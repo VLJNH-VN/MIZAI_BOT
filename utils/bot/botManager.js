@@ -77,6 +77,7 @@ function getGroupAnti(groupId) {
     antiFake:          g.antiFake          ?? false,
     antiOut:           g.antiOut           ?? false,
     antiUndo:          g.antiUndo          ?? false,
+    antiBot:           g.antiBot           ?? false,
     antiLinkWhitelist: g.antiLinkWhitelist ?? [],
     antiSpamThreshold: g.antiSpamThreshold ?? 5,
     antiSpamWindow:    g.antiSpamWindow    ?? 5,
@@ -141,6 +142,32 @@ function clearSpam(groupId, userId) {
   spamStore.delete(key);
 }
 
+// ── Group Settings (rank on/off, v.v.) ───────────────────────────────────────
+
+const GROUP_SETTINGS_FILE = path.join(__dirname, "../../includes/data/groupSettings.json");
+
+function readGroupSettings() {
+  return readJsonFile(GROUP_SETTINGS_FILE, {});
+}
+
+function saveGroupSettings(data) {
+  writeJsonFile(GROUP_SETTINGS_FILE, data);
+}
+
+function getGroupSetting(groupId, key, defaultVal = true) {
+  const data = readGroupSettings();
+  if (!data[groupId]) return defaultVal;
+  const val = data[groupId][key];
+  return val === undefined ? defaultVal : val;
+}
+
+function setGroupSetting(groupId, key, value) {
+  const data = readGroupSettings();
+  if (!data[groupId]) data[groupId] = {};
+  data[groupId][key] = value;
+  saveGroupSettings(data);
+}
+
 module.exports = {
   getBotAdminIds,
   isBotAdmin,
@@ -153,4 +180,6 @@ module.exports = {
   recordMessage,
   clearSpam,
   isAntiUndoEnabled: (groupId) => getGroupAnti(groupId).antiUndo,
+  getGroupSetting,
+  setGroupSetting,
 };

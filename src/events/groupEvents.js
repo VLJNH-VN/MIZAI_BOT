@@ -1,5 +1,17 @@
 const { ThreadType } = require("zca-js");
 const { handleNewUser } = require("../../utils/ai/goibot");
+const { getGroupAnti } = require("../../utils/bot/botManager");
+
+// ── Bot detection keywords ────────────────────────────────────────────────────
+const BOT_NAME_PATTERNS = [
+  /\bbot\b/i, /\bauto\b/i, /\bspam\b/i, /\bclone\b/i,
+  /\bfake\b/i, /\brobot\b/i, /\bscript\b/i,
+];
+
+function looksLikeBot(name) {
+  if (!name) return false;
+  return BOT_NAME_PATTERNS.some(rx => rx.test(name));
+}
 
 // ── Join Notification ─────────────────────────────────────────────────────────
 
@@ -15,11 +27,28 @@ async function handleJoinNoti({ api, data }) {
     if (!members.length) return;
 
     const groupName = payload.groupName || "nhóm";
+    const anti = getGroupAnti(String(threadId));
 
     for (const member of members) {
       const userId = String(member.id || member.uid || "");
       const name   = member.dName || member.displayName || member.name || userId;
       if (!name) continue;
+
+      // ── Anti-Bot: kick nếu phát hiện bot ─────────────────────────────────
+      if (anti.antiBot && looksLikeBot(name)) {
+        logEvent(`[anti-bot] Phát hiện bot: ${name} (${userId}) trong nhóm ${threadId}`);
+        try {
+          await api.removeUserFromGroup(userId, String(threadId));
+          await api.sendMessage(
+            { msg: `🤖 Anti-Bot: Đã kick tài khoản bot "${name}" ra khỏi nhóm.` },
+            String(threadId),
+            ThreadType.Group
+          ).catch(() => {});
+        } catch (e) {
+          logWarn(`[anti-bot] Không thể kick ${userId}: ${e?.message}`);
+        }
+        continue;
+      }
 
       const msg = `👋 Chào mừng ${name} đã tham gia ${groupName}!`;
       logEvent(`joinNoti -> ${msg}`);

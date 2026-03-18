@@ -1,10 +1,12 @@
 const { getTopUsers, getUserData, formatMoney, getLevel } = require("../../includes/database/economy");
 const { resolveSenderName } = require("../../includes/database/infoCache");
+const { getGroupSetting } = require("../../utils/bot/botManager");
+const { ThreadType } = require("zca-js");
 
 module.exports = {
   config: {
     name: "rank",
-    version: "1.0.0",
+    version: "1.1.0",
     hasPermssion: 0,
     credits: "MiZai",
     description: "Xem bảng xếp hạng giàu nhất và thống kê cá nhân",
@@ -13,7 +15,14 @@ module.exports = {
     cooldowns: 5
   },
 
-  run: async ({ api, event, args, send }) => {
+  run: async ({ api, event, args, send, threadID }) => {
+    if (event.type === ThreadType.Group) {
+      const rankOn = getGroupSetting(threadID, "rankEnabled", true);
+      if (!rankOn) {
+        return send("❌ Lệnh rank đã bị tắt trong nhóm này.\n💡 Admin nhóm dùng: .set rank on để bật lại.");
+      }
+    }
+
     const raw = event?.data || {};
     const userId = raw?.uidFrom ? String(raw.uidFrom) : null;
     const sub = args[0] ? args[0].toLowerCase() : "";

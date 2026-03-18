@@ -12,6 +12,7 @@ const FEATURES = {
   fake: { field: "antiFake", label: "Anti-Fake",  icon: "🤖", desc: "phát hiện tài khoản ảo khi vào nhóm" },
   out:  { field: "antiOut",  label: "Anti-Out",   icon: "🚪", desc: "kick thành viên vào ra liên tục" },
   undo: { field: "antiUndo", label: "Anti-Undo",  icon: "↩️", desc: "cấm thu hồi tin nhắn" },
+  bot:  { field: "antiBot",  label: "Anti-Bot",   icon: "🤖", desc: "tự kick tài khoản bot khi vào nhóm" },
 };
 
 function getAllGroupIds() {
@@ -34,7 +35,7 @@ module.exports = {
       ".anti <tính năng> on|off     — Bật/tắt cho nhóm này",
       ".anti <tính năng> onall      — Bật cho tất cả nhóm (admin)",
       ".anti <tính năng> offall     — Tắt cho tất cả nhóm (admin)",
-      "Tính năng: link, spam, nsfw, fake, out, undo",
+      "Tính năng: link, spam, nsfw, fake, out, undo, bot",
     ].join("\n"),
     cooldowns: 3,
   },

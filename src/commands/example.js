@@ -109,9 +109,9 @@ module.exports = {
   config: {
     name        : "example",         // Tên lệnh — trùng tên file (không .js), viết thường
     aliases     : ["ex"],              // (tuỳ chọn) Alias thay thế
-    version     : "1.0.0",
+    version     : "1.5",
     hasPermssion: 0,                  // 0 = mọi người | 1 = admin nhóm | 2 = admin bot
-    credits     : "Tên của bạn",
+    credits     : "LJZI x XBACH",
     description : "Mô tả lệnh này làm gì",
     commandCategory: "Utility",
     // Danh mục: System | Utility | Fun | Economy | Admin | Quản Trị | Giải Trí | Tra Cứu | Kinh Tế

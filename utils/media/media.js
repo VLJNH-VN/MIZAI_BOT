@@ -5,7 +5,13 @@ const path       = require("path");
 const axios      = require("axios");
 const FormData   = require("form-data");
 const { execSync } = require("child_process");
-const { githubApiHeaders } = require("./githubConfig");
+function githubApiHeaders(token) {
+  return {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+}
 
 // ── Đường dẫn ─────────────────────────────────────────────────────────────────
 

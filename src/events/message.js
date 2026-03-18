@@ -1,6 +1,24 @@
 const { handleCommand } = require("../../includes/handlers/handleCommand");
 const { handleReply } = require("../../includes/handlers/handleReply");
-const { handleListen } = require("../../includes/handlers/listen");
+
+async function handleListen({ api, event, commands, prefix }) {
+  if (!commands || typeof commands.forEach !== "function") return;
+  for (const [commandName, command] of commands) {
+    if (!command || typeof command.onMessage !== "function") continue;
+    const threadID = event.threadId;
+    const raw = event?.data || {};
+    const send = async (message) => {
+      if (!threadID) return;
+      const payload = typeof message === "string" ? { msg: message, quote: raw } : message;
+      return api.sendMessage(payload, threadID, event.type);
+    };
+    try {
+      await command.onMessage({ api, event, args: [], send, commands, prefix, commandName });
+    } catch (err) {
+      logError(`Lỗi onMessage của command '${commandName}': ${err?.message || err}`);
+    }
+  }
+}
 const { warmupFromEvent } = require("../../includes/database/infoCache");
 const { isActivated } = require("../../includes/database/accessCode");
 const { isBotAdmin, isGroupAdmin } = require("../../utils/bot/botManager");

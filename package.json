@@ -1,16 +1,38 @@
 {
-  "name": "workspace",
-  "version": "0.0.0",
-  "license": "MIT",
+  "name": "zalo-bot-zcajs",
+  "version": "2.0.0",
+  "description": "Bot Zalo sử dụng zca-js, đăng nhập bằng cookie + IMEI. AI: Groq (llama-3.3-70b-versatile)",
+  "main": "index.js",
   "scripts": {
-    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
-    "build": "pnpm run typecheck && pnpm -r --if-present run build",
-    "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "new-cmd": "node scripts/new-cmd.js",
+    "list-cmds": "node scripts/list-cmds.js",
+    "move-cmd": "node scripts/move-cmd.js",
+    "backup-cmds": "node scripts/backup-cmds.js",
+    "backup": "node utils/system/githubBackup.js",
+    "backup:msg": "node utils/system/githubBackup.js"
   },
-  "private": true,
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "axios": "^1.13.6",
+    "better-sqlite3": "^11.10.0",
+    "canvas": "^3.2.1",
+    "cheerio": "^1.2.0",
+    "form-data": "^4.0.5",
+    "googleapis": "^171.4.0",
+    "image-size": "^2.0.2",
+    "minipass": "^7.1.3",
+    "node-cache": "^5.1.2",
+    "node-fetch": "^3.3.2",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.34.5",
+    "sql.js": "^1.14.1",
+    "sqlite3": "^6.0.1",
+    "string-similarity": "^4.0.4",
+    "zca-js": "^2.1.1"
+  },
   "devDependencies": {
-    "typescript": "~5.9.2",
-    "prettier": "^3.8.1"
+    "nodemon": "^3.1.14"
   }
 }

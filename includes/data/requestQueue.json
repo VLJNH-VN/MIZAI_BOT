@@ -1,0 +1,23 @@
+{
+  "counter": 1,
+  "pending": [],
+  "history": [
+    {
+      "stt": 1,
+      "type": "naptien",
+      "userId": "416355319192202658",
+      "userName": "Đặng Lịnh",
+      "threadId": "2955257624987878758",
+      "content": "Nạp 1.000.000 VNĐ",
+      "extra": {
+        "amount": 1000000
+      },
+      "notifyMsgId": null,
+      "status": "approved",
+      "createdAt": 1773598346069,
+      "resolvedBy": "416355319192202658",
+      "resolvedAt": 1773598366288,
+      "reason": ""
+    }
+  ]
+}

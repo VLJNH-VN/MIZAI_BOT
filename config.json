@@ -1,0 +1,18 @@
+{
+  "prefix": ".",
+  "loginMethod": "cookie",
+  "cookiePath": "./cookie.json",
+  "imei": "3d093692-ae08-465c-bcaf-ea1a2829d1e1-74c987a7c11e14edf988007dcd378420",
+  "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+  "ownerId": "6024931307373526012",
+  "adminBotIds": ["6024931307373526012"],
+  "qrPath": "./qr.png",
+  "groqKeys": [],
+  "githubToken": "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",
+  "repo": "VLJNH-VN/mizai",
+  "branch": "main",
+  "googleKeyPath": "./utils/mizai.json",
+  "googleDriveFolderId": "1AUEXznxl00jG7s0Xs9wcxfdcWd0iv75D",
+  "autoUndoOnAngry": true,
+  "🔄 undoEnabled": true
+}

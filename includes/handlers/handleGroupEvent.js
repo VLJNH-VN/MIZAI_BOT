@@ -1,7 +1,6 @@
 const { GroupEventType, ThreadType } = require("zca-js");
-const { handleJoinNoti } = require("../../src/events/joinNoti");
-const { handleLeaveNoti } = require("../../src/events/leaveNoti");
-const { getGroupAnti, recordJoin } = require("../../utils/bot/antiManager");
+const { handleJoinNoti, handleLeaveNoti } = require("../../src/events/groupEvents");
+const { getGroupAnti, recordJoin } = require("../../utils/bot/botManager");
 
 // ── Helper ─────────────────────────────────────────────────────────────────────
 function getEventLabel(type) {

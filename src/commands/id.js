@@ -1,4 +1,4 @@
-const { isBotAdmin } = require("../../utils/bot/admin");
+const { isBotAdmin } = require("../../utils/bot/botManager");
 
 module.exports = {
   config: {

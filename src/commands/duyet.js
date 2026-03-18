@@ -147,7 +147,7 @@ module.exports = {
     if (!senderId) return;
 
     // Kiểm tra quyền admin trong onReply
-    const { isBotAdmin } = require("../../utils/bot/admin");
+    const { isBotAdmin } = require("../../utils/bot/botManager");
     if (!isBotAdmin(senderId)) return;
 
     let adminName = senderId;

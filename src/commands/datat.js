@@ -18,7 +18,7 @@ const path = require("path");
 const { execSync } = require("child_process");
 const FormData = require("form-data");
 
-const { loadIndex, pickRandom, processAll, VIDEO_DIR } = require("../../utils/media/mediaCache");
+const { loadIndex, pickRandom, processAll, VIDEO_DIR } = require("../../utils/media/media");
 
 const ROOT      = process.cwd();
 const TEMP_DIR  = path.join(ROOT, "includes", "cache", "temp");

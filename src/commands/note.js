@@ -1,6 +1,6 @@
 const axios = require("axios");
 const fs = require("fs");
-const { loadCommandFromFile } = require("../../utils/system/commandLoader");
+const { loadCommandFromFile } = require("../../utils/system/loader");
 
 const COMMANDS_DIR = __dirname;
 

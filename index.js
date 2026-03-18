@@ -5,13 +5,10 @@ global.config = require("./config.json");
 require("./utils/system/global");
 
 // ── Core modules ──────────────────────────────────────────────────────────────
-const { setApi }               = require("./utils/system/global");
-const { loadCommands, runOnLoad } = require("./utils/system/commandLoader");
-const { scheduleCacheCleanup } = require("./utils/system/cacheCleaner");
-const { scheduleKeyCheck }     = require("./utils/system/keyManager");
-const { startAutoGetData }     = require("./utils/system/autoGetData");
-const { createZaloClient }     = require("./utils/system/zaloClient");
-const { setupLifecycle }       = require("./utils/system/lifecycle");
+const { setApi }                  = require("./utils/system/global");
+const { loadCommands, runOnLoad, setupLifecycle } = require("./utils/system/loader");
+const { scheduleCacheCleanup, scheduleKeyCheck, startAutoGetData } = require("./utils/system/maintenance");
+const { createZaloClient }        = require("./utils/system/client");
 
 // ── Events ────────────────────────────────────────────────────────────────────
 const { handleMessage }    = require("./src/events/message");

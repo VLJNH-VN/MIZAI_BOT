@@ -1,5 +1,5 @@
 const { execSync } = require("child_process");
-const { sendVideo, tempDir } = require("../../utils/media/upload");
+const { sendVideo, tempDir } = require("../../utils/media/media");
 const axios = require("axios");
 const fs    = require("fs");
 const path  = require("path");

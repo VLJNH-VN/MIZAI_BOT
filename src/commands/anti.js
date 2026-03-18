@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { ThreadType } = require("zca-js");
-const { getGroupAnti, setGroupAnti } = require("../../utils/bot/antiManager");
+const { getGroupAnti, setGroupAnti } = require("../../utils/bot/botManager");
 
 const ANTI_FILE = path.join(__dirname, "../../includes/data/anti.json");
 

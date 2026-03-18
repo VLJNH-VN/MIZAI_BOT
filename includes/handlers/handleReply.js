@@ -19,8 +19,7 @@ const replyStore     = createTtlStore(DEFAULT_TTL_MS);
  * @param {Object} [opts.payload]   - Dữ liệu tuỳ ý truyền sang onReply
  * @param {number} [opts.ttl]       - Thời gian sống (ms), mặc định 10 phút
  */
-function registerReply(opts) { replyStore.register(opts); };
-}
+function registerReply(opts) { replyStore.register(opts); }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

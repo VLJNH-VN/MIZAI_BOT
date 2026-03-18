@@ -5,7 +5,7 @@
  */
 
 const { ThreadType } = require("zca-js");
-const { isAntiUndoEnabled } = require("../../utils/bot/antiManager");
+const { isAntiUndoEnabled } = require("../../utils/bot/botManager");
 
 const { createTtlStore } = require('./ttlStore');
 

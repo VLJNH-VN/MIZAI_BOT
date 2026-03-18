@@ -103,10 +103,10 @@ const axios   = require("axios");
 const { getDb }                               = require("../../includes/database/sqlite");
 const economy                                 = require("../../includes/database/economy");
 const { resolveSenderName, resolveGroupName } = require("../../includes/database/infoCache");
-const { getBotAdminIds, isBotAdmin, isGroupAdmin } = require("../bot/admin");
+const { getBotAdminIds, isBotAdmin, isGroupAdmin } = require("../bot/botManager");
 const { logInfo, logWarn, logError, logEvent, logDebug } = require("./logger");
-const { checkGroqKey, setAutoCheck }          = require("./keyManager");
-const { processGaiData }                      = require("../bot/processGaiData");
+const { checkGroqKey, setAutoCheck }          = require("./maintenance");
+const { processGaiData, resolveQuote }        = require("../bot/messageUtils");
 const {
   encodeAndUploadToGithub,
   decodeFromGithub,
@@ -117,9 +117,8 @@ const {
   decodeOne    : mediaCacheDecodeOne,
   loadIndex    : mediaCacheLoadIndex,
   pickRandom   : mediaCachePickRandom,
-}                                             = require("../media/mediaCache");
-const { startAutoGetData, stopAutoGetData }   = require("./autoGetData");
-const { resolveQuote }                        = require("../bot/resolveQuote");
+}                                             = require("../media/media");
+const { startAutoGetData, stopAutoGetData }   = require("./maintenance");
 const msgCache                                = require("../../includes/database/messageCache");
 
 // ── Logger ────────────────────────────────────────────────────────────────────

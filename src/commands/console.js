@@ -1,6 +1,6 @@
 const { ThreadType } = require("zca-js");
 const { resolveSenderName, resolveGroupName } = require("../../includes/database/infoCache");
-const { extractBody } = require("../../utils/bot/extractBody");
+const { extractBody } = require("../../utils/bot/messageUtils");
 
 async function logToConsole({ api, event }) {
   const raw = event?.data || {};

@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { loadCommands, loadCommandFromFile } = require("../../utils/system/commandLoader");
+const { loadCommands, loadCommandFromFile } = require("../../utils/system/loader");
 
 function listJsFiles(dir) {
   try {

@@ -293,7 +293,7 @@ module.exports = {
     try {
       if (data?.type !== "choosee") return;
 
-      const { extractBody } = require("../../utils/bot/extractBody");
+      const { extractBody } = require("../../utils/bot/messageUtils");
       const body  = extractBody(event?.data).trim();
       const parts = body.split(/\s+/);
       const files = data.files || [];

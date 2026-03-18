@@ -1,7 +1,7 @@
 const { ThreadType } = require("zca-js");
 const { resolveSenderName, resolveGroupName } = require("../database/infoCache");
-const { isBotAdmin, isGroupAdmin } = require("../../utils/bot/admin");
-const { extractBody } = require("../../utils/bot/extractBody");
+const { isBotAdmin, isGroupAdmin } = require("../../utils/bot/botManager");
+const { extractBody } = require("../../utils/bot/messageUtils");
 const stringSimilarity = require("string-similarity");
 const { registerReply } = require("./handleReply");
 const { registerReaction } = require("./handleReaction");
@@ -59,7 +59,7 @@ async function checkPermission({ permLevel, senderId, event, threadID, send, api
 
   if (level === 2) {
     if (!isBotAdmin(senderId)) {
-      const { getBotAdminIds } = require("../../utils/bot/admin");
+      const { getBotAdminIds } = require("../../utils/bot/botManager");
       const adminSet = getBotAdminIds();
       logWarn(`[PERM] Từ chối lệnh admin. senderId="${senderId}" | adminIds=${JSON.stringify([...adminSet])}`);
       await send(

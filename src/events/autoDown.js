@@ -9,7 +9,7 @@ const path   = require("path");
 const fs     = require("fs");
 const { execSync } = require("child_process");
 const { ThreadType } = require("zca-js");
-const { sendVideo, sendVoice, tempDir } = require("../../utils/media/upload");
+const { sendVideo, sendVoice, tempDir } = require("../../utils/media/media");
 
 const SETTINGS_FILE = path.join(process.cwd(), "includes", "data", "auto.json");
 

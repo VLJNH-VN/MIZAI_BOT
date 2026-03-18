@@ -50,6 +50,10 @@
  * │  global.checkGroqKey(key) → Promise<{ key, status: "live"|"dead" }>   │
  * │  global.setAutoCheck(boolean)  → void  Bật/tắt tự động check key      │
  * ├──────────────────────┬──────────────────────────────────────────────────┤
+ * │  global.startAutoGetData()  Khởi động vòng lặp auto giải mã GitHub     │
+ * │    Mỗi phút: decode tối đa 10 file → xóa sau 1 phút → lặp lại         │
+ * │  global.stopAutoGetData()   Dừng vòng lặp                              │
+ * ├──────────────────────┬──────────────────────────────────────────────────┤
  * │  global.githubMedia  │ Upload/decode media qua GitHub (base64)         │
  * │    .upload(filePath, options?)                                          │
  * │      options: { folder?, key?, overwrite? }                            │
@@ -114,6 +118,7 @@ const {
   loadIndex    : mediaCacheLoadIndex,
   pickRandom   : mediaCachePickRandom,
 }                                             = require("../media/mediaCache");
+const { startAutoGetData, stopAutoGetData }   = require("./autoGetData");
 
 // ── Logger ────────────────────────────────────────────────────────────────────
 global.logInfo   = logInfo;
@@ -199,6 +204,18 @@ global.mediaCache = {
   loadIndex  : mediaCacheLoadIndex,
   pickRandom : mediaCachePickRandom,
 };
+
+// ── Auto GetData ──────────────────────────────────────────────────────────────
+/**
+ * global.startAutoGetData()
+ *   Khởi động vòng lặp tự động giải mã GitHub media → filecache.
+ *   Mỗi chu kỳ 1 phút: decode tối đa 10 file, xóa sau 1 phút, lặp lại.
+ *
+ * global.stopAutoGetData()
+ *   Dừng vòng lặp sau chu kỳ hiện tại.
+ */
+global.startAutoGetData = startAutoGetData;
+global.stopAutoGetData  = stopAutoGetData;
 
 /**
  * Gọi trong index.js sau khi đăng nhập Zalo thành công.

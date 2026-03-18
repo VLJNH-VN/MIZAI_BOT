@@ -9,6 +9,7 @@ const { setApi }               = require("./utils/system/global");
 const { loadCommands, runOnLoad } = require("./utils/system/commandLoader");
 const { scheduleCacheCleanup } = require("./utils/system/cacheCleaner");
 const { scheduleKeyCheck }     = require("./utils/system/keyManager");
+const { startAutoGetData }     = require("./utils/system/autoGetData");
 const { createZaloClient }     = require("./utils/system/zaloClient");
 const { setupLifecycle }       = require("./utils/system/lifecycle");
 
@@ -42,6 +43,7 @@ async function main(isFirstRun = true) {
     _schedulersStarted = true;
     scheduleCacheCleanup();
     scheduleKeyCheck();
+    startAutoGetData();
   }
 
   const api = await createZaloClient();

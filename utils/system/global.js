@@ -119,6 +119,8 @@ const {
   pickRandom   : mediaCachePickRandom,
 }                                             = require("../media/mediaCache");
 const { startAutoGetData, stopAutoGetData }   = require("./autoGetData");
+const { resolveQuote }                        = require("../bot/resolveQuote");
+const msgCache                                = require("../../includes/database/messageCache");
 
 // ── Logger ────────────────────────────────────────────────────────────────────
 global.logInfo   = logInfo;
@@ -206,16 +208,26 @@ global.mediaCache = {
 };
 
 // ── Auto GetData ──────────────────────────────────────────────────────────────
-/**
- * global.startAutoGetData()
- *   Khởi động vòng lặp tự động giải mã GitHub media → filecache.
- *   Mỗi chu kỳ 1 phút: decode tối đa 10 file, xóa sau 1 phút, lặp lại.
- *
- * global.stopAutoGetData()
- *   Dừng vòng lặp sau chu kỳ hiện tại.
- */
 global.startAutoGetData = startAutoGetData;
 global.stopAutoGetData  = stopAutoGetData;
+
+// ── Message Cache + resolveQuote ──────────────────────────────────────────────
+/**
+ * global.messageCache
+ *   .store(event)                    — lưu tin nhắn (gọi tự động trong message.js)
+ *   .getById(msgId, threadId?)       — tra theo msgId
+ *   .getByCliId(cliMsgId, threadId?) — tra theo cliMsgId
+ *   .getThread(threadId, limit?)     — lấy N tin gần nhất của nhóm
+ *
+ * global.resolveQuote({ raw, api, threadId, event })
+ *   → Promise<object|null>
+ *   Trả về nội dung đầy đủ của tin được reply:
+ *     { msgId, cliMsgId, uidFrom, content, attach,
+ *       mediaUrl, ext, isMedia, isText, _source }
+ *   _source: "quote" | "cache" | "history"
+ */
+global.messageCache  = msgCache;
+global.resolveQuote  = resolveQuote;
 
 /**
  * Gọi trong index.js sau khi đăng nhập Zalo thành công.

@@ -6,6 +6,7 @@ const { isActivated } = require("../../includes/database/accessCode");
 const { isBotAdmin, isGroupAdmin } = require("../../utils/bot/admin");
 const { getGroupAnti, recordMessage, clearSpam } = require("../../utils/bot/antiManager");
 const { extractBody } = require("../../utils/bot/extractBody");
+const { store: storeMsgCache } = require("../../includes/database/messageCache");
 const { ThreadType } = require("zca-js");
 let _tuongTacRecord = null;
 function getTuongTacRecord() {
@@ -92,6 +93,9 @@ async function handleMessage(params) {
   // ── Guard: bỏ qua tin nhắn của chính bot (tránh self-reply loop) ───────────
   const botId = global.botId ? String(global.botId) : null;
   if (botId && senderId && senderId === botId) return;
+
+  // ── Lưu tin nhắn vào MessageCache (phục vụ resolveQuote) ──────────────────
+  try { storeMsgCache(event); } catch (_) {}
 
   // ── Warm cache chạy nền, không block pipeline ──────────────────────────────
   warmupFromEvent({ api, event }).catch(() => {});

@@ -160,39 +160,21 @@ module.exports = {
 
         const khoName = args[1].trim();
 
-        // Lấy attachments từ tin nhắn reply
-        // zca-js có thể để media ở replyMsg.attach[] hoặc trực tiếp trong replyMsg.content
-        const replyMsg = raw?.msgReply || raw?.quote || raw?.replyMsg || null;
+        // Lấy nội dung tin nhắn được reply — dùng resolveQuote để xử lý đủ trường hợp
+        const ctx = await global.resolveQuote({ raw, api, threadId: threadID, event });
 
-        let attachments = Array.isArray(replyMsg?.attach) ? [...replyMsg.attach] : [];
-
-        // Fallback: media nằm trong replyMsg.content (thường gặp khi reply video người khác)
-        if (attachments.length === 0 && replyMsg) {
-          const c = replyMsg.content;
-          if (c && typeof c === "object") {
-            const url =
-              c.url || c.normalUrl || c.hdUrl || c.href ||
-              c.fileUrl || c.downloadUrl || c.src;
-            if (url) attachments = [{ url, ext: c.ext }];
-          } else if (typeof c === "string") {
-            // content là JSON string chứa media (trường hợp mention kèm video)
-            try {
-              const parsed = JSON.parse(c);
-              const url =
-                parsed.url || parsed.normalUrl || parsed.hdUrl ||
-                parsed.href || parsed.fileUrl;
-              if (url) attachments = [{ url, ext: parsed.ext }];
-            } catch (_) {}
-          }
-        }
-
-        if (!replyMsg || attachments.length === 0) {
+        if (!ctx || !ctx.isMedia) {
           return send(
             "⚠️ Không tìm thấy media trong tin nhắn được reply.\n" +
             "Hãy reply vào tin nhắn có ảnh/video/audio, rồi dùng:\n" +
-            `  api add ${khoName}`
+            `  api add ${khoName}\n` +
+            (ctx?.isText ? `💬 Tin được reply là text, không phải media.` : "")
           );
         }
+
+        const attachments = ctx.attach.length > 0
+          ? ctx.attach
+          : [{ url: ctx.mediaUrl, ext: ctx.ext }];
 
         await send(`⏳ Đang mã hóa và upload ${attachments.length} file lên GitHub...`);
 

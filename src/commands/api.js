@@ -1,30 +1,16 @@
 "use strict";
 
-/**
- * src/commands/api.js
- * ─────────────────────────────────────────────────────────────────────────────
- * Quản lý kho link media (ảnh/video/audio) được mã hóa base64 và lưu trên GitHub.
- *
- * Lệnh:
- *   api add <tên>  — Reply vào tin nhắn có media để mã hóa & upload GitHub
- *   api check      — Xem danh sách kho, reply STT kiểm tra / "del N" xóa kho
- *   api del <tên>  — Xóa kho link theo tên
- *   api get <tên>  — Lấy ngẫu nhiên 1 link từ kho
- *
- * Sau lệnh check:
- *   • Reply STT   → kiểm tra link sống/chết của kho đó
- *   • Reply del N → xóa kho tương ứng
- *   • Thả 👍 vào kết quả check → tự lọc link chết
- */
-
-const fs    = require("fs");
-const path  = require("path");
-const os    = require("os");
+const fs   = require("fs");
+const path = require("path");
+const os   = require("os");
 
 const LIST_API_DIR = path.join(__dirname, "../../includes/listapi");
 
+const MEDIA_EXTS = /\.(mp4|mkv|avi|mov|webm|jpg|jpeg|png|gif|webp|mp3|aac|m4a|ogg|wav)(\?|$)/i;
+const URL_REGEX  = /https?:\/\/[^\s"'<>[\]{}|\\^`]+/gi;
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Helpers
+// Helpers file
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ensureDir(dir) {
@@ -58,11 +44,10 @@ function listKho() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tải file về temp → mã hóa base64 → upload GitHub → trả về rawUrl
+// Tải file → upload GitHub → trả rawUrl
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function uploadToGithub(url, khoName, extHint) {
-  // Xác định extension — ưu tiên hint từ item.ext, rồi từ URL, fallback ".mp4" nếu có "video" trong URL
+async function uploadMediaToGithub(url, khoName, extHint) {
   const extMatch = url.split("?")[0].match(/\.(mp4|mkv|avi|mov|webm|jpg|jpeg|png|gif|webp|mp3|aac|m4a|ogg|wav)$/i);
   const ext = extHint
     ? (extHint.startsWith(".") ? extHint : "." + extHint).toLowerCase()
@@ -73,14 +58,14 @@ async function uploadToGithub(url, khoName, extHint) {
   const tmpPath = path.join(os.tmpdir(), `api_${Date.now()}${ext}`);
 
   try {
-    // Download file từ Zalo CDN
     const resp = await global.axios.get(url, {
       responseType: "arraybuffer",
-      timeout: 60000,
+      timeout: 90000,
+      maxContentLength: 200 * 1024 * 1024,
+      headers: { "User-Agent": "Mozilla/5.0" },
     });
     fs.writeFileSync(tmpPath, Buffer.from(resp.data));
 
-    // Upload lên GitHub (base64 encode bên trong githubMedia)
     const result = await global.githubMedia.upload(tmpPath, {
       folder: `media/${khoName}`,
       key: `${khoName}_${Date.now()}`,
@@ -93,101 +78,161 @@ async function uploadToGithub(url, khoName, extHint) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Kiểm tra link sống/chết (theo chunk để không timeout)
+// Trích xuất URLs media từ một URL (JSON / text / HTML)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function checkLinks(links) {
-  const CHUNK = 10;
-  let live = 0, dead = 0;
+async function extractMediaUrlsFromEndpoint(sourceUrl) {
+  const resp = await global.axios.get(sourceUrl, {
+    timeout: 30000,
+    headers: { "User-Agent": "Mozilla/5.0" },
+    validateStatus: s => s < 500,
+  });
 
+  const contentType = String(resp.headers?.["content-type"] || "");
+  let raw = resp.data;
+
+  // Nếu là JSON object/array — flatten toàn bộ string values
+  if (contentType.includes("json") || typeof raw === "object") {
+    raw = JSON.stringify(raw);
+  }
+
+  // Lấy tất cả URL xuất hiện trong body
+  const allUrls = String(raw).match(URL_REGEX) || [];
+
+  // Lọc chỉ giữ URL media + bỏ trùng
+  const mediaUrls = [...new Set(
+    allUrls
+      .map(u => u.replace(/['">,\]}\s]+$/, "")) // trim trailing junk
+      .filter(u => MEDIA_EXTS.test(u))
+  )];
+
+  return mediaUrls;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Kiểm tra link sống / chết — dùng HEAD, fallback GET range
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function isLive(url) {
+  try {
+    const r = await global.axios.head(url, { timeout: 8000, validateStatus: s => s < 500 });
+    if (r.status === 200 || r.status === 206) return true;
+    if (r.status === 405) {
+      // Server không hỗ trợ HEAD — thử GET bytes=0-0
+      const r2 = await global.axios.get(url, {
+        timeout: 8000,
+        headers: { Range: "bytes=0-0" },
+        responseType: "stream",
+        validateStatus: s => s < 500,
+      });
+      r2.data?.destroy?.();
+      return r2.status < 400;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+async function checkLinks(links) {
+  const CHUNK = 8;
+  let live = 0, dead = 0;
   for (let i = 0; i < links.length; i += CHUNK) {
-    await Promise.all(links.slice(i, i + CHUNK).map(async (url) => {
-      try {
-        const r = await global.axios.head(url, { timeout: 8000 });
-        r.status === 200 ? live++ : dead++;
-      } catch (_) { dead++; }
+    await Promise.all(links.slice(i, i + CHUNK).map(async url => {
+      (await isLive(url)) ? live++ : dead++;
     }));
   }
   return { live, dead };
 }
 
 async function filterLiveLinks(links) {
-  const CHUNK = 10;
+  const CHUNK = 8;
   const live  = [];
-
   for (let i = 0; i < links.length; i += CHUNK) {
-    await Promise.all(links.slice(i, i + CHUNK).map(async (url) => {
-      try {
-        const r = await global.axios.head(url, { timeout: 8000 });
-        if (r.status === 200) live.push(url);
-      } catch (_) {}
+    await Promise.all(links.slice(i, i + CHUNK).map(async url => {
+      if (await isLive(url)) live.push(url);
     }));
   }
   return live;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Export lệnh
+// Export
 // ─────────────────────────────────────────────────────────────────────────────
 
 module.exports = {
   config: {
     name: "api",
-    version: "2.2.0",
+    version: "3.0.0",
     hasPermssion: 2,
     credits: "DongDev (port: MiZai)",
     description: "Quản lý kho link media mã hóa base64 lưu trên GitHub",
     commandCategory: "Admin",
     usages: [
-      "api add <tên>  — Reply vào media để upload GitHub",
-      "api check      — Xem danh sách kho",
-      "api del <tên>  — Xóa kho",
-      "api get <tên>  — Lấy link ngẫu nhiên",
+      "api add <tên>          — Reply vào media để upload GitHub",
+      "api fetch <tên> <url>  — Lấy nhiều URL media từ 1 endpoint",
+      "api check              — Xem danh sách kho",
+      "api del <tên>          — Xóa kho",
+      "api get <tên>          — Lấy link ngẫu nhiên",
     ].join("\n"),
     cooldowns: 5,
   },
 
-  // ── run ─────────────────────────────────────────────────────────────────────
+  // ── run ───────────────────────────────────────────────────────────────────
   run: async ({ api, event, args, send, threadID, registerReply, registerReaction }) => {
     try {
       ensureDir(LIST_API_DIR);
       const raw = event?.data || {};
       const sub = (args[0] || "").toLowerCase().trim();
 
-      // ── api add <tên> ────────────────────────────────────────────────────
+      // ── Hướng dẫn ─────────────────────────────────────────────────────────
+      if (!sub) {
+        return send(
+          `📦 QUẢN LÝ KHO MEDIA\n` +
+          `━━━━━━━━━━━━━━━━\n` +
+          `api add <tên>          — Reply vào media rồi upload\n` +
+          `api fetch <tên> <url>  — Lấy nhiều URL từ 1 endpoint\n` +
+          `api check              — Xem danh sách kho\n` +
+          `api del <tên>          — Xóa kho\n` +
+          `api get <tên>          — Lấy link ngẫu nhiên\n` +
+          `━━━━━━━━━━━━━━━━\n` +
+          `⚙️ Media được mã hóa base64 và lưu trên GitHub`
+        );
+      }
+
+      // ── api add <tên> ──────────────────────────────────────────────────────
       if (sub === "add") {
         if (!args[1]) return send("⚠️ Vui lòng nhập tên kho.\nVí dụ: api add gai");
 
         const khoName = args[1].trim();
-
-        // Lấy nội dung tin nhắn được reply — dùng resolveQuote để xử lý đủ trường hợp
         const ctx = await global.resolveQuote({ raw, api, threadId: threadID, event });
 
         if (!ctx || !ctx.isMedia) {
           return send(
             "⚠️ Không tìm thấy media trong tin nhắn được reply.\n" +
             "Hãy reply vào tin nhắn có ảnh/video/audio, rồi dùng:\n" +
-            `  api add ${khoName}\n` +
-            (ctx?.isText ? `💬 Tin được reply là text, không phải media.` : "")
+            `  api add ${khoName}` +
+            (ctx?.isText ? "\n💬 Tin được reply là text, không phải media." : "")
           );
         }
 
-        const attachments = ctx.attach.length > 0
+        const attachments = ctx.attach?.length > 0
           ? ctx.attach
           : [{ url: ctx.mediaUrl, ext: ctx.ext }];
 
         await send(`⏳ Đang mã hóa và upload ${attachments.length} file lên GitHub...`);
 
-        const kho    = readKho(khoName);
-        let added    = 0;
-        let failed   = 0;
+        const kho  = readKho(khoName);
+        let added  = 0;
+        let failed = 0;
 
         for (const item of attachments) {
-          const url = item.url || item.normalUrl || item.hdUrl || item.href || item.fileUrl || item.downloadUrl;
+          const url = item.url || item.normalUrl || item.hdUrl
+                   || item.href || item.fileUrl || item.downloadUrl;
           if (!url) { failed++; continue; }
 
           try {
-            const rawUrl = await uploadToGithub(url, khoName, item.ext);
+            const rawUrl = await uploadMediaToGithub(url, khoName, item.ext);
             kho.push(rawUrl);
             added++;
           } catch (e) {
@@ -203,11 +248,71 @@ module.exports = {
         return send(msg);
       }
 
-      // ── api check ────────────────────────────────────────────────────────
+      // ── api fetch <tên> <url> ──────────────────────────────────────────────
+      if (sub === "fetch") {
+        const khoName   = args[1]?.trim();
+        const sourceUrl = args[2]?.trim();
+
+        if (!khoName || !sourceUrl) {
+          return send(
+            "⚠️ Cú pháp: api fetch <tên_kho> <url>\n" +
+            "Ví dụ: api fetch gai https://api.example.com/videos\n" +
+            "Bot sẽ tự trích xuất tất cả URL media trong kết quả trả về."
+          );
+        }
+
+        if (!/^https?:\/\//i.test(sourceUrl)) {
+          return send("❌ URL không hợp lệ. Phải bắt đầu bằng http:// hoặc https://");
+        }
+
+        await send(`🔍 Đang tải và phân tích: ${sourceUrl}`);
+
+        let mediaUrls;
+        try {
+          mediaUrls = await extractMediaUrlsFromEndpoint(sourceUrl);
+        } catch (e) {
+          return send(`❌ Không tải được URL: ${e.message}`);
+        }
+
+        if (!mediaUrls.length) {
+          return send(
+            "📭 Không tìm thấy URL media nào trong kết quả.\n" +
+            "Đảm bảo URL trả về JSON hoặc text có chứa link ảnh/video."
+          );
+        }
+
+        await send(`📋 Tìm thấy ${mediaUrls.length} URL media. Đang thêm vào kho "${khoName}"...`);
+
+        const kho = readKho(khoName);
+        const existingSet = new Set(kho);
+        let added = 0, skipped = 0;
+
+        for (const u of mediaUrls) {
+          if (existingSet.has(u)) { skipped++; continue; }
+          kho.push(u);
+          existingSet.add(u);
+          added++;
+        }
+
+        writeKho(khoName, kho);
+
+        return send(
+          `✅ Hoàn tất fetch!\n` +
+          `━━━━━━━━━━━━━━━━\n` +
+          `🌐 Nguồn: ${sourceUrl}\n` +
+          `➕ Đã thêm: ${added} URL mới\n` +
+          `⏭️ Bỏ qua (trùng): ${skipped}\n` +
+          `📦 Tổng kho "${khoName}": ${kho.length} link\n` +
+          `━━━━━━━━━━━━━━━━\n` +
+          `💡 Dùng: api check → kiểm tra link sống/chết`
+        );
+      }
+
+      // ── api check ──────────────────────────────────────────────────────────
       if (sub === "check") {
         const files = listKho();
         if (files.length === 0) {
-          return send("📭 Kho trống. Dùng `api add <tên>` để thêm link.");
+          return send("📭 Kho trống. Dùng `api add <tên>` hoặc `api fetch <tên> <url>` để thêm link.");
         }
 
         let totalLinks = 0;
@@ -226,7 +331,7 @@ module.exports = {
           `${rows.join("\n")}\n` +
           `━━━━━━━━━━━━━━━━\n` +
           `📝 Tổng: ${totalLinks} link\n\n` +
-          `💡 Reply STT để kiểm tra trạng thái link\n` +
+          `💡 Reply STT để kiểm tra link sống/chết\n` +
           `💡 Reply "del N" để xóa kho`;
 
         const sentInfo = await api.sendMessage(
@@ -247,7 +352,7 @@ module.exports = {
         return;
       }
 
-      // ── api del <tên> ────────────────────────────────────────────────────
+      // ── api del <tên> ──────────────────────────────────────────────────────
       if (sub === "del") {
         const khoName = args[1]?.trim();
         if (!khoName) return send("⚠️ Nhập tên kho muốn xóa: api del <tên>");
@@ -258,7 +363,7 @@ module.exports = {
         return send(`✅ Đã xóa kho "${khoName}" thành công.`);
       }
 
-      // ── api get <tên> ────────────────────────────────────────────────────
+      // ── api get <tên> ──────────────────────────────────────────────────────
       if (sub === "get") {
         const khoName = args[1]?.trim();
         if (!khoName) return send("⚠️ Nhập tên kho: api get <tên>");
@@ -270,25 +375,18 @@ module.exports = {
         return send(`🔗 Link ngẫu nhiên từ kho "${khoName}":\n${url}`);
       }
 
-      // ── Hướng dẫn ────────────────────────────────────────────────────────
       return send(
-        `📦 QUẢN LÝ KHO MEDIA\n` +
-        `━━━━━━━━━━━━━━━━\n` +
-        `api add <tên>  — Reply vào media rồi upload\n` +
-        `api check      — Xem danh sách kho\n` +
-        `api del <tên>  — Xóa kho\n` +
-        `api get <tên>  — Lấy link ngẫu nhiên\n` +
-        `━━━━━━━━━━━━━━━━\n` +
-        `⚙️ Media được mã hóa base64 và lưu trên GitHub`
+        `❓ Lệnh con không hợp lệ: "${args[0]}"\n` +
+        `💡 Dùng: api để xem hướng dẫn.`
       );
+
     } catch (err) {
       global.logError?.(`[api] ${err?.message || err}`);
-      return send(`❎ Đã xảy ra lỗi: ${err?.message || err}`);
+      return send(`❎ Lỗi: ${err?.message || err}`);
     }
   },
 
-  // ── onReply ─────────────────────────────────────────────────────────────────
-  // Kích hoạt khi user reply vào tin nhắn "api check"
+  // ── onReply ──────────────────────────────────────────────────────────────
   onReply: async ({ api, event, data, send, threadID, registerReaction }) => {
     try {
       if (data?.type !== "choosee") return;
@@ -298,19 +396,18 @@ module.exports = {
       const parts = body.split(/\s+/);
       const files = data.files || [];
 
-      // ── "del N" — xóa kho ────────────────────────────────────────────────
+      // "del N" — xóa kho
       if (parts[0]?.toLowerCase() === "del" && !isNaN(parseInt(parts[1]))) {
         const idx = parseInt(parts[1]) - 1;
         if (idx < 0 || idx >= files.length) return send("❌ Số thứ tự không hợp lệ.");
-
         const khoName = files[idx].replace(".json", "");
-        const p       = khoPath(khoName);
+        const p = khoPath(khoName);
         if (!fs.existsSync(p)) return send(`❌ Kho "${khoName}" không tồn tại.`);
         fs.unlinkSync(p);
         return send(`✅ Đã xóa kho "${khoName}"!`);
       }
 
-      // ── STT — kiểm tra link ───────────────────────────────────────────────
+      // STT — kiểm tra link
       const choose = parseInt(body);
       if (isNaN(choose)) return send("❌ Nhập số STT hoặc 'del N'.");
 
@@ -362,18 +459,14 @@ module.exports = {
     }
   },
 
-  // ── onReaction ──────────────────────────────────────────────────────────────
-  // Kích hoạt khi user thả 👍 vào kết quả kiểm tra link
+  // ── onReaction ───────────────────────────────────────────────────────────
   onReaction: async ({ data, send, icon }) => {
     try {
       if (data?.type !== "filter") return;
-
-      // Chỉ xử lý 👍
       if (icon !== "👍" && icon !== "\uD83D\uDC4D") return;
 
       const { khoName } = data;
       const kho = readKho(khoName);
-
       if (kho.length === 0) return send(`📭 Kho "${khoName}" không có link nào.`);
 
       await send(`⏳ Đang lọc link chết trong kho "${khoName}"...`);

@@ -1,5 +1,7 @@
-const fs   = require("fs");
-const path = require("path");
+const fs       = require("fs");
+const path     = require("path");
+const FormData = require("form-data");
+const { execSync } = require("child_process");
 
 const RAW_PATH    = path.join(__dirname, "../../includes/data/gai.json");
 const COOKED_PATH = path.join(__dirname, "../../includes/data/VideoCosplay.json");
@@ -27,13 +29,44 @@ async function downloadVideo(url, outPath) {
   fs.writeFileSync(outPath, Buffer.from(res.data));
 }
 
+// ── Extract frame đầu từ video → upload lên Catbox → trả về URL công khai ────
+async function extractAndUploadThumb(videoPath) {
+  const thumbPath = path.join(TEMP_DIR, `thumb_${Date.now()}.jpg`);
+  try {
+    execSync(
+      `ffmpeg -y -i "${videoPath}" -ss 0 -vframes 1 -q:v 5 "${thumbPath}"`,
+      { stdio: "pipe", timeout: 15000 }
+    );
+    if (!fs.existsSync(thumbPath)) return "";
+
+    const form = new FormData();
+    form.append("reqtype", "fileupload");
+    form.append("fileToUpload", fs.createReadStream(thumbPath), {
+      filename: path.basename(thumbPath),
+      contentType: "image/jpeg",
+    });
+
+    const res = await global.axios.post("https://catbox.moe/user/api.php", form, {
+      headers: form.getHeaders(),
+      timeout: 20000,
+    });
+
+    const url = typeof res.data === "string" ? res.data.trim() : "";
+    return url.startsWith("https://") ? url : "";
+  } catch {
+    return "";
+  } finally {
+    try { if (fs.existsSync(thumbPath)) fs.unlinkSync(thumbPath); } catch {}
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 module.exports = {
   config: {
     name           : "gai",
     aliases        : ["g"],
-    version        : "2.1.0",
+    version        : "2.2.0",
     hasPermssion   : 0,
     credits        : "Bot",
     description    : "Gửi video ngẫu nhiên từ kho. Quản lý kho bằng add/del/list.",
@@ -115,7 +148,7 @@ module.exports = {
         return send("❌ Tải xong nhưng file rỗng. Link có thể đã hết hạn.");
       }
 
-      // Upload lên Zalo qua global.upload
+      // Upload video lên Zalo qua global.upload
       const uploads = await global.upload(tmpPath, threadID, event.type);
       if (!uploads || !uploads[0]?.fileUrl) {
         throw new Error("Upload không trả về fileUrl.");
@@ -124,15 +157,18 @@ module.exports = {
       const { fileUrl, fileName, totalSize } = uploads[0];
       const videoUrl = fileName ? `${fileUrl}/${fileName}` : fileUrl;
 
+      // Extract thumbnail từ video rồi upload lên Catbox
+      const thumbnailUrl = await extractAndUploadThumb(tmpPath);
+
       await api.sendVideo(
         {
           videoUrl,
-          thumbnailUrl: "",
-          duration    : (item.duration || 0) * 1000,
-          width       : item.width    || 1280,
-          height      : item.height   || 720,
-          msg         : "",
-          fileSize    : totalSize || 0,
+          thumbnailUrl,
+          duration : (item.duration || 0) * 1000,
+          width    : item.width    || 1280,
+          height   : item.height   || 720,
+          msg      : "",
+          fileSize : totalSize || 0,
         },
         threadID,
         event.type

@@ -4,13 +4,33 @@ const { getGroupAnti } = require("../../utils/bot/botManager");
 
 // ── Bot detection keywords ────────────────────────────────────────────────────
 const BOT_NAME_PATTERNS = [
-  /\bbot\b/i, /\bauto\b/i, /\bspam\b/i, /\bclone\b/i,
-  /\bfake\b/i, /\brobot\b/i, /\bscript\b/i,
+  /\bbot\b/i,
+  /\bauto\b/i,
+  /\bspam\b/i,
+  /\bclone\b/i,
+  /\bfake\b/i,
+  /\brobot\b/i,
+  /\bscript\b/i,
+  /\badvert/i,
+  /\bquảng\s*cáo\b/i,
+  /\bsell\b/i,
+  /\bshop\b.*\bbot\b/i,
+  /\bacc\s*clone\b/i,
+  /acc\s*\d{5,}/i,
+  /\btự\s*động\b/i,
+  /\bauto\s*rep/i,
+  /\bspammer\b/i,
+  /\bvirtualuser\b/i,
 ];
 
 function looksLikeBot(name) {
   if (!name) return false;
   return BOT_NAME_PATTERNS.some(rx => rx.test(name));
+}
+
+function isInBotUidBlacklist(userId, anti) {
+  if (!userId || !Array.isArray(anti.antiBotUids)) return false;
+  return anti.antiBotUids.map(String).includes(String(userId));
 }
 
 // ── Join Notification ─────────────────────────────────────────────────────────
@@ -34,13 +54,16 @@ async function handleJoinNoti({ api, data }) {
       const name   = member.dName || member.displayName || member.name || userId;
       if (!name) continue;
 
-      // ── Anti-Bot: kick nếu phát hiện bot ─────────────────────────────────
-      if (anti.antiBot && looksLikeBot(name)) {
-        logEvent(`[anti-bot] Phát hiện bot: ${name} (${userId}) trong nhóm ${threadId}`);
+      // ── Anti-Bot: kick nếu phát hiện bot (theo tên hoặc UID) ───────────
+      const byName = anti.antiBot && looksLikeBot(name);
+      const byUid  = anti.antiBot && isInBotUidBlacklist(userId, anti);
+      if (byName || byUid) {
+        const reason = byUid ? `UID nằm trong blacklist` : `tên chứa từ khoá bot`;
+        logEvent(`[anti-bot] Kick: ${name} (${userId}) — ${reason}`);
         try {
           await api.removeUserFromGroup(userId, String(threadId));
           await api.sendMessage(
-            { msg: `🤖 Anti-Bot: Đã kick tài khoản bot "${name}" ra khỏi nhóm.` },
+            { msg: `🤖 Anti-Bot: Đã kick "${name}" (${reason}).` },
             String(threadId),
             ThreadType.Group
           ).catch(() => {});

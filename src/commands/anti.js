@@ -5,6 +5,45 @@ const { getGroupAnti, setGroupAnti } = require("../../utils/bot/botManager");
 
 const ANTI_FILE = path.join(__dirname, "../../includes/data/anti.json");
 
+function readAntiRaw() {
+  try { return JSON.parse(fs.readFileSync(ANTI_FILE, "utf-8")); }
+  catch { return {}; }
+}
+
+function saveAntiRaw(data) {
+  fs.writeFileSync(ANTI_FILE, JSON.stringify(data, null, 2), "utf-8");
+}
+
+function getBotUids(groupId) {
+  const data = readAntiRaw();
+  return Array.isArray(data[groupId]?.antiBotUids) ? data[groupId].antiBotUids.map(String) : [];
+}
+
+function addBotUid(groupId, uid) {
+  const data = readAntiRaw();
+  if (!data[groupId]) data[groupId] = {};
+  if (!Array.isArray(data[groupId].antiBotUids)) data[groupId].antiBotUids = [];
+  const list = data[groupId].antiBotUids.map(String);
+  if (!list.includes(String(uid))) {
+    data[groupId].antiBotUids.push(String(uid));
+    saveAntiRaw(data);
+    return true;
+  }
+  return false;
+}
+
+function removeBotUid(groupId, uid) {
+  const data = readAntiRaw();
+  if (!data[groupId] || !Array.isArray(data[groupId].antiBotUids)) return false;
+  const before = data[groupId].antiBotUids.length;
+  data[groupId].antiBotUids = data[groupId].antiBotUids.filter(u => String(u) !== String(uid));
+  if (data[groupId].antiBotUids.length < before) {
+    saveAntiRaw(data);
+    return true;
+  }
+  return false;
+}
+
 const FEATURES = {
   link: { field: "antiLink", label: "Anti-Link",  icon: "🔗", desc: "xoá tin nhắn có link lạ" },
   spam: { field: "antiSpam", label: "Anti-Spam",  icon: "🚫", desc: "cảnh báo gửi quá nhanh" },
@@ -31,10 +70,12 @@ module.exports = {
     description: "Bật/tắt các tính năng bảo vệ nhóm (anti)",
     commandCategory: "Quản Trị",
     usages: [
-      ".anti                        — Xem trạng thái",
-      ".anti <tính năng> on|off     — Bật/tắt cho nhóm này",
-      ".anti <tính năng> onall      — Bật cho tất cả nhóm (admin)",
-      ".anti <tính năng> offall     — Tắt cho tất cả nhóm (admin)",
+      ".anti                          — Xem trạng thái",
+      ".anti <tính năng> on|off       — Bật/tắt cho nhóm này",
+      ".anti <tính năng> onall|offall — Bật/tắt cho tất cả nhóm (admin)",
+      ".anti bot add <uid>            — Thêm UID vào blacklist bot",
+      ".anti bot remove <uid>         — Xoá UID khỏi blacklist bot",
+      ".anti bot list                 — Xem danh sách UID blacklist",
       "Tính năng: link, spam, nsfw, fake, out, undo, bot",
     ].join("\n"),
     cooldowns: 3,
@@ -75,13 +116,50 @@ module.exports = {
 
     const { field, label, icon, desc } = feature;
 
+    // ── Quản lý UID blacklist bot ────────────────────────────────────────────
+    if (sub === "bot") {
+      const action = toggle; // add | remove | list
+      const uid    = args[2] ? String(args[2]).trim() : null;
+
+      if (action === "list") {
+        const list = getBotUids(threadID);
+        if (!list.length) {
+          return send(`🤖 Blacklist Bot UID — Nhóm này\n━━━━━━━━━━━━━━━━\n(Chưa có UID nào)\n💡 Dùng: .anti bot add <uid>`);
+        }
+        const lines = list.map((u, i) => `  ${i + 1}. ${u}`).join("\n");
+        return send(`🤖 Blacklist Bot UID — Nhóm này\n━━━━━━━━━━━━━━━━\n${lines}\n━━━━━━━━━━━━━━━━\nTổng: ${list.length} UID`);
+      }
+
+      if (action === "add") {
+        if (!uid) return send(`❌ Thiếu UID.\nDùng: .anti bot add <uid>`);
+        const added = addBotUid(threadID, uid);
+        return send(added
+          ? `✅ Đã thêm UID ${uid} vào blacklist bot.`
+          : `⚠️ UID ${uid} đã có trong blacklist rồi.`
+        );
+      }
+
+      if (action === "remove" || action === "rm" || action === "del") {
+        if (!uid) return send(`❌ Thiếu UID.\nDùng: .anti bot remove <uid>`);
+        const removed = removeBotUid(threadID, uid);
+        return send(removed
+          ? `✅ Đã xoá UID ${uid} khỏi blacklist bot.`
+          : `⚠️ Không tìm thấy UID ${uid} trong blacklist.`
+        );
+      }
+    }
+
     // Không có toggle → hiển thị trạng thái tính năng đó
     if (!["on", "off", "onall", "offall"].includes(toggle)) {
       const cfg = getGroupAnti(threadID);
+      const extra = sub === "bot"
+        ? `\n📋 UID Blacklist: ${getBotUids(threadID).length} UID (.anti bot list)`
+        : "";
       return send(
         `${icon} ${label} — ${desc}\n` +
         `Trạng thái: ${cfg[field] ? "✅ ON" : "❌ OFF"}\n` +
-        `Dùng: .anti ${sub} on | .anti ${sub} off`
+        `Dùng: .anti ${sub} on | .anti ${sub} off` +
+        extra
       );
     }
 

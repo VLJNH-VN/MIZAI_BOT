@@ -78,6 +78,7 @@ function getGroupAnti(groupId) {
     antiOut:           g.antiOut           ?? false,
     antiUndo:          g.antiUndo          ?? false,
     antiBot:           g.antiBot           ?? false,
+    antiBotUids:       Array.isArray(g.antiBotUids) ? g.antiBotUids : [],
     antiLinkWhitelist: g.antiLinkWhitelist ?? [],
     antiSpamThreshold: g.antiSpamThreshold ?? 5,
     antiSpamWindow:    g.antiSpamWindow    ?? 5,

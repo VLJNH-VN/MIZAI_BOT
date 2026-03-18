@@ -254,14 +254,25 @@ async function _runCycle() {
     for (const key of shuffled) {
       if (_stopRequested) break;
       try {
-        const cachedPath = await decodeOne(key, { force: true, onLog: () => {} });
-        if (cachedPath) decoded.push({ key, cachedPath });
+        const cachedPath = await decodeOne(key, {
+          force: true,
+          onLog: (msg) => _log("logDebug", `[autoGetData] ${msg}`),
+        });
+        if (cachedPath) {
+          decoded.push({ key, cachedPath });
+        } else {
+          _log("logWarn", `[autoGetData] ${key}: decodeOne trả về null (apiUrl lỗi hoặc file hỏng)`);
+        }
       } catch (e) {
         _log("logWarn", `[autoGetData] ${key}: ${e.message}`);
       }
     }
 
-    _log("logInfo", `[autoGetData] Đã giải mã ${decoded.length}/${shuffled.length} file — sẽ xóa sau 1 phút.`);
+    if (decoded.length === 0 && shuffled.length > 0) {
+      _log("logWarn", `[autoGetData] Không decode được file nào (${shuffled.length} thử). Kiểm tra githubToken / apiUrl.`);
+    } else {
+      _log("logInfo", `[autoGetData] Đã giải mã ${decoded.length}/${shuffled.length} file — sẽ xóa sau 1 phút.`);
+    }
 
     setTimeout(() => {
       if (decoded.length > 0) {

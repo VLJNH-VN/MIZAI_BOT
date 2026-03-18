@@ -295,7 +295,7 @@ module.exports = {
             added++;
           } catch (e) {
             failed++;
-            global.logWarn?.(`[api fetch] Lỗi ${u}: ${e.message}`);
+            global.logDebug?.(`[api fetch] Skip ${u}: ${e.message}`);
           }
         }
 

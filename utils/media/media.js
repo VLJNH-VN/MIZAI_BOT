@@ -66,12 +66,29 @@ async function decodeFromApiUrl(apiUrl, outputPath, token) {
     timeout: 90000,
   });
 
-  const b64 = res.data?.content;
-  if (!b64) throw new Error("GitHub không trả về content base64");
+  const b64         = res.data?.content;
+  const downloadUrl = res.data?.download_url;
 
-  const buffer = Buffer.from(b64.replace(/\n/g, ""), "base64");
-  fs.writeFileSync(outputPath, buffer);
-  return buffer.length;
+  // File nhỏ (<1MB): GitHub trả về base64 content
+  if (b64 && b64.trim().length > 0) {
+    const buffer = Buffer.from(b64.replace(/\n/g, ""), "base64");
+    fs.writeFileSync(outputPath, buffer);
+    return buffer.length;
+  }
+
+  // File lớn (>1MB): GitHub không trả content — tải thẳng từ download_url
+  if (downloadUrl) {
+    const dl = await axios.get(downloadUrl, {
+      responseType: "arraybuffer",
+      timeout: 120000,
+      maxContentLength: 200 * 1024 * 1024,
+    });
+    const buffer = Buffer.from(dl.data);
+    fs.writeFileSync(outputPath, buffer);
+    return buffer.length;
+  }
+
+  throw new Error("GitHub không trả về content base64 và không có download_url");
 }
 
 function getVideoMeta(filePath) {

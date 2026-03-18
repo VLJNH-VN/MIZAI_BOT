@@ -234,14 +234,31 @@ async function decodeFromGithub(keyOrUrl, outputPath = null) {
     throw new Error(`[githubMedia] Tải file thất bại: ${msg}`);
   }
 
-  const b64 = res.data?.content;
-  if (!b64) {
-    throw new Error("[githubMedia] GitHub API không trả về content base64");
-  }
+  const b64         = res.data?.content;
+  const downloadUrl = res.data?.download_url;
 
-  // GitHub trả về base64 có ký tự xuống dòng — cần xóa trước khi decode
-  const cleanB64 = b64.replace(/\n/g, "");
-  const buffer   = Buffer.from(cleanB64, "base64");
+  let buffer;
+
+  // File nhỏ (<1MB): GitHub trả về base64 content
+  if (b64 && b64.trim().length > 0) {
+    buffer = Buffer.from(b64.replace(/\n/g, ""), "base64");
+  }
+  // File lớn (>1MB): tải thẳng từ download_url
+  else if (downloadUrl) {
+    try {
+      const dl = await axios.get(downloadUrl, {
+        responseType: "arraybuffer",
+        timeout: 120000,
+        maxContentLength: 200 * 1024 * 1024,
+      });
+      buffer = Buffer.from(dl.data);
+    } catch (e) {
+      throw new Error(`[githubMedia] Tải file lớn thất bại: ${e.message}`);
+    }
+  }
+  else {
+    throw new Error("[githubMedia] GitHub API không trả về content base64 và không có download_url");
+  }
 
   // ── Lưu file nếu có outputPath ────────────────────────────────────────────
   if (outputPath) {

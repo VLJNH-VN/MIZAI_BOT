@@ -6,17 +6,17 @@ const C = {
   bold:       "\x1b[1m",
   dim:        "\x1b[2m",
   // Info — xanh lá sáng
-  infoIcon:   "\x1b[38;5;82m",
+  infoTag:    "\x1b[38;5;82m",
   infoText:   "\x1b[97m",
   // Warn — vàng cam
-  warnIcon:   "\x1b[38;5;214m",
+  warnTag:    "\x1b[38;5;214m",
   warnText:   "\x1b[38;5;229m",
   // Error — đỏ
-  errIcon:    "\x1b[38;5;196m",
+  errTag:     "\x1b[38;5;196m",
   errText:    "\x1b[38;5;203m",
   errStack:   "\x1b[38;5;240m",
   // Event — tím xanh
-  evtIcon:    "\x1b[38;5;141m",
+  evtTag:     "\x1b[38;5;141m",
   evtText:    "\x1b[38;5;189m",
   // Debug — xám
   dbgText:    "\x1b[38;5;244m",
@@ -72,13 +72,13 @@ function formatMeta(meta) {
 // ── Loggers ───────────────────────────────────────────────────────────────────
 function logInfo(message, ...meta) {
   const { text, err, extra } = parseMessage(message, meta);
-  const line = `${C.infoIcon}✓${C.reset} ${C.infoText}${text}${C.reset}${formatMeta(extra)}`;
+  const line = `${C.infoTag}${C.bold}INFO${C.reset} ${C.infoText}${text}${C.reset}${formatMeta(extra)}`;
   console.log(err ? line + formatError(err) : line);
 }
 
 function logWarn(message, ...meta) {
   const { text, err, extra } = parseMessage(message, meta);
-  const line = `${C.warnIcon}⚠${C.reset} ${C.warnText}${text}${C.reset}${formatMeta(extra)}`;
+  const line = `${C.warnTag}${C.bold}WARN${C.reset} ${C.warnText}${text}${C.reset}${formatMeta(extra)}`;
   console.warn(err ? line + formatError(err) : line);
 }
 
@@ -86,31 +86,31 @@ function logError(message, ...meta) {
   const { text, err, extra } = parseMessage(message, meta);
 
   if (err) {
-    console.error(`${C.errIcon}✗${C.reset} ${C.errText}${text}${C.reset}${formatMeta(extra)}${formatError(err)}`);
+    console.error(`${C.errTag}${C.bold}ERROR${C.reset} ${C.errText}${text}${C.reset}${formatMeta(extra)}${formatError(err)}`);
     return;
   }
 
   if (text.includes("\n")) {
     const [first, ...rest] = text.split("\n");
     const indented = rest.filter(Boolean).map(l => `${C.errStack}    ${l}${C.reset}`).join("\n");
-    const line = `${C.errIcon}✗${C.reset} ${C.errText}${first}${C.reset}${formatMeta(extra)}`;
+    const line = `${C.errTag}${C.bold}ERROR${C.reset} ${C.errText}${first}${C.reset}${formatMeta(extra)}`;
     console.error(indented ? line + "\n" + indented : line);
     return;
   }
 
-  console.error(`${C.errIcon}✗${C.reset} ${C.errText}${text}${C.reset}${formatMeta(extra)}`);
+  console.error(`${C.errTag}${C.bold}ERROR${C.reset} ${C.errText}${text}${C.reset}${formatMeta(extra)}`);
 }
 
 function logEvent(message, ...meta) {
   const { text, err, extra } = parseMessage(message, meta);
-  const line = `${C.evtIcon}◉${C.reset} ${C.evtText}${text}${C.reset}${formatMeta(extra)}`;
+  const line = `${C.evtTag}${C.bold}EVENT${C.reset} ${C.evtText}${text}${C.reset}${formatMeta(extra)}`;
   console.log(err ? line + formatError(err) : line);
 }
 
 function logDebug(message, ...meta) {
   if (process.env.DEBUG !== "1") return;
   const { text, extra } = parseMessage(message, meta);
-  console.log(`${C.dbgText}▸ ${text}${formatMeta(extra)}${C.reset}`);
+  console.log(`${C.dbgText}${C.bold}DEBUG${C.reset} ${C.dbgText}${text}${formatMeta(extra)}${C.reset}`);
 }
 
 module.exports = { logInfo, logWarn, logError, logEvent, logDebug };

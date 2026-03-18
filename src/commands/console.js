@@ -1,5 +1,6 @@
 const { ThreadType } = require("zca-js");
 const { resolveSenderName, resolveGroupName } = require("../../includes/database/infoCache");
+const { extractBody } = require("../../utils/bot/extractBody");
 
 async function logToConsole({ api, event }) {
   const raw = event?.data || {};
@@ -18,12 +19,11 @@ async function logToConsole({ api, event }) {
     threadName = await resolveGroupName({ api, groupId: threadId, fallbackName: raw?.thread?.name });
   }
 
-  let content = "";
-  if (typeof raw.content === "string") {
-    content = raw.content.slice(0, 120).replace(/\n/g, " ").trim();
-  } else if (raw.content && typeof raw.content === "object") {
-    const t = raw.content.title || raw.content.href || raw.content.action || "";
-    content = `[${raw.content.type || "object"}] ${String(t).slice(0, 80)}`.trim();
+  let content = extractBody(raw).slice(0, 120).replace(/\n/g, " ").trim();
+  if (!content && raw.content && typeof raw.content === "object") {
+    const c = raw.content;
+    const extra = c.url || c.normalUrl || c.href || c.fileUrl || c.title || c.action || "";
+    content = `[${c.type || "media"}] ${String(extra).slice(0, 80)}`.trim();
   }
 
   logInfo(`[MSG] ${threadName} | ${senderName} [${senderId}]: ${content || "(no text)"}`);

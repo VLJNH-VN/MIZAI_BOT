@@ -311,7 +311,8 @@ module.exports = {
     try {
       if (data?.type !== "choosee") return;
 
-      const body  = (event?.data?.content || "").trim();
+      const { extractBody } = require("../../utils/bot/extractBody");
+      const body  = extractBody(event?.data).trim();
       const parts = body.split(/\s+/);
       const files = data.files || [];
 

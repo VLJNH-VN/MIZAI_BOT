@@ -42,7 +42,7 @@ function registerReply({ messageId, commandName, payload = {}, ttl = DEFAULT_TTL
 
 function pickReplyTarget(raw) {
   if (!raw || typeof raw !== "object") return null;
-  return raw.replyTo || raw.replyMessage || raw.reply || raw.quote || null;
+  return raw.quote || raw.msgReply || raw.replyTo || raw.replyMessage || raw.reply || null;
 }
 
 function findTrackedFromTarget(target) {

@@ -23,6 +23,7 @@
 const fs    = require("fs");
 const path  = require("path");
 const axios = require("axios");
+const { githubApiHeaders } = require("./githubConfig");
 
 // ── Đường dẫn file JSON lưu link ─────────────────────────────────────────────
 const LINKS_FILE = path.join(process.cwd(), "includes", "data", "githubMediaLinks.json");
@@ -85,13 +86,6 @@ function getGithubConfig() {
   };
 }
 
-function githubApiHeaders(token) {
-  return {
-    Authorization: `Bearer ${token}`,
-    Accept: "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-  };
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lấy SHA của file (cần khi update file đã tồn tại trên GitHub)

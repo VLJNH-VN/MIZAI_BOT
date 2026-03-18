@@ -7,20 +7,11 @@
 const { ThreadType } = require("zca-js");
 const { isAntiUndoEnabled } = require("../../utils/bot/antiManager");
 
-// Map<messageId, { commandName, payload, expireAt }>
-const undoStore = new Map();
+const { createTtlStore } = require('./ttlStore');
 
-const DEFAULT_TTL_MS = 10 * 60 * 1000; // 10 phút
+const DEFAULT_TTL_MS = 10 * 60 * 1000;
+const undoStore      = createTtlStore(DEFAULT_TTL_MS);
 
-// Dọn entry hết hạn định kỳ
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of undoStore) {
-    if (entry.expireAt && now > entry.expireAt) {
-      undoStore.delete(key);
-    }
-  }
-}, 60 * 1000);
 
 /**
  * Đăng ký một message đang theo dõi sự kiện thu hồi.
@@ -41,29 +32,15 @@ function registerUndo({ messageId, commandName, payload = {}, ttl = DEFAULT_TTL_
 }
 
 function findTrackedUndo(raw) {
-  if (!raw || typeof raw !== "object") return null;
-
-  // raw là TUndo: ID tin nhắn bị thu hồi nằm ở content.globalMsgId / content.cliMsgId
+  if (!raw || typeof raw !== 'object') return null;
   const candidates = [
-    raw?.content?.globalMsgId,
-    raw?.content?.cliMsgId,
-    raw.realMsgId,
-    raw.msgId,
-    raw.cliMsgId
-  ]
-    .filter(Boolean)
-    .map((id) => String(id));
-
+    raw?.content?.globalMsgId, raw?.content?.cliMsgId,
+    raw.realMsgId, raw.msgId, raw.cliMsgId,
+  ].filter(Boolean).map((id) => String(id));
   for (const id of candidates) {
-    const entry = undoStore.get(id);
-    if (!entry) continue;
-    if (entry.expireAt && Date.now() > entry.expireAt) {
-      undoStore.delete(id);
-      continue;
-    }
-    return { ...entry, _key: id };
+    const entry = undoStore.find(id);
+    if (entry) return entry;
   }
-
   return null;
 }
 
@@ -108,7 +85,7 @@ async function handleUndo({ api, undo, commands }) {
       return api.sendMessage(payload, threadID, type);
     };
 
-    undoStore.delete(tracked._key);
+    undoStore.del(tracked._key);
 
     await command.onUndo({
       api,

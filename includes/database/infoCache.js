@@ -3,10 +3,6 @@ const { getDb, run, get } = require("./sqlite");
 const USER_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const GROUP_TTL_MS = 24 * 60 * 60 * 1000; // 1 day
 
-function nowMs() {
-  return Date.now();
-}
-
 function safeJson(obj) {
   try {
     return JSON.stringify(obj ?? null);
@@ -48,7 +44,7 @@ async function getCachedUser(userId) {
 
 async function upsertUser({ userId, name, profile }) {
   const db = await getDb();
-  const ts = nowMs();
+  const ts = Date.now();
   await run(
     db,
     `
@@ -72,7 +68,7 @@ async function getCachedGroup(groupId) {
 
 async function upsertGroup({ groupId, name, info, memVerList, pendingApprove }) {
   const db = await getDb();
-  const ts = nowMs();
+  const ts = Date.now();
   await run(
     db,
     `
@@ -132,7 +128,7 @@ async function resolveSenderName({ api, userId, fallbackName }) {
   if (fallbackName && String(fallbackName).trim()) return String(fallbackName).trim();
 
   const cached = await getCachedUser(uid);
-  const isFresh = cached?.updated_at && nowMs() - Number(cached.updated_at) < USER_TTL_MS;
+  const isFresh = cached?.updated_at && Date.now() - Number(cached.updated_at) < USER_TTL_MS;
   if (cached?.name && isFresh) return cached.name;
 
   try {
@@ -151,7 +147,7 @@ async function resolveGroupName({ api, groupId, fallbackName }) {
   if (fallbackName && String(fallbackName).trim()) return String(fallbackName).trim();
 
   const cached = await getCachedGroup(gid);
-  const isFresh = cached?.updated_at && nowMs() - Number(cached.updated_at) < GROUP_TTL_MS;
+  const isFresh = cached?.updated_at && Date.now() - Number(cached.updated_at) < GROUP_TTL_MS;
   if (cached?.name && isFresh) return cached.name;
 
   try {
@@ -178,7 +174,7 @@ async function warmupFromEvent({ api, event }) {
     tasks.push(
       (async () => {
         const cached = await getCachedUser(userId);
-        const fresh = cached?.updated_at && nowMs() - Number(cached.updated_at) < USER_TTL_MS;
+        const fresh = cached?.updated_at && Date.now() - Number(cached.updated_at) < USER_TTL_MS;
         if (!fresh) await refreshUserInfo(api, userId);
       })()
     );
@@ -187,7 +183,7 @@ async function warmupFromEvent({ api, event }) {
     tasks.push(
       (async () => {
         const cached = await getCachedGroup(threadId);
-        const fresh = cached?.updated_at && nowMs() - Number(cached.updated_at) < GROUP_TTL_MS;
+        const fresh = cached?.updated_at && Date.now() - Number(cached.updated_at) < GROUP_TTL_MS;
         if (!fresh) await refreshGroupInfo(api, threadId);
       })()
     );

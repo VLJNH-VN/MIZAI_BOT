@@ -27,10 +27,6 @@ function trackGroupForBroadcast(threadID) {
 // ── Cooldown store ─────────────────────────────────────────────────────────────
 const cooldownStore = new Map();
 
-function nowMs() {
-  return Date.now();
-}
-
 function getSenderId(raw) {
   return raw?.uidFrom ? String(raw.uidFrom) : "unknown";
 }
@@ -100,7 +96,7 @@ async function checkCooldown({ canonicalName, senderId, cooldownSec, send }) {
 
   const key = `${canonicalName}:${senderId}`;
   const last = cooldownStore.get(key) || 0;
-  const elapsed = nowMs() - last;
+  const elapsed = Date.now() - last;
   const waitMs = cooldownSec * 1000 - elapsed;
 
   if (waitMs > 0) {
@@ -109,7 +105,7 @@ async function checkCooldown({ canonicalName, senderId, cooldownSec, send }) {
     return false;
   }
 
-  cooldownStore.set(key, nowMs());
+  cooldownStore.set(key, Date.now());
   return true;
 }
 
@@ -193,7 +189,7 @@ async function handleCommand({ api, event, commands, prefix }) {
     if (!cooldownOk) return;
 
     // ── Thực thi lệnh ─────────────────────────────────────────────────────────
-    const startTime = nowMs();
+    const startTime = Date.now();
     await command.run({
       api,
       event,
@@ -211,7 +207,7 @@ async function handleCommand({ api, event, commands, prefix }) {
       registerReaction,
       registerUndo
     });
-    const execTime = nowMs() - startTime;
+    const execTime = Date.now() - startTime;
 
     // ── Log ────────────────────────────────────────────────────────────────────
     let userName = senderId;

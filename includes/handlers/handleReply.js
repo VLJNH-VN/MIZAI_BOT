@@ -5,20 +5,11 @@
  * - Tự động dọn sạch các entry hết hạn sau TTL (mặc định 10 phút)
  */
 
-const DEFAULT_TTL_MS = 10 * 60 * 1000; // 10 phút
+const { createTtlStore } = require('./ttlStore');
 
-// Map<messageId, { commandName, payload, expireAt }>
-const replyStore = new Map();
+const DEFAULT_TTL_MS = 10 * 60 * 1000;
+const replyStore     = createTtlStore(DEFAULT_TTL_MS);
 
-// ── Dọn entry hết hạn định kỳ ─────────────────────────────────────────────────
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of replyStore) {
-    if (entry.expireAt && now > entry.expireAt) {
-      replyStore.delete(key);
-    }
-  }
-}, 60 * 1000); // chạy mỗi 1 phút
 
 /**
  * Đăng ký một message đang chờ reply.
@@ -28,14 +19,7 @@ setInterval(() => {
  * @param {Object} [opts.payload]   - Dữ liệu tuỳ ý truyền sang onReply
  * @param {number} [opts.ttl]       - Thời gian sống (ms), mặc định 10 phút
  */
-function registerReply({ messageId, commandName, payload = {}, ttl = DEFAULT_TTL_MS }) {
-  if (!messageId || !commandName) return;
-
-  replyStore.set(String(messageId), {
-    commandName,
-    payload,
-    expireAt: ttl > 0 ? Date.now() + ttl : null
-  });
+function registerReply(opts) { replyStore.register(opts); };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -46,30 +30,14 @@ function pickReplyTarget(raw) {
 }
 
 function findTrackedFromTarget(target) {
-  if (!target || typeof target !== "object") return null;
-
+  if (!target || typeof target !== 'object') return null;
   const candidates = [
-    target.msgId,
-    target.messageId,
-    target.globalMsgId,
-    target.cliMsgId
-  ]
-    .filter(Boolean)
-    .map((id) => String(id));
-
+    target.msgId, target.messageId, target.globalMsgId, target.cliMsgId,
+  ].filter(Boolean).map((id) => String(id));
   for (const id of candidates) {
-    const entry = replyStore.get(id);
-    if (!entry) continue;
-
-    // Kiểm tra TTL
-    if (entry.expireAt && Date.now() > entry.expireAt) {
-      replyStore.delete(id);
-      continue;
-    }
-
-    return { ...entry, _key: id };
+    const entry = replyStore.find(id);
+    if (entry) return entry;
   }
-
   return null;
 }
 
@@ -99,7 +67,7 @@ async function handleReply({ api, event, commands, prefix }) {
     };
 
     // Xoá khỏi store sau khi đã xử lý (one-shot), trừ khi command muốn giữ lại
-    replyStore.delete(tracked._key);
+    replyStore.del(tracked._key);
 
     await command.onReply({
       api,

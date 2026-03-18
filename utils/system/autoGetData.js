@@ -13,14 +13,13 @@
 const fs   = require("fs");
 const path = require("path");
 
-const { decodeOne, loadIndex, VIDEO_DIR, THUMB_DIR, INDEX_FILE } =
+const { decodeOne, loadIndex, readLinks, saveIndex, VIDEO_DIR, THUMB_DIR, INDEX_FILE } =
   require("../media/mediaCache");
 
 const MAX_FILES = 10;
 const CYCLE_MS  = 60 * 1000;
 
 const ROOT       = process.cwd();
-const LINKS_FILE = path.join(ROOT, "includes", "data", "githubMediaLinks.json");
 
 let _running = false;
 let _stopRequested = false;
@@ -30,20 +29,9 @@ function _log(fn, msg) {
   logger(msg);
 }
 
-function _readLinks() {
-  try {
-    if (fs.existsSync(LINKS_FILE))
-      return JSON.parse(fs.readFileSync(LINKS_FILE, "utf8"));
-  } catch (_) {}
   return {};
 }
 
-function _saveIndex(arr) {
-  try {
-    fs.writeFileSync(INDEX_FILE, JSON.stringify(arr, null, 2), "utf8");
-  } catch (e) {
-    _log("logError", `[autoGetData] Không ghi được dataCache.json: ${e.message}`);
-  }
 }
 
 function _removeDecodedFiles(decoded) {
@@ -66,7 +54,7 @@ function _removeDecodedFiles(decoded) {
     const full = path.join(ROOT, e.cachedPath);
     return fs.existsSync(full) && fs.statSync(full).size > 0;
   });
-  _saveIndex(kept);
+  saveIndex(kept);
 }
 
 async function _runCycle() {
@@ -77,7 +65,7 @@ async function _runCycle() {
   }
 
   try {
-    const links   = _readLinks();
+    const links   = readLinks();
     const allKeys = Object.keys(links);
 
     if (allKeys.length === 0) {

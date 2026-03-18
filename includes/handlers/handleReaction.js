@@ -7,23 +7,14 @@
 
 const { ThreadType, Reactions } = require("zca-js");
 
-// Map<messageId, { commandName, payload, expireAt }>
-const reactionStore = new Map();
+const { createTtlStore } = require('./ttlStore');
 
-const DEFAULT_TTL_MS = 10 * 60 * 1000; // 10 phút
+const DEFAULT_TTL_MS  = 10 * 60 * 1000;
+const reactionStore  = createTtlStore(DEFAULT_TTL_MS);
 
 // Zalo reaction code cho cảm xúc phẫn nộ (dùng Reactions enum từ zca-js)
 const ANGRY_ICONS = new Set([Reactions.ANGRY, Reactions.ANGRY_FACE]);
 
-// Dọn entry hết hạn định kỳ
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of reactionStore) {
-    if (entry.expireAt && now > entry.expireAt) {
-      reactionStore.delete(key);
-    }
-  }
-}, 60 * 1000);
 
 /**
  * Đăng ký một message đang chờ reaction.
@@ -38,32 +29,17 @@ function registerReaction({ messageId, commandName, payload = {}, ttl = DEFAULT_
 }
 
 function findTrackedReaction(raw) {
-  if (!raw || typeof raw !== "object") return null;
-
+  if (!raw || typeof raw !== 'object') return null;
   const rMsgs = raw?.content?.rMsg || [];
-  const rMsgCandidates = rMsgs.flatMap((r) => [r?.gMsgID, r?.cMsgID].filter(Boolean));
-
+  const rMsgCandidates = rMsgs.flatMap((rr) => [rr?.gMsgID, rr?.cMsgID].filter(Boolean));
   const candidates = [
     ...rMsgCandidates,
-    raw.msgId,
-    raw.cliMsgId,
-    raw.messageId,
-    raw.globalMsgId,
-    raw?.content?.msgId
-  ]
-    .filter(Boolean)
-    .map((id) => String(id));
-
+    raw.msgId, raw.cliMsgId, raw.messageId, raw.globalMsgId, raw?.content?.msgId,
+  ].filter(Boolean).map((id) => String(id));
   for (const id of candidates) {
-    const entry = reactionStore.get(id);
-    if (!entry) continue;
-    if (entry.expireAt && Date.now() > entry.expireAt) {
-      reactionStore.delete(id);
-      continue;
-    }
-    return { ...entry, _key: id };
+    const entry = reactionStore.find(id);
+    if (entry) return entry;
   }
-
   return null;
 }
 

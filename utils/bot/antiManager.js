@@ -1,21 +1,16 @@
 const fs = require("fs");
 const path = require("path");
+const { readJsonFile, writeJsonFile } = require("../system/fileHelper");
 
 const ANTI_FILE = path.join(__dirname, "../../includes/data/anti.json");
 const ANTI_OUT_FILE = path.join(__dirname, "../../includes/data/antiOut.json");
 
 function readAnti() {
-  try {
-    if (!fs.existsSync(ANTI_FILE)) {
-      fs.writeFileSync(ANTI_FILE, JSON.stringify({}));
-      return {};
-    }
-    return JSON.parse(fs.readFileSync(ANTI_FILE, "utf-8"));
-  } catch { return {}; }
+  return readJsonFile(ANTI_FILE, {});
 }
 
 function saveAnti(data) {
-  fs.writeFileSync(ANTI_FILE, JSON.stringify(data, null, 2));
+  writeJsonFile(ANTI_FILE, data);
 }
 
 function getGroupAnti(groupId) {
@@ -47,17 +42,11 @@ function setGroupAnti(groupId, key, value) {
 
 // ── Anti Out tracking ──────────────────────────────────────────────────────────
 function readAntiOut() {
-  try {
-    if (!fs.existsSync(ANTI_OUT_FILE)) {
-      fs.writeFileSync(ANTI_OUT_FILE, JSON.stringify({}));
-      return {};
-    }
-    return JSON.parse(fs.readFileSync(ANTI_OUT_FILE, "utf-8"));
-  } catch { return {}; }
+  return readJsonFile(ANTI_OUT_FILE, {});
 }
 
 function saveAntiOut(data) {
-  fs.writeFileSync(ANTI_OUT_FILE, JSON.stringify(data, null, 2));
+  writeJsonFile(ANTI_OUT_FILE, data);
 }
 
 function recordJoin(groupId, userId) {

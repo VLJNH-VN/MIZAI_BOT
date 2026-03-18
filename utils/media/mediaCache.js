@@ -30,6 +30,7 @@ const fs         = require("fs");
 const path       = require("path");
 const axios      = require("axios");
 const { execSync } = require("child_process");
+const { githubApiHeaders } = require("./githubConfig");
 
 // ── Đường dẫn ──────────────────────────────────────────────────────────────────
 const ROOT         = process.cwd();
@@ -54,13 +55,6 @@ function getConfig() {
   }
 }
 
-function githubApiHeaders(token) {
-  return {
-    Authorization: `Bearer ${token}`,
-    Accept: "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-  };
-}
 
 // ── Đọc/ghi danh sách link đã upload ─────────────────────────────────────────
 function readLinks() {
@@ -327,4 +321,6 @@ module.exports = {
   VIDEO_DIR,
   THUMB_DIR,
   INDEX_FILE,
+  readLinks,
+  saveIndex,
 };

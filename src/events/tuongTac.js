@@ -89,41 +89,43 @@ function getNextFirstOfMonthMs() {
 }
 
 function startTuongTac(api) {
-  logInfo("[TuongTac] Đã khởi động.");
+  let dayMin, weekH, monthH;
 
   const startDailyTimer = () => {
     const ms = getNextMidnightMs();
+    dayMin = Math.round(ms / 60000);
     setTimeout(async () => {
       await sendTopForAllGroups(api, "day", "TOP TƯƠNG TÁC NGÀY");
       resetPeriod("day");
       setInterval(async () => { await sendTopForAllGroups(api, "day", "TOP TƯƠNG TÁC NGÀY"); resetPeriod("day"); }, DAY_MS);
     }, ms);
-    logInfo(`[TuongTac] Top ngày gửi sau ${Math.round(ms / 60000)} phút.`);
   };
 
   const startWeeklyTimer = () => {
     const ms = getNextMondayMs();
+    weekH = Math.round(ms / 3600000);
     setTimeout(async () => {
       await sendTopForAllGroups(api, "week", "TOP TƯƠNG TÁC TUẦN");
       resetPeriod("week");
       setInterval(async () => { await sendTopForAllGroups(api, "week", "TOP TƯƠNG TÁC TUẦN"); resetPeriod("week"); }, WEEK_MS);
     }, ms);
-    logInfo(`[TuongTac] Top tuần gửi sau ${Math.round(ms / 3600000)} giờ.`);
   };
 
   const startMonthlyTimer = () => {
     const ms = getNextFirstOfMonthMs();
+    monthH = Math.round(ms / 3600000);
     setTimeout(async () => {
       await sendTopForAllGroups(api, "month", "TOP TƯƠNG TÁC THÁNG");
       resetPeriod("month");
       setInterval(async () => { await sendTopForAllGroups(api, "month", "TOP TƯƠNG TÁC THÁNG"); resetPeriod("month"); }, MONTH_MS);
     }, ms);
-    logInfo(`[TuongTac] Top tháng gửi sau ${Math.round(ms / 3600000)} giờ.`);
   };
 
   startDailyTimer();
   startWeeklyTimer();
   startMonthlyTimer();
+
+  return `ngày: ${dayMin}p | tuần: ${weekH}h | tháng: ${monthH}h`;
 }
 
 module.exports = { startTuongTac, recordMessage, getTopForGroup };

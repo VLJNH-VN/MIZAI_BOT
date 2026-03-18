@@ -53,7 +53,7 @@ async function checkAllKeys() {
   const data = loadKeyData();
   if (!data.autoCheck || !data.keys.length) return;
 
-  logInfo("[KEY] Bắt đầu check Groq key...");
+  
   const live = [], dead = [], noBalance = [];
 
   for (const key of data.keys) {
@@ -61,14 +61,13 @@ async function checkAllKeys() {
     if (result.status === "live")       live.push(key);
     else if (result.status === "no_balance") noBalance.push(key);
     else                                dead.push(key);
-    logInfo(`[KEY] ${key.slice(0, 8)}... => ${result.status}${result.note ? ` (${result.note})` : ""}`);
+    
   }
 
   data.live = live;
   data.dead = dead;
   data.no_balance = noBalance;
   saveKeyData(data);
-  logInfo(`[KEY] Kết quả: ${live.length} live, ${noBalance.length} hết credit, ${dead.length} dead`);
 }
 
 function scheduleKeyCheck(intervalMs = 5 * 60 * 1000) {

@@ -6,7 +6,6 @@
 const { handleGoibot } = require("../../utils/ai/goibot");
 
 function startGoibot(api) {
-    logInfo("[Goibot] Đã khởi động AI Mizai.");
 
     api.listener.on("message", async (event) => {
         try {

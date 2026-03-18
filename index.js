@@ -55,9 +55,16 @@ async function main(isFirstRun = true) {
     logInfo("[LISTENER] Bắt đầu nhận lệnh!");
     if (isFirstRun) {
       startAutoSend(api);
-      startTuongTac(api);
+      const ttInfo = startTuongTac(api);
       startAutoDown(api);
       startGoibot(api);
+      logInfo(
+        "[BOT] Dịch vụ đã khởi động:\n" +
+        "      ├─ AutoSend\n" +
+        `      ├─ TuongTac  (${ttInfo})\n` +
+        "      ├─ AutoDown  (API: zeidteam + kemapis)\n" +
+        "      └─ Goibot    AI Mizai"
+      );
     }
   });
 

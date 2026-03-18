@@ -42,7 +42,6 @@ function currentHHMM() {
 }
 
 function startAutoSend(api) {
-  logInfo("[AutoSend] Đã khởi động.");
 
   setInterval(async () => {
     const nowTime = currentHHMM();

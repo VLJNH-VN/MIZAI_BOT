@@ -180,7 +180,6 @@ async function handleImages(api, medias, caption, threadId, threadType, cacheDir
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 function startAutoDown(api) {
-    logInfo("[AutoDown] Đã khởi động. (API: zeidteam + kemapis)");
 
     api.listener.on("message", async (msg) => {
         const threadId   = msg.threadId;

@@ -104,7 +104,9 @@ async function autoRemoveAngryMessage({ api, msgId, threadID, type, icon }) {
     await api.undo(msgId, threadID, type);
     logEvent(`[ REACT-AUTO-REMOVE ] Đã gỡ tin nhắn ${msgId} tại thread ${threadID} (react: ${icon})`);
   } catch (err) {
-    logError(`[ REACT-AUTO-REMOVE ] Không thể gỡ tin nhắn ${msgId}: ${err?.message || err}`);
+    const detail = err?.message || err?.error || err?.data?.error
+      || (typeof err === "object" ? JSON.stringify(err) : String(err));
+    logError(`[ REACT-AUTO-REMOVE ] Không thể gỡ tin nhắn ${msgId}: ${detail}`);
   }
 }
 

@@ -50,6 +50,15 @@
  * │  global.checkGroqKey(key) → Promise<{ key, status: "live"|"dead" }>   │
  * │  global.setAutoCheck(boolean)  → void  Bật/tắt tự động check key      │
  * ├──────────────────────┬──────────────────────────────────────────────────┤
+ * │  global.githubMedia  │ Upload/decode media qua GitHub (base64)         │
+ * │    .upload(filePath, options?)                                          │
+ * │      options: { folder?, key?, overwrite? }                            │
+ * │      → Promise<{ key, rawUrl, apiUrl }>                                │
+ * │    .decode(keyOrApiUrl, outputPath?)                                   │
+ * │      → Promise<Buffer>  (lưu file nếu có outputPath)                  │
+ * │    .links()  → object  (toàn bộ githubMediaLinks.json)                │
+ * │  Env: GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, GITHUB_BRANCH          │
+ * ├──────────────────────┬──────────────────────────────────────────────────┤
  * │  global.logInfo(msg)   │ [INFO]  xanh lá                               │
  * │  global.logWarn(msg)   │ [WARN]  vàng                                  │
  * │  global.logError(msg)  │ [ERROR] đỏ                                    │
@@ -85,6 +94,11 @@ const { getBotAdminIds, isBotAdmin, isGroupAdmin } = require("../bot/admin");
 const { logInfo, logWarn, logError, logEvent, logDebug } = require("./logger");
 const { checkGroqKey, setAutoCheck }          = require("./keyManager");
 const { processGaiData }                      = require("../bot/processGaiData");
+const {
+  encodeAndUploadToGithub,
+  decodeFromGithub,
+  getMediaLinks,
+}                                             = require("../media/githubMedia");
 
 // ── Logger ────────────────────────────────────────────────────────────────────
 global.logInfo   = logInfo;
@@ -128,6 +142,33 @@ global.setAutoCheck  = setAutoCheck;
 
 // ── Xử lý video gai ──────────────────────────────────────────────────────────
 global.processGaiData = processGaiData;
+
+// ── GitHub Media (base64 encode → upload → decode) ────────────────────────────
+/**
+ * global.githubMedia.upload(filePath, options?)
+ *   Mã hóa file media bằng base64 và tải lên GitHub.
+ *   options: { folder?, key?, overwrite? }
+ *   → Promise<{ key, rawUrl, apiUrl }>
+ *
+ * global.githubMedia.decode(keyOrApiUrl, outputPath?)
+ *   Tải file từ GitHub và giải mã base64 về Buffer (hoặc lưu vào file).
+ *   → Promise<Buffer>
+ *
+ * global.githubMedia.links()
+ *   Trả về toàn bộ nội dung githubMediaLinks.json.
+ *   → object
+ *
+ * Env cần thiết:
+ *   GITHUB_TOKEN  - Personal Access Token (scope: repo)
+ *   GITHUB_OWNER  - Tên tài khoản GitHub
+ *   GITHUB_REPO   - Tên repository
+ *   GITHUB_BRANCH - Nhánh (mặc định "main")
+ */
+global.githubMedia = {
+  upload: encodeAndUploadToGithub,
+  decode: decodeFromGithub,
+  links:  getMediaLinks,
+};
 
 /**
  * Gọi trong index.js sau khi đăng nhập Zalo thành công.

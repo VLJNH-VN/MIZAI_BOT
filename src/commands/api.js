@@ -281,17 +281,22 @@ module.exports = {
           );
         }
 
-        await send(`📋 Tìm thấy ${mediaUrls.length} URL media. Đang thêm vào kho "${khoName}"...`);
+        await send(`📋 Tìm thấy ${mediaUrls.length} URL media. Đang tải & mã hóa từng file...`);
 
         const kho = readKho(khoName);
-        const existingSet = new Set(kho);
-        let added = 0, skipped = 0;
+        let added = 0, failed = 0;
 
-        for (const u of mediaUrls) {
-          if (existingSet.has(u)) { skipped++; continue; }
-          kho.push(u);
-          existingSet.add(u);
-          added++;
+        for (let i = 0; i < mediaUrls.length; i++) {
+          const u = mediaUrls[i];
+          try {
+            await send(`⏳ [${i + 1}/${mediaUrls.length}] Đang xử lý...`);
+            const rawUrl = await uploadMediaToGithub(u, khoName);
+            kho.push(rawUrl);
+            added++;
+          } catch (e) {
+            failed++;
+            global.logWarn?.(`[api fetch] Lỗi ${u}: ${e.message}`);
+          }
         }
 
         writeKho(khoName, kho);
@@ -300,8 +305,8 @@ module.exports = {
           `✅ Hoàn tất fetch!\n` +
           `━━━━━━━━━━━━━━━━\n` +
           `🌐 Nguồn: ${sourceUrl}\n` +
-          `➕ Đã thêm: ${added} URL mới\n` +
-          `⏭️ Bỏ qua (trùng): ${skipped}\n` +
+          `➕ Upload thành công: ${added}\n` +
+          `❌ Thất bại: ${failed}\n` +
           `📦 Tổng kho "${khoName}": ${kho.length} link\n` +
           `━━━━━━━━━━━━━━━━\n` +
           `💡 Dùng: api check → kiểm tra link sống/chết`

@@ -4,11 +4,10 @@
  * Mã hóa media (video/ảnh/audio) bằng base64 rồi tải lên GitHub,
  * lưu link raw vào JSON, và giải mã về file/buffer khi cần.
  *
- * Yêu cầu env:
- *   GITHUB_TOKEN  - Personal Access Token (scope: repo)
- *   GITHUB_OWNER  - Tên tài khoản GitHub (vd: "myuser")
- *   GITHUB_REPO   - Tên repository (vd: "media-store")
- *   GITHUB_BRANCH - Nhánh mặc định (mặc định "main")
+ * Đọc cấu hình từ global.config (config.json):
+ *   config.githubToken  - Personal Access Token (scope: repo)
+ *   config.uploadRepo   - "owner/repo" dùng để upload media (vd: "VLJNH-VN/UPLOAD_MIZAI")
+ *   config.branch       - Nhánh mặc định (mặc định "main")
  *
  * ┌──────────────────────────────────────────────────────────────────────────┐
  * │  EXPORTS                                                                 │
@@ -28,7 +27,7 @@ const axios = require("axios");
 // ── Đường dẫn file JSON lưu link ─────────────────────────────────────────────
 const LINKS_FILE = path.join(process.cwd(), "includes", "data", "githubMediaLinks.json");
 
-// ── Loại MIME hợp lệ ──────────────────────────────────────────────────────────
+// ── Loại file hợp lệ ─────────────────────────────────────────────────────────
 const SUPPORTED_EXTS = new Set([
   ".mp4", ".mkv", ".avi", ".mov", ".webm",      // video
   ".jpg", ".jpeg", ".png", ".gif", ".webp",      // ảnh
@@ -58,17 +57,32 @@ function writeLinks(data) {
   }
 }
 
+/**
+ * Đọc config GitHub từ global.config (config.json).
+ * uploadRepo: "owner/repo" — ví dụ "VLJNH-VN/UPLOAD_MIZAI"
+ */
 function getGithubConfig() {
-  const token  = process.env.GITHUB_TOKEN;
-  const owner  = process.env.GITHUB_OWNER;
-  const repo   = process.env.GITHUB_REPO;
-  const branch = process.env.GITHUB_BRANCH || "main";
+  const cfg = global.config || {};
 
-  if (!token) throw new Error("[githubMedia] Thiếu env GITHUB_TOKEN");
-  if (!owner) throw new Error("[githubMedia] Thiếu env GITHUB_OWNER");
-  if (!repo)  throw new Error("[githubMedia] Thiếu env GITHUB_REPO");
+  const token      = cfg.githubToken;
+  const uploadRepo = cfg.uploadRepo;
+  const branch     = cfg.branch || "main";
 
-  return { token, owner, repo, branch };
+  if (!token)      throw new Error("[githubMedia] Thiếu config.githubToken trong config.json");
+  if (!uploadRepo) throw new Error("[githubMedia] Thiếu config.uploadRepo trong config.json (vd: \"VLJNH-VN/UPLOAD_MIZAI\")");
+
+  const parts = uploadRepo.split("/");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    throw new Error(`[githubMedia] config.uploadRepo không đúng định dạng "owner/repo": "${uploadRepo}"`);
+  }
+
+  return {
+    token,
+    owner:  parts[0],
+    repo:   parts[1],
+    branch,
+    fullRepo: uploadRepo,
+  };
 }
 
 function githubApiHeaders(token) {
@@ -103,13 +117,13 @@ async function getFileSha(owner, repo, ghPath, branch, token) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Đọc file media, mã hóa base64, tải lên GitHub, lưu link raw vào JSON.
+ * Đọc file media, mã hóa base64, tải lên GitHub (uploadRepo), lưu link raw vào JSON.
  *
- * @param {string} filePath     - Đường dẫn file local (video/ảnh/audio)
+ * @param {string} filePath       - Đường dẫn file local (video/ảnh/audio)
  * @param {object} [options]
- * @param {string} [options.folder]   - Thư mục con trên GitHub (vd: "media/videos")
- * @param {string} [options.key]      - Khóa lưu trong JSON (mặc định: tên file)
- * @param {boolean} [options.overwrite] - Cho phép ghi đè nếu file đã tồn tại (default: true)
+ * @param {string} [options.folder]     - Thư mục con trên GitHub (vd: "media/videos")
+ * @param {string} [options.key]        - Khóa lưu trong JSON (mặc định: tên file)
+ * @param {boolean} [options.overwrite] - Ghi đè nếu file đã tồn tại (default: true)
  * @returns {Promise<{ key: string, rawUrl: string, apiUrl: string }>}
  */
 async function encodeAndUploadToGithub(filePath, options = {}) {
@@ -155,7 +169,7 @@ async function encodeAndUploadToGithub(filePath, options = {}) {
     );
   } catch (e) {
     const msg = e.response?.data?.message || e.message;
-    throw new Error(`[githubMedia] Upload thất bại: ${msg}`);
+    throw new Error(`[githubMedia] Upload thất bại (${owner}/${repo}): ${msg}`);
   }
 
   const rawUrl = uploadRes.data?.content?.download_url;

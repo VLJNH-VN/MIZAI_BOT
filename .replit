@@ -52,5 +52,3 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-GITHUB_REPO = "UPLOAD_MIZAI"
-GITHUB_BRANCH = "main"

@@ -57,7 +57,10 @@
  * │    .decode(keyOrApiUrl, outputPath?)                                   │
  * │      → Promise<Buffer>  (lưu file nếu có outputPath)                  │
  * │    .links()  → object  (toàn bộ githubMediaLinks.json)                │
- * │  Env: GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, GITHUB_BRANCH          │
+ * │  Config (config.json):                                                  │
+ * │    githubToken  — Personal Access Token (scope: repo)                  │
+ * │    uploadRepo   — "owner/repo" vd: "VLJNH-VN/UPLOAD_MIZAI"            │
+ * │    branch       — Nhánh (mặc định "main")                              │
  * ├──────────────────────┬──────────────────────────────────────────────────┤
  * │  global.logInfo(msg)   │ [INFO]  xanh lá                               │
  * │  global.logWarn(msg)   │ [WARN]  vàng                                  │

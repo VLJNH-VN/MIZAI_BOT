@@ -247,7 +247,7 @@ module.exports = {
       }
 
       try {
-        await api.removeGroupMember(threadID, uid);
+        await api.removeUserFromGroup(uid, threadID);
         return send(`✅ Đã kick UID ${uid} khỏi nhóm.`);
       } catch (err) {
         return send(`❌ Không thể kick UID ${uid}.\nLý do: ${err?.message || "Không rõ"}`);
@@ -266,7 +266,7 @@ module.exports = {
       }
 
       try {
-        await api.changeGroupName(threadID, newName);
+        await api.changeGroupName(newName, threadID);
         return send(`✅ Đã đổi tên nhóm thành: ${newName}`);
       } catch (err) {
         return send(`❌ Không thể đổi tên nhóm.\nLý do: ${err?.message || "Không rõ"}`);

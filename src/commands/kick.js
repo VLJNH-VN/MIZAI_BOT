@@ -40,7 +40,7 @@ module.exports = {
         continue;
       }
       try {
-        await api.removeGroupMember(threadID, uid);
+        await api.removeUserFromGroup(uid, threadID);
         kicked++;
       } catch (err) {
         const name = mentions[uid]?.dName || uid;

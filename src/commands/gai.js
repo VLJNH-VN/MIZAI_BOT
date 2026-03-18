@@ -1,10 +1,9 @@
 const fs   = require("fs");
 const path = require("path");
-const axios = require("axios");
-const { sendVideo, tempDir } = require("../../utils/media/upload");
 
-const RAW_PATH     = path.join(__dirname, "../../includes/data/gai.json");
-const COOKED_PATH  = path.join(__dirname, "../../includes/data/VideoCosplay.json");
+const RAW_PATH    = path.join(__dirname, "../../includes/data/gai.json");
+const COOKED_PATH = path.join(__dirname, "../../includes/data/VideoCosplay.json");
+const TEMP_DIR    = path.join(process.cwd(), "includes", "cache", "temp");
 
 // ── Helpers JSON ──────────────────────────────────────────────────────────────
 function loadRaw() {
@@ -19,7 +18,7 @@ function loadCooked() {
 
 // ── Tải video về temp ─────────────────────────────────────────────────────────
 async function downloadVideo(url, outPath) {
-  const res = await axios.get(url, {
+  const res = await global.axios.get(url, {
     responseType: "arraybuffer",
     timeout: 90000,
     maxContentLength: 500 * 1024 * 1024,
@@ -34,12 +33,12 @@ module.exports = {
   config: {
     name           : "gai",
     aliases        : ["g"],
-    version        : "2.0.0",
+    version        : "2.1.0",
     hasPermssion   : 0,
     credits        : "Bot",
     description    : "Gửi video ngẫu nhiên từ kho. Quản lý kho bằng add/del/list.",
     commandCategory: "Giải Trí",
-    usages         : ".gai | .gai <id> | .gai add <url> | .gai del <id> | .gai list",
+    usages         : ".gai | .gai <số> | .gai add <url> | .gai del <id> | .gai list",
     cooldowns      : 10
   },
 
@@ -56,7 +55,7 @@ module.exports = {
       const newId = raw.length > 0 ? Math.max(...raw.map(x => x.id)) + 1 : 1;
       raw.push({ id: newId, url, addedBy: senderId, threadId: threadID, addedAt: new Date().toISOString() });
       saveRaw(raw);
-      return send(`✅ Đã thêm vào kho! (ID: ${newId})\nTổng raw: ${raw.length} link.\n💡 Chạy node getdata.js để xử lý metadata rồi gửi được video.`);
+      return send(`✅ Đã thêm vào kho! (ID: ${newId})\nTổng raw: ${raw.length} link.\n💡 Dùng .getdat để xử lý metadata.`);
     }
 
     // ── .gai del <id> ────────────────────────────────────────────────────────
@@ -77,27 +76,25 @@ module.exports = {
 
     // ── .gai list ────────────────────────────────────────────────────────────
     if (sub === "list") {
-      const cooked = loadCooked();
-      const raw    = loadRaw();
+      const cooked    = loadCooked();
+      const raw       = loadRaw();
       if (!raw.length && !cooked.length) return send("📭 Kho chưa có gì cả.");
       const cookedUrls = new Set(cooked.map(x => x.url));
       const lines = raw.map(x =>
         `• [${x.id}] ${cookedUrls.has(x.url) ? "✅" : "⏳"} ${x.url}`
       ).join("\n");
-      return send(
-        `📋 Kho gai — ${raw.length} link (✅ đã xử lý: ${cooked.length})\n${lines}`
-      );
+      return send(`📋 Kho gai — ${raw.length} link (✅ đã xử lý: ${cooked.length})\n${lines}`);
     }
 
-    // ── .gai [id] — Gửi video ────────────────────────────────────────────────
+    // ── .gai [số] — Gửi video ────────────────────────────────────────────────
     const cooked = loadCooked();
     if (!cooked.length) {
       const raw = loadRaw();
       if (!raw.length) return send(`📭 Kho trống. Thêm link bằng: ${prefix}${commandName} add <url>`);
-      return send(`⚠️ Kho có ${raw.length} link nhưng chưa xử lý metadata.\nChạy: node getdata.js rồi thử lại.`);
+      return send(`⚠️ Kho có ${raw.length} link nhưng chưa xử lý metadata.\nDùng .getdat để xử lý.`);
     }
 
-    // Chọn video theo index hoặc ngẫu nhiên
+    // Chọn video theo số thứ tự hoặc ngẫu nhiên
     let item;
     if (args[0] && !isNaN(parseInt(args[0]))) {
       const idx = parseInt(args[0]) - 1;
@@ -108,8 +105,8 @@ module.exports = {
 
     await send("⏳ Đang tải video...");
 
-    fs.mkdirSync(tempDir, { recursive: true });
-    const tmpPath = path.join(tempDir, `gai_${Date.now()}.mp4`);
+    fs.mkdirSync(TEMP_DIR, { recursive: true });
+    const tmpPath = path.join(TEMP_DIR, `gai_${Date.now()}.mp4`);
 
     try {
       await downloadVideo(item.url, tmpPath);
@@ -118,15 +115,28 @@ module.exports = {
         return send("❌ Tải xong nhưng file rỗng. Link có thể đã hết hạn.");
       }
 
-      // duration trong VideoCosplay lưu bằng giây → đổi sang ms cho sendVideo
-      const meta = {
-        width   : item.width    || 1280,
-        height  : item.height   || 720,
-        duration: (item.duration || 0) * 1000,
-        msg     : ""
-      };
+      // Upload lên Zalo qua global.upload
+      const uploads = await global.upload(tmpPath, threadID, event.type);
+      if (!uploads || !uploads[0]?.fileUrl) {
+        throw new Error("Upload không trả về fileUrl.");
+      }
 
-      await sendVideo(api, tmpPath, threadID, event.type, meta);
+      const { fileUrl, fileName, totalSize } = uploads[0];
+      const videoUrl = fileName ? `${fileUrl}/${fileName}` : fileUrl;
+
+      await api.sendVideo(
+        {
+          videoUrl,
+          thumbnailUrl: "",
+          duration    : (item.duration || 0) * 1000,
+          width       : item.width    || 1280,
+          height      : item.height   || 720,
+          msg         : "",
+          fileSize    : totalSize || 0,
+        },
+        threadID,
+        event.type
+      );
 
     } catch (err) {
       logError?.(`[gai] ${err?.message || err}`);

@@ -9,15 +9,18 @@ const { setApi }               = require("./utils/system/global");
 const { loadCommands }         = require("./utils/system/commandLoader");
 const { scheduleCacheCleanup } = require("./utils/system/cacheCleaner");
 const { scheduleKeyCheck }     = require("./utils/system/keyManager");
-const { startAutoSend }        = require("./includes/auto/autoSend");
-const { startTuongTac }        = require("./includes/auto/tuongTac");
 const { createZaloClient }     = require("./utils/system/zaloClient");
 const { setupLifecycle }       = require("./utils/system/lifecycle");
-// ── Event handlers ────────────────────────────────────────────────────────────
+
+// ── Events ────────────────────────────────────────────────────────────────────
 const { handleMessage }    = require("./src/events/message");
 const { handleReaction }   = require("./includes/handlers/handleReaction");
 const { handleGroupEvent } = require("./includes/handlers/handleGroupEvent");
 const { handleUndo }       = require("./includes/handlers/handleUndo");
+const { startAutoSend }    = require("./src/events/autoSend");
+const { startTuongTac }    = require("./src/events/tuongTac");
+const { startAutoDown }    = require("./src/events/autoDown");
+const { startGoibot }      = require("./src/events/goibot");
 
 // ── Config validation ─────────────────────────────────────────────────────────
 function validateConfig() {
@@ -52,8 +55,11 @@ async function main(isFirstRun = true) {
     if (isFirstRun) {
       startAutoSend(api);
       startTuongTac(api);
+      startAutoDown(api);
+      startGoibot(api);
     }
   });
+
   api.listener.on("disconnected", (code, reason) => global.restartBot(`code:${code} | ${reason}`));
   api.listener.on("error",        (err)        => global.restartBot(`error:${err?.message}`));
 

@@ -10,7 +10,7 @@ const { ThreadType } = require("zca-js");
 let _tuongTacRecord = null;
 function getTuongTacRecord() {
   if (!_tuongTacRecord) {
-    try { _tuongTacRecord = require("../../includes/auto/tuongTac").recordMessage; } catch {}
+    try { _tuongTacRecord = require("./tuongTac").recordMessage; } catch {}
   }
   return _tuongTacRecord;
 }

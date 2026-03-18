@@ -1,5 +1,5 @@
 const { ThreadType } = require("zca-js");
-const { getTopForGroup, recordMessage } = require("../../includes/auto/tuongTac");
+const { getTopForGroup, recordMessage } = require("../events/tuongTac");
 
 module.exports = {
   config: {

@@ -9,10 +9,8 @@
   "qrPath": "./qr.png",
   "groqKeys": [],
   "githubToken": "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",
-  "repo": "VLJNH-VN/mizai",
+  "repo": "VLJNH-VN/NOTE_MIZAI",
   "branch": "main",
-  "googleKeyPath": "./utils/mizai.json",
-  "googleDriveFolderId": "1AUEXznxl00jG7s0Xs9wcxfdcWd0iv75D",
   "autoUndoOnAngry": true,
   "🔄 undoEnabled": true
 }

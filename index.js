@@ -7,15 +7,12 @@ require("./utils/system/global");
 // ── Core modules ──────────────────────────────────────────────────────────────
 const { setApi }               = require("./utils/system/global");
 const { loadCommands }         = require("./utils/system/commandLoader");
-const { ensureYtDlp }          = require("./utils/system/ytdlpInstaller");
 const { scheduleCacheCleanup } = require("./utils/system/cacheCleaner");
 const { scheduleKeyCheck }     = require("./utils/system/keyManager");
 const { startAutoSend }        = require("./includes/auto/autoSend");
 const { startTuongTac }        = require("./includes/auto/tuongTac");
-const { startAutoDown }        = require("./includes/auto/autoDown");
 const { createZaloClient }     = require("./utils/system/zaloClient");
 const { setupLifecycle }       = require("./utils/system/lifecycle");
-const { startKeepAlive }       = require("./utils/system/keepAlive");
 // ── Event handlers ────────────────────────────────────────────────────────────
 const { handleMessage }    = require("./src/events/message");
 const { handleReaction }   = require("./includes/handlers/handleReaction");
@@ -42,13 +39,7 @@ async function main(isFirstRun = true) {
     _schedulersStarted = true;
     scheduleCacheCleanup();
     scheduleKeyCheck();
-    startKeepAlive();
   }
-
-  // ── Auto modules (chỉ khởi động sau khi api sẵn sàng) ───────────────────────
-
-  // Đảm bảo yt-dlp sẵn sàng VÀ YOUTUBE_DL_DIR được set trước khi load commands
-  await ensureYtDlp().catch((err) => logWarn(`[yt-dlp] Lỗi auto-install: ${err?.message}`));
 
   const api = await createZaloClient();
   setApi(api);
@@ -61,7 +52,6 @@ async function main(isFirstRun = true) {
     if (isFirstRun) {
       startAutoSend(api);
       startTuongTac(api);
-      startAutoDown(api);
     }
   });
   api.listener.on("disconnected", (code, reason) => global.restartBot(`code:${code} | ${reason}`));

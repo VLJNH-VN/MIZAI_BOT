@@ -3,8 +3,6 @@ const fs = require("fs");
 const path = require("path");
 const { Reactions } = require("zca-js");
 
-const YTDLP_API = "https://yt-dlp-hwys.onrender.com";
-
 // ── Paths ──────────────────────────────────────────────────────────────────────
 const KEY_FILE  = path.join(__dirname, "..", "..", "includes", "data", "key.json");
 const DATA_FILE = path.join(__dirname, "..", "..", "includes", "data", "goibot.json");
@@ -327,8 +325,7 @@ async function searchSoundCloud(query) {
 }
 
 async function downloadAudio(url, outPath) {
-  const audioDownloadUrl = `${YTDLP_API}/api/download?url=${encodeURIComponent(url)}&format=bestaudio/best`;
-  const res = await axios.get(audioDownloadUrl, {
+  const res = await axios.get(url, {
     responseType: "stream",
     timeout: 120000,
     headers: { "User-Agent": "Mozilla/5.0" }

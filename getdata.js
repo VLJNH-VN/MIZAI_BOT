@@ -1,12 +1,42 @@
 /**
  * getdata.js
- * Script CLI — Chạy: node getdata.js
- * Logic xử lý nằm trong utils/bot/processGaiData.js (tái sử dụng được).
+ * Script CLI — Chạy: node getdata.js [--force]
+ *
+ * Giải mã tất cả file media (video/ảnh/audio) đã upload lên GitHub (base64)
+ * về filecache local và lưu metadata vào includes/data/dataCache.json.
+ *
+ * Dùng: node getdata.js           — chỉ decode entry mới
+ *       node getdata.js --force   — decode lại toàn bộ
  */
 
-const { processGaiData } = require("./utils/bot/processGaiData");
+// Load config vào global trước (để mediaCache.js dùng global.config)
+global.config = require("./config.json");
 
-processGaiData({
-  sleepMs: 300000, // 5 phút giữa mỗi video khi chạy CLI (tránh block 429)
-  onLog  : (msg) => console.log(msg),
-}).catch(err => console.error("Lỗi:", err));
+const { processAll } = require("./utils/media/mediaCache");
+
+const force = process.argv.includes("--force");
+
+console.log("═══════════════════════════════════════════");
+console.log("  GETDATA — Giải mã GitHub Media → Cache  ");
+console.log("═══════════════════════════════════════════");
+if (force) console.log("⚠️  Chế độ --force: decode lại toàn bộ\n");
+
+processAll({
+  force,
+  onLog: (msg) => console.log(msg),
+  onProgress: ({ done, total, success, fail }) => {
+    process.stdout.write(`\r  Tiến độ: ${done}/${total} | ✅ ${success} | ❌ ${fail}   `);
+    if (done === total) process.stdout.write("\n");
+  },
+})
+  .then(({ success, fail, total, saved }) => {
+    console.log("\n───────────────────────────────────────────");
+    console.log(`  Kết quả: ✅ ${success} thành công | ❌ ${fail} lỗi`);
+    console.log(`  Tổng cache hiện tại: ${saved} file`);
+    console.log("═══════════════════════════════════════════");
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error("\n❌ Lỗi nghiêm trọng:", err.message);
+    process.exit(1);
+  });

@@ -1,7 +1,7 @@
 /**
  * src/events/autoDown.js
  * Tự động tải media từ link chia sẻ trong chat Zalo.
- * API: zeidteam (chung) + kemapis (Instagram/Threads)
+ * API: yt-dlp-hwys.onrender.com
  */
 
 const axios  = require("axios");
@@ -14,8 +14,7 @@ const { sendVideo, sendVoice, tempDir } = require("../../utils/media/upload");
 const SETTINGS_FILE = path.join(process.cwd(), "includes", "data", "auto.json");
 
 // ─── API endpoints ─────────────────────────────────────────────────────────────
-const API_ZEID  = "https://api.zeidteam.xyz/media-downloader/atd2";
-const API_INSTA = "https://kemapis.eu.org/api/instagram/media";
+const API_MEDIA = "https://yt-dlp-hwys.onrender.com/api/media";
 
 // ─── Link hỗ trợ ──────────────────────────────────────────────────────────────
 const SUPPORTED_LINKS = [
@@ -87,17 +86,24 @@ function cleanupFiles(files, delay = 8000) {
 
 // ─── Lấy media info từ API ────────────────────────────────────────────────────
 async function getMediaInfo(url) {
-    const isInsta = /instagram\.com|threads\.net|threads\.com/.test(url);
-    const apiUrl  = isInsta
-        ? `${API_INSTA}?url=${encodeURIComponent(url)}`
-        : `${API_ZEID}?url=${encodeURIComponent(url)}`;
+    const res  = await axios.get(`${API_MEDIA}?url=${encodeURIComponent(url)}`, { timeout: 90000 });
+    const raw  = res.data;
+    if (!raw || typeof raw !== "object") throw new Error("API không trả về dữ liệu hợp lệ");
 
-    const res  = await axios.get(apiUrl, { timeout: 60000 });
-    const data = res.data;
-    if (!data || !Array.isArray(data.medias) || data.medias.length === 0) {
-        throw new Error("API không trả về media hợp lệ");
-    }
-    return data;
+    const medias = [];
+    if (raw.download_url)       medias.push({ type: "video", url: raw.download_url });
+    if (raw.download_audio_url) medias.push({ type: "audio", url: raw.download_audio_url });
+
+    if (medias.length === 0) throw new Error("API không trả về media hợp lệ");
+
+    return {
+        title:     raw.title     || "",
+        author:    raw.uploader  || raw.channel || "Unknown",
+        source:    (raw.platform || "").toLowerCase(),
+        thumbnail: raw.thumbnail || "",
+        duration:  raw.duration  || 0,
+        medias
+    };
 }
 
 // ─── Gửi audio ────────────────────────────────────────────────────────────────

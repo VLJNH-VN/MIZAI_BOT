@@ -62,7 +62,7 @@ async function main(isFirstRun = true) {
         "[BOT] Dịch vụ đã khởi động:\n" +
         "      ├─ AutoSend\n" +
         `      ├─ TuongTac  (${ttInfo})\n` +
-        "      ├─ AutoDown  (API: zeidteam + kemapis)\n" +
+        "      ├─ AutoDown  (API: yt-dlp-hwys)\n" +
         "      └─ Goibot    AI Mizai"
       );
     }

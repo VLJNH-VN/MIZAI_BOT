@@ -11,7 +11,7 @@ const path = require("path");
 const axios = require("axios");
 const { execSync } = require("child_process");
 
-const inputJsonPath  = path.join(__dirname, "includes", "data", "RawVideoUrls.json");
+const inputJsonPath  = path.join(__dirname, "includes", "data", "gai.json");
 const outputJsonPath = path.join(__dirname, "includes", "data", "VideoCosplay.json");
 const cacheDir       = path.join(__dirname, "includes", "cache", "videos");
 const thumbDir       = path.join(__dirname, "includes", "cache", "thumbs");

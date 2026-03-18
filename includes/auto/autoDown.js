@@ -11,7 +11,7 @@ const { execSync } = require("child_process");
 const { ThreadType } = require("zca-js");
 const { sendVideo, sendVoice, tempDir } = require("../../utils/media/upload");
 
-const SETTINGS_FILE = path.join(process.cwd(), "includes", "data", "settings.json");
+const SETTINGS_FILE = path.join(process.cwd(), "includes", "data", "autojson");
 const YTDLP_API     = "https://yt-dlp-hwys.onrender.com";
 
 // ============== LINK ==============//

@@ -125,7 +125,7 @@ function startTuongTac(api) {
   startWeeklyTimer();
   startMonthlyTimer();
 
-  return `ngày: ${dayMin}p | tuần: ${weekH}h | tháng: ${monthH}h`;
+  return `DAY: ${dayMin}p | WEEK: ${weekH}h | MTH: ${monthH}h`;
 }
 
 module.exports = { startTuongTac, recordMessage, getTopForGroup };

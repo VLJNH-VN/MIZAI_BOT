@@ -61,10 +61,14 @@ function listKho() {
 // Tải file về temp → mã hóa base64 → upload GitHub → trả về rawUrl
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function uploadToGithub(url, khoName) {
-  // Xác định extension
+async function uploadToGithub(url, khoName, extHint) {
+  // Xác định extension — ưu tiên hint từ item.ext, rồi từ URL, fallback ".mp4" nếu có "video" trong URL
   const extMatch = url.split("?")[0].match(/\.(mp4|mkv|avi|mov|webm|jpg|jpeg|png|gif|webp|mp3|aac|m4a|ogg|wav)$/i);
-  const ext = extMatch ? extMatch[0].toLowerCase() : ".jpg";
+  const ext = extHint
+    ? (extHint.startsWith(".") ? extHint : "." + extHint).toLowerCase()
+    : extMatch
+      ? extMatch[0].toLowerCase()
+      : /video|mp4|mov/i.test(url) ? ".mp4" : ".jpg";
 
   const tmpPath = path.join(os.tmpdir(), `api_${Date.now()}${ext}`);
 
@@ -156,9 +160,31 @@ module.exports = {
 
         const khoName = args[1].trim();
 
-        // Lấy attachments từ tin nhắn reply (zca-js: raw.msgReply.attach)
-        const replyMsg    = raw?.msgReply || raw?.quote || null;
-        const attachments = Array.isArray(replyMsg?.attach) ? replyMsg.attach : [];
+        // Lấy attachments từ tin nhắn reply
+        // zca-js có thể để media ở replyMsg.attach[] hoặc trực tiếp trong replyMsg.content
+        const replyMsg = raw?.msgReply || raw?.quote || raw?.replyMsg || null;
+
+        let attachments = Array.isArray(replyMsg?.attach) ? [...replyMsg.attach] : [];
+
+        // Fallback: media nằm trong replyMsg.content (thường gặp khi reply video người khác)
+        if (attachments.length === 0 && replyMsg) {
+          const c = replyMsg.content;
+          if (c && typeof c === "object") {
+            const url =
+              c.url || c.normalUrl || c.hdUrl || c.href ||
+              c.fileUrl || c.downloadUrl || c.src;
+            if (url) attachments = [{ url, ext: c.ext }];
+          } else if (typeof c === "string") {
+            // content là JSON string chứa media (trường hợp mention kèm video)
+            try {
+              const parsed = JSON.parse(c);
+              const url =
+                parsed.url || parsed.normalUrl || parsed.hdUrl ||
+                parsed.href || parsed.fileUrl;
+              if (url) attachments = [{ url, ext: parsed.ext }];
+            } catch (_) {}
+          }
+        }
 
         if (!replyMsg || attachments.length === 0) {
           return send(
@@ -175,11 +201,11 @@ module.exports = {
         let failed   = 0;
 
         for (const item of attachments) {
-          const url = item.url || item.href || item.fileUrl || item.normalUrl;
+          const url = item.url || item.normalUrl || item.hdUrl || item.href || item.fileUrl || item.downloadUrl;
           if (!url) { failed++; continue; }
 
           try {
-            const rawUrl = await uploadToGithub(url, khoName);
+            const rawUrl = await uploadToGithub(url, khoName, item.ext);
             kho.push(rawUrl);
             added++;
           } catch (e) {

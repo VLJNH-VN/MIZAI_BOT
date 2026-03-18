@@ -6,7 +6,7 @@ require("./utils/system/global");
 
 // ── Core modules ──────────────────────────────────────────────────────────────
 const { setApi }               = require("./utils/system/global");
-const { loadCommands }         = require("./utils/system/commandLoader");
+const { loadCommands, runOnLoad } = require("./utils/system/commandLoader");
 const { scheduleCacheCleanup } = require("./utils/system/cacheCleaner");
 const { scheduleKeyCheck }     = require("./utils/system/keyManager");
 const { createZaloClient }     = require("./utils/system/zaloClient");
@@ -49,6 +49,7 @@ async function main(isFirstRun = true) {
   global.botId    = String(api.getOwnId());
   global.commands = loadCommands(path.join(__dirname, "src", "commands"));
   global.prefix   = global.config.prefix || ".";
+  await runOnLoad(global.commands, api);
 
   api.listener.on("connected", () => {
     logInfo("[LISTENER] Bắt đầu nhận lệnh!");

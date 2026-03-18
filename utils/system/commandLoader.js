@@ -88,4 +88,20 @@ function loadCommands(commandsDir) {
   return commands;
 }
 
-module.exports = { loadCommands, loadCommandFromFile };
+async function runOnLoad(commands, api) {
+  if (!commands || !api) return;
+  const seen = new Set();
+  for (const [, command] of commands) {
+    if (!command || seen.has(command)) continue;
+    seen.add(command);
+    if (typeof command.onLoad !== "function") continue;
+    try {
+      await command.onLoad({ api, commands });
+    } catch (err) {
+      const name = command?.config?.name || "unknown";
+      logError(`[CMD] Lỗi onLoad của '${name}': ${err?.message || err}`);
+    }
+  }
+}
+
+module.exports = { loadCommands, loadCommandFromFile, runOnLoad };

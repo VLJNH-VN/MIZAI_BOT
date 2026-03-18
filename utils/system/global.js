@@ -84,6 +84,7 @@ const { resolveSenderName, resolveGroupName } = require("../../includes/database
 const { getBotAdminIds, isBotAdmin, isGroupAdmin } = require("../bot/admin");
 const { logInfo, logWarn, logError, logEvent, logDebug } = require("./logger");
 const { checkGroqKey, setAutoCheck }          = require("./keyManager");
+const { processGaiData }                      = require("../bot/processGaiData");
 
 // ── Logger ────────────────────────────────────────────────────────────────────
 global.logInfo   = logInfo;
@@ -124,6 +125,9 @@ global.uploadImage = async function uploadImage(input, name) {
 // ── Key manager ───────────────────────────────────────────────────────────────
 global.checkGroqKey  = checkGroqKey;
 global.setAutoCheck  = setAutoCheck;
+
+// ── Xử lý video gai ──────────────────────────────────────────────────────────
+global.processGaiData = processGaiData;
 
 /**
  * Gọi trong index.js sau khi đăng nhập Zalo thành công.

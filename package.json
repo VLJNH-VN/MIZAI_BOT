@@ -1,5 +1,5 @@
 {
-  "name": "zalo-bot-zcajs",
+  "name": "MIZAI_BOT",
   "version": "1.5.0",
   "description": "Bot Zalo sử dụng zca-js, đăng nhập bằng cookie + IMEI. AI: Groq (llama-3.3-70b-versatile)",
   "main": "index.js",

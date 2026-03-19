@@ -86,15 +86,16 @@ module.exports = {
 
     if (!tracks.length) return send(`❎ Không tìm thấy kết quả cho: "${keyword}"`);
 
-    // Tải thumbnail
-    const attachments = [];
+    // Tải thumbnail → lưu temp file → gửi kèm ảnh
+    const tmpFiles = [];
     for (const t of tracks) {
-      if (!t.thumb) { attachments.push(null); continue; }
+      if (!t.thumb) { tmpFiles.push(null); continue; }
       try {
-        const stream  = (await global.axios.get(t.thumb, { responseType: "stream", timeout: 10000 })).data;
-        stream.path   = "thumb.jpg";
-        attachments.push(stream);
-      } catch { attachments.push(null); }
+        const buf     = (await global.axios.get(t.thumb, { responseType: "arraybuffer", timeout: 10000 })).data;
+        const tmpPath = path.join(os.tmpdir(), `spt_thumb_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`);
+        fs.writeFileSync(tmpPath, Buffer.from(buf));
+        tmpFiles.push(tmpPath);
+      } catch { tmpFiles.push(null); }
     }
 
     const list = tracks.map((t, i) =>
@@ -110,12 +111,17 @@ module.exports = {
       `━━━━━━━━━━━━━━━━\n` +
       `📌 Reply STT (1–${tracks.length}) để tải nhạc`;
 
-    const validAttachments = attachments.filter(Boolean);
-    const sent  = await api.sendMessage(
-      validAttachments.length ? { msg: msgBody, attachments: validAttachments } : { msg: msgBody },
-      threadID,
-      event.type
-    );
+    const validTmp = tmpFiles.filter(Boolean);
+    let sent;
+    try {
+      sent = await api.sendMessage(
+        validTmp.length ? { msg: msgBody, attachments: validTmp } : { msg: msgBody },
+        threadID,
+        event.type
+      );
+    } finally {
+      for (const f of validTmp) try { fs.unlinkSync(f); } catch {}
+    }
     const msgId = sent?.message?.msgId ?? sent?.msgId ?? sent?.data?.msgId;
     if (msgId) {
       registerReply({

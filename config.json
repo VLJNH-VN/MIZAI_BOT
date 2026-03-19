@@ -1,13 +1,17 @@
 {
-  "prefix": ".",
+  "prefix": "!",
   "loginMethod": "cookie",
   "cookiePath": "./cookie.json",
   "imei": "3d093692-ae08-465c-bcaf-ea1a2829d1e1-74c987a7c11e14edf988007dcd378420",
   "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
   "ownerId": "6024931307373526012",
-  "adminBotIds": ["6024931307373526012"],
+  "adminBotIds": [
+    "6024931307373526012"
+  ],
   "qrPath": "./qr.png",
-  "groqKeys": ["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"],
+  "groqKeys": [
+    "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"
+  ],
   "hfToken": "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",
   "githubToken": "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",
   "repo": "VLJNH-VN/NOTE_MIZAI",

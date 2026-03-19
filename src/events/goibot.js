@@ -198,16 +198,22 @@ const POLL_MODELS = {
   "any-dark":     "Any Dark",
 };
 
-async function generatePollinationsImage({ prompt, modelKey = "sana", width, height, seed }) {
-  const params = new URLSearchParams({ model: modelKey, nologo: "true", nofeed: "true" });
-  if (width)      params.set("width",  width);
-  if (height)     params.set("height", height);
+const FALLBACK_MODELS = ["flux", "turbo", "flux-realism"];
+
+async function generatePollinationsImage({ prompt, modelKey = "flux", width, height, seed }) {
+  const params = new URLSearchParams({
+    model:  modelKey,
+    width:  width  || 1024,
+    height: height || 1024,
+    nologo: "true",
+    nofeed: "true",
+  });
   if (seed != null) params.set("seed", seed);
 
   const url = `${POLL_BASE}/${encodeURIComponent(prompt)}?${params.toString()}`;
   const res = await axios.get(url, {
     responseType: "arraybuffer",
-    timeout:      60000,
+    timeout:      90000,
     headers: { "User-Agent": "Mozilla/5.0" },
   });
   return Buffer.from(res.data);
@@ -215,28 +221,35 @@ async function generatePollinationsImage({ prompt, modelKey = "sana", width, hei
 
 async function handleImgAction(api, imgAction, raw, threadId, type, send) {
   const prompt   = (imgAction.prompt || "").trim();
-  const modelKey = imgAction.model || "sana";
+  let   modelKey = imgAction.model || "flux";
+  if (!POLL_MODELS[modelKey]) modelKey = "flux";
   if (!prompt) return send("❌ Không có mô tả ảnh để tạo.");
 
   const label = POLL_MODELS[modelKey] || modelKey;
   await send(`🎨 Đang tạo ảnh: "${prompt}"\n🤖 Model: ${label}`);
 
   const tmpFile = path.join(os.tmpdir(), `mizai_img_${Date.now()}.jpg`);
-  try {
-    const imgBuf = await generatePollinationsImage({ prompt, modelKey });
-    fs.writeFileSync(tmpFile, imgBuf);
-    await api.sendMessage({ msg: `🖼️ ${prompt}`, attachments: [tmpFile] }, threadId, type);
-  } catch (err) {
-    const status = err?.response?.status || 0;
-    const msg    = err?.message || "";
-    if (status === 429 || msg.includes("rate limit")) {
-      return send("⏳ API đang bận, thử lại sau ít phút nhé~");
+  const tryModels = [modelKey, ...FALLBACK_MODELS.filter(m => m !== modelKey)];
+
+  let lastErr = null;
+  for (const m of tryModels) {
+    try {
+      const imgBuf = await generatePollinationsImage({ prompt, modelKey: m });
+      fs.writeFileSync(tmpFile, imgBuf);
+      await api.sendMessage({ msg: `🖼️ ${prompt}`, attachments: [tmpFile] }, threadId, type);
+      setTimeout(() => { try { fs.unlinkSync(tmpFile); } catch {} }, 60000);
+      return;
+    } catch (err) {
+      const status = err?.response?.status || 0;
+      if (status === 429) {
+        return send("⏳ API đang bận, thử lại sau ít phút nhé~");
+      }
+      lastErr = err;
+      logError(`[goibot/img] model=${m} lỗi ${status}: ${err?.message?.slice(0, 100)}`);
     }
-    logError(`[goibot/img] ${msg.slice(0, 200)}`);
-    return send(`❌ Tạo ảnh thất bại: ${msg.slice(0, 120)}`);
-  } finally {
-    setTimeout(() => { try { fs.unlinkSync(tmpFile); } catch {} }, 60000);
   }
+
+  return send(`❌ Tạo ảnh thất bại: ${lastErr?.message?.slice(0, 100) || "Lỗi không xác định"}`);
 }
 
 // ════════════════════════════════════════════════════════════════════════════════

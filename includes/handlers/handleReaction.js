@@ -99,7 +99,7 @@ async function handleReaction({ api, reaction, commands }) {
     const type     = isGroup ? ThreadType.Group : ThreadType.User;
 
     if (icon) {
-      logEvent(`[ REACT ] ${threadType}:${threadID} | uid:${uid} → ${icon}`);
+      //logEvent(`[ REACT ] ${threadType}:${threadID} | uid:${uid} → ${icon}`);
     }
 
     // ── Tự động gỡ tin nhắn khi bị thả cảm xúc phẫn nộ ──────────────────────

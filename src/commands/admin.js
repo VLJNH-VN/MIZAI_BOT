@@ -35,12 +35,19 @@ function trackGroup(threadID) {
 }
 
 // ── Lấy UID từ mention hoặc args ─────────────────────────────────────────────
+function isValidUid(uid) {
+  return uid && /^\d{5,}$/.test(String(uid).trim());
+}
+
 function extractUid(args, event) {
   const mentions = event?.data?.mentions;
-  if (mentions && Object.keys(mentions).length > 0) {
-    return Object.keys(mentions)[0];
+  if (mentions && typeof mentions === "object") {
+    const uids = Object.keys(mentions).filter(isValidUid);
+    if (uids.length > 0) return uids[0];
   }
-  return args[1] ? String(args[1]).trim() : null;
+  const raw = args[1] ? String(args[1]).trim() : null;
+  if (raw && isValidUid(raw)) return raw;
+  return null;
 }
 
 // ── Format danh sách admin ────────────────────────────────────────────────────
@@ -120,7 +127,7 @@ module.exports = {
     if (sub === "add") {
       const uid = extractUid(args, event);
       if (!uid) {
-        return send(`❌ Thiếu UID.\nDùng: ${prefix}admin add <uid> hoặc tag người dùng.`);
+        return send(`❌ Không tìm thấy UID hợp lệ.\n💡 Dùng: ${prefix}admin add <uid số>\nVí dụ: ${prefix}admin add 123456789\n⚠️ Tag @tên có thể không lấy được UID — hãy dùng lệnh ${prefix}id hoặc ${prefix}admin tang @tên để lấy UID trước.`);
       }
 
       const cfg = readConfig();
@@ -145,7 +152,7 @@ module.exports = {
     if (sub === "remove" || sub === "rm" || sub === "del") {
       const uid = extractUid(args, event);
       if (!uid) {
-        return send(`❌ Thiếu UID.\nDùng: ${prefix}admin remove <uid>`);
+        return send(`❌ Không tìm thấy UID hợp lệ.\n💡 Dùng: ${prefix}admin remove <uid số>`);
       }
 
       const cfg = readConfig();

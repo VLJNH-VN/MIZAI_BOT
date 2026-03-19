@@ -4282,5 +4282,15 @@
     "branch": "main",
     "uploadedAt": "2026-03-19T04:54:04.636Z",
     "ext": ".jpg"
+  },
+  "thumb_1773917204624.jpg": {
+    "rawUrl": "https://raw.githubusercontent.com/VLJNH-VN/UPLOAD_MIZAI/main/media/images/thumb_1773917204624.jpg",
+    "apiUrl": "https://api.github.com/repos/VLJNH-VN/UPLOAD_MIZAI/contents/media/images/thumb_1773917204624.jpg?ref=main",
+    "ghPath": "media/images/thumb_1773917204624.jpg",
+    "owner": "VLJNH-VN",
+    "repo": "UPLOAD_MIZAI",
+    "branch": "main",
+    "uploadedAt": "2026-03-19T10:46:46.197Z",
+    "ext": ".jpg"
   }
 }

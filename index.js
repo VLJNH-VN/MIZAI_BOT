@@ -7,7 +7,7 @@ require("./utils/system/global");
 // ── Core modules ──────────────────────────────────────────────────────────────
 const { setApi }                  = require("./utils/system/global");
 const { loadCommands, runOnLoad, setupLifecycle } = require("./utils/system/loader");
-const { scheduleCacheCleanup, scheduleKeyCheck, startAutoGetData } = require("./utils/system/maintenance");
+const { scheduleCacheCleanup, scheduleKeyCheck } = require("./utils/system/maintenance");
 const { startKeepAlive } = require("./utils/system/keepAlive");
 const { createZaloClient }        = require("./utils/system/client");
 
@@ -42,7 +42,6 @@ async function main(isFirstRun = true) {
     _schedulersStarted = true;
     scheduleCacheCleanup();
     scheduleKeyCheck();
-    startAutoGetData();
     startKeepAlive();
   }
 

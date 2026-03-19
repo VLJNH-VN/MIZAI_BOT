@@ -443,8 +443,6 @@ module.exports = {
         global.config.uploadRepo = repoArg;
         global.config.branch     = branchArg;
 
-        global.startAutoGetData?.();
-
         return send(
           `✅ Đã cập nhật repo upload!\n` +
           `━━━━━━━━━━━━━━━━\n` +

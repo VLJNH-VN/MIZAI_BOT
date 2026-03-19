@@ -68,17 +68,6 @@
 //      uploadRepo   — "owner/repo" vd: "VLJNH-VN/UPLOAD_MIZAI"
 //      branch       — Nhánh (mặc định "main")
 //
-//  MEDIA CACHE (quản lý file đã giải mã từ GitHub):
-//    global.mediaCache.processAll(opts?)
-//      → Promise<{success,fail,total,saved}>  decode entry mới vào cache
-//    global.mediaCache.decodeOne(key, opts?)
-//      → Promise<string|null>  decode 1 entry theo key, trả về cachedPath
-//    global.mediaCache.loadIndex()
-//      → array  toàn bộ dataCache.json
-//    global.mediaCache.pickRandom(opts?)
-//      opts: { videoOnly?, ext? }
-//      → object|null  chọn ngẫu nhiên 1 entry có file trên disk
-//
 //  MESSAGE CACHE (cache in-memory tin nhắn gần đây):
 //    global.messageCache.store(event)                    — lưu tự động
 //    global.messageCache.getById(msgId, threadId?)       — tra theo msgId
@@ -131,8 +120,6 @@
 //    global.restartBot(reason?, delayMs?)   → khởi động lại bot
 //    global.checkGroqKey(key)               → Promise<{ key, status: "live"|"dead" }>
 //    global.setAutoCheck(boolean)           → bật/tắt tự động check key
-//    global.startAutoGetData()              → khởi động vòng lặp auto giải mã GitHub
-//    global.stopAutoGetData()               → dừng vòng lặp
 //
 // ─────────────────────────────────────────────────────────────────
 
@@ -256,25 +243,7 @@ module.exports = {
     // Xem toàn bộ danh sách media đã upload
     // const links = global.githubMedia.links();
 
-    // ── 4. MEDIA CACHE (quản lý file đã decode từ GitHub) ────────
-
-    // Decode tất cả entry mới vào cache disk
-    // const result = await global.mediaCache.processAll();
-    // logInfo(`Cache: ${result.success} thành công, ${result.fail} lỗi`);
-
-    // Decode 1 entry cụ thể
-    // const cachedPath = await global.mediaCache.decodeOne("my_video_key");
-    // if (cachedPath) { /* dùng cachedPath để gửi video */ }
-
-    // Lấy toàn bộ index cache
-    // const index = global.mediaCache.loadIndex();
-
-    // Chọn ngẫu nhiên 1 video trong cache
-    // const entry = global.mediaCache.pickRandom({ videoOnly: true });
-    // const entry = global.mediaCache.pickRandom({ ext: ".mp4" });
-    // if (entry) { /* entry.cachedPath, entry.key, ... */ }
-
-    // ── 5. MESSAGE CACHE (tra cứu tin nhắn gần đây) ──────────────
+    // ── 4. MESSAGE CACHE (tra cứu tin nhắn gần đây) ──────────────
 
     // Lấy tin nhắn theo msgId
     // const cached = global.messageCache.getById("msgId123", threadID);
@@ -525,7 +494,6 @@ module.exports = {
  *
  *  global.uploadImage    → rawUrl GitHub (raw.githubusercontent.com)
  *  global.githubMedia    → upload/decode base64 media qua GitHub
- *  global.mediaCache     → quản lý file đã decode từ GitHub trên disk
  *  global.messageCache   → cache in-memory tin nhắn gần đây theo thread
  *  global.resolveQuote   → lấy nội dung đầy đủ của tin nhắn được reply
  * ════════════════════════════════════════════════════════════════

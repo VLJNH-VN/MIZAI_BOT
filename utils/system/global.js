@@ -45,10 +45,6 @@
  * │  global.checkGroqKey(key) → Promise<{ key, status: "live"|"dead" }>   │
  * │  global.setAutoCheck(boolean)  → void  Bật/tắt tự động check key      │
  * ├──────────────────────┬──────────────────────────────────────────────────┤
- * │  global.startAutoGetData()  Khởi động vòng lặp auto giải mã GitHub     │
- * │    Mỗi phút: decode tối đa 10 file → xóa sau 1 phút → lặp lại         │
- * │  global.stopAutoGetData()   Dừng vòng lặp                              │
- * ├──────────────────────┬──────────────────────────────────────────────────┤
  * │  global.githubMedia  │ Upload/decode media qua GitHub (base64)         │
  * │    .upload(filePath, options?)                                          │
  * │      options: { folder?, key?, overwrite? }                            │
@@ -60,12 +56,6 @@
  * │    githubToken  — Personal Access Token (scope: repo)                  │
  * │    uploadRepo   — "owner/repo" vd: "VLJNH-VN/UPLOAD_MIZAI"            │
  * │    branch       — Nhánh (mặc định "main")                              │
- * ├──────────────────────┬──────────────────────────────────────────────────┤
- * │  global.mediaCache   │ Filecache: giải mã GitHub base64 → disk         │
- * │    .processAll(opts?)          → Promise decode entry mới → cache      │
- * │    .decodeOne(key, opts?)      → Promise<string|null> cachedPath        │
- * │    .loadIndex()                → array (dataCache.json)                │
- * │    .pickRandom({videoOnly?,ext?}) → object|null                        │
  * ├──────────────────────┬──────────────────────────────────────────────────┤
  * │  global.logInfo(msg)   │ [INFO]  xanh lá                               │
  * │  global.logWarn(msg)   │ [WARN]  vàng                                  │
@@ -108,13 +98,6 @@ const {
   decodeFromGithub,
   getMediaLinks,
 }                                             = require("../media/githubMedia");
-const {
-  processAll   : mediaCacheProcessAll,
-  decodeOne    : mediaCacheDecodeOne,
-  loadIndex    : mediaCacheLoadIndex,
-  pickRandom   : mediaCachePickRandom,
-}                                             = require("../media/media");
-const { startAutoGetData, stopAutoGetData }   = require("./maintenance");
 const msgCache                                = require("../../includes/database/messageCache");
 
 // ── Logger ────────────────────────────────────────────────────────────────────
@@ -181,25 +164,6 @@ global.githubMedia = {
   decode: decodeFromGithub,
   links:  getMediaLinks,
 };
-
-/**
- * global.mediaCache — Quản lý filecache video đã giải mã từ GitHub
- *   .processAll(opts?)   → Promise<{success,fail,total,saved}>  decode entry mới
- *   .decodeOne(key,opts?) → Promise<string|null>  decode 1 entry theo key
- *   .loadIndex()         → array  toàn bộ dataCache.json
- *   .pickRandom(opts?)   → object|null  chọn ngẫu nhiên 1 entry có file trên disk
- *     opts: { videoOnly?, ext? }
- */
-global.mediaCache = {
-  processAll : mediaCacheProcessAll,
-  decodeOne  : mediaCacheDecodeOne,
-  loadIndex  : mediaCacheLoadIndex,
-  pickRandom : mediaCachePickRandom,
-};
-
-// ── Auto GetData ──────────────────────────────────────────────────────────────
-global.startAutoGetData = startAutoGetData;
-global.stopAutoGetData  = stopAutoGetData;
 
 // ── Message Cache + resolveQuote ──────────────────────────────────────────────
 /**

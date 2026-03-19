@@ -8,7 +8,6 @@ const { registerReaction } = require("./handleReaction");
 const { registerUndo } = require("./handleUndo");
 const fs = require("fs");
 const path = require("path");
-const { sendVideo, pickRandom, getVideoMeta, VIDEO_DIR } = require("../../utils/media/media");
 
 // ── Ghi nhớ nhóm cho broadcast ────────────────────────────────────────────────
 const GROUPS_CACHE_PATH = path.join(__dirname, "../../includes/database/groupsCache.json");

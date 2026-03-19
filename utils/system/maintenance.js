@@ -189,117 +189,6 @@ function setAutoCheck(enabled) {
   logInfo(`[KEY] Auto check: ${enabled ? "BẬT" : "TẮT"}`);
 }
 
-// ── Auto Get Data ─────────────────────────────────────────────────────────────
-
-const MAX_FILES = 10;
-const CYCLE_MS  = 60 * 1000;
-const ROOT       = process.cwd();
-
-let _running = false;
-let _stopRequested = false;
-
-function _log(fn, msg) {
-  const logger = global[fn] || (fn === "logError" ? console.error : console.log);
-  logger(msg);
-}
-
-function _removeDecodedFiles(decoded) {
-  const { VIDEO_DIR, THUMB_DIR, loadIndex, saveIndex } = require("../media/media");
-
-  for (const { key, cachedPath } of decoded) {
-    try {
-      if (fs.existsSync(cachedPath)) fs.unlinkSync(cachedPath);
-    } catch (_) {}
-    try {
-      const thumbBin = path.join(THUMB_DIR, `${key}.bin`);
-      if (fs.existsSync(thumbBin)) fs.unlinkSync(thumbBin);
-    } catch (_) {}
-    try {
-      const thumbJpg = path.join(THUMB_DIR, `${key}.jpg`);
-      if (fs.existsSync(thumbJpg)) fs.unlinkSync(thumbJpg);
-    } catch (_) {}
-  }
-
-  const index = loadIndex();
-  const kept  = index.filter(e => {
-    const full = path.join(ROOT, e.cachedPath);
-    return fs.existsSync(full) && fs.statSync(full).size > 0;
-  });
-  saveIndex(kept);
-}
-
-async function _runCycle() {
-  if (_stopRequested) {
-    _running = false;
-    _log("logInfo", "[autoGetData] Đã dừng vòng lặp.");
-    return;
-  }
-
-  try {
-    const { decodeOne, readLinks } = require("../media/media");
-    const links   = readLinks();
-    const allKeys = Object.keys(links).filter(k => !links[k].dead);
-
-    if (allKeys.length === 0) {
-      _log("logInfo", "[autoGetData] Không còn key hợp lệ — dừng vòng lặp.");
-      _running = false;
-      return;
-    }
-
-    const shuffled = allKeys.sort(() => Math.random() - 0.5).slice(0, MAX_FILES);
-    //_log("logInfo", `[autoGetData] Bắt đầu giải mã ${shuffled.length} file...`);
-
-    const decoded = [];
-
-    for (const key of shuffled) {
-      if (_stopRequested) break;
-      try {
-        const cachedPath = await decodeOne(key, {
-          force: true,
-          onLog: (msg) => _log("logDebug", `[autoGetData] ${msg}`),
-        });
-        if (cachedPath) {
-          decoded.push({ key, cachedPath });
-        } else {
-          _log("logWarn", `[autoGetData] ${key}: tải trả về null (apiUrl lỗi hoặc file hỏng)`);
-        }
-      } catch (e) {
-        _log("logWarn", `[autoGetData] ${key}: ${e.message}`);
-      }
-    }
-
-    if (decoded.length === 0 && shuffled.length > 0) {
-      _log("logWarn", `[autoGetData] Không tải được file nào (${shuffled.length} thử). Kiểm tra githubToken / apiUrl.`);
-    } else {
-      //_log("logInfo", `[autoGetData] Đã giải mã ${decoded.length}/${shuffled.length} file — sẽ xóa sau 1 phút.`);
-    }
-
-    setTimeout(() => {
-      if (decoded.length > 0) {
-        _removeDecodedFiles(decoded);
-        //_log("logInfo", `[autoGetData] Đã xóa ${decoded.length} file cache. Bắt đầu chu kỳ mới.`);
-      }
-      _runCycle();
-    }, CYCLE_MS);
-
-  } catch (e) {
-    _log("logError", `[autoGetData] Lỗi chu kỳ: ${e.message}`);
-    setTimeout(_runCycle, CYCLE_MS);
-  }
-}
-
-function startAutoGetData() {
-  if (_running) return;
-  _running       = true;
-  _stopRequested = false;
-  _log("logInfo", `[autoGetData] Khởi động — tối đa ${MAX_FILES} file/phút, tự xóa sau ${CYCLE_MS / 1000}s.`);
-  _runCycle();
-}
-
-function stopAutoGetData() {
-  _stopRequested = true;
-}
-
 module.exports = {
   scheduleCacheCleanup,
   cleanupCacheDir,
@@ -308,8 +197,6 @@ module.exports = {
   checkGroqKey,
   scheduleKeyCheck,
   setAutoCheck,
-  startAutoGetData,
-  stopAutoGetData,
   readJsonFile,
   writeJsonFile,
 };

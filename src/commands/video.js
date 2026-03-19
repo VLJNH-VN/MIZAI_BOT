@@ -13,7 +13,7 @@
 const fs   = require("fs");
 const path = require("path");
 
-const { sendVideo } = require("../../utils/media/media");
+const { sendVideo, getVideoMeta } = require("../../utils/media/media");
 
 const ROOT      = process.cwd();
 const VIDEO_DIR = path.join(ROOT, "includes", "cache", "videos");
@@ -75,10 +75,11 @@ module.exports = {
     await send(`⏳ Đang gửi video... (${path.basename(filePath)})`);
 
     try {
+      const meta = getVideoMeta(filePath);
       await sendVideo(api, filePath, threadID, event.type, {
-        width:    1280,
-        height:   720,
-        duration: 0,
+        width:    meta.width    || 1280,
+        height:   meta.height   || 720,
+        duration: meta.duration || 0,
         msg:      "",
       });
     } catch (err) {

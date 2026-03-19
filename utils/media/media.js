@@ -344,20 +344,25 @@ async function sendVideo(api, tmpPath, threadId, threadType, meta = {}) {
         const t = thumbUploads?.[0];
         if (t?.fileUrl) {
           thumbnailUrl = t.fileName ? `${t.fileUrl}/${t.fileName}` : t.fileUrl;
+        } else {
+          const keys = JSON.stringify(Object.keys(thumbUploads?.[0] || {}));
+          console.warn(`[sendVideo] thumb upload trả về không có fileUrl. Keys: ${keys}`);
         }
-      } catch (_) {}
-      finally {
+      } catch (thumbErr) {
+        console.warn(`[sendVideo] thumb upload lỗi: ${thumbErr?.message || thumbErr}`);
+      } finally {
         try { fs.unlinkSync(thumbPath); } catch (_) {}
       }
+    } else {
+      console.warn(`[sendVideo] extractThumb thất bại cho: ${path.basename(tmpPath)}`);
     }
   }
 
+  const payload = { videoUrl, duration, width, height, msg };
+  if (thumbnailUrl) payload.thumbnailUrl = thumbnailUrl;
+
   try {
-    return await api.sendVideo(
-      { videoUrl, thumbnailUrl, duration, width, height, msg },
-      threadId,
-      threadType
-    );
+    return await api.sendVideo(payload, threadId, threadType);
   } catch (e) {
     throw new Error(`[sendVideo lỗi] videoUrl=${videoUrl} | thumb=${thumbnailUrl} | ${e?.message || e}`);
   }
@@ -408,6 +413,7 @@ module.exports = {
   logMessageToFile,
   cleanTempFiles,
   cleanupOldFiles,
+  getVideoMeta,
   sendVideo,
   sendVoice,
   uploadImage,

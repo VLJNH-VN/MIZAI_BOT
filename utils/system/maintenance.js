@@ -238,11 +238,11 @@ async function _runCycle() {
   try {
     const { decodeOne, readLinks } = require("../media/media");
     const links   = readLinks();
-    const allKeys = Object.keys(links);
+    const allKeys = Object.keys(links).filter(k => !links[k].dead);
 
     if (allKeys.length === 0) {
-      _log("logWarn", "[autoGetData] githubMediaLinks.json trống — thử lại sau 1 phút.");
-      setTimeout(_runCycle, CYCLE_MS);
+      _log("logInfo", "[autoGetData] Không còn key hợp lệ — dừng vòng lặp.");
+      _running = false;
       return;
     }
 

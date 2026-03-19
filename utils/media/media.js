@@ -118,11 +118,28 @@ async function decodeOne(key, opts = {}) {
 
   try {
     const bytes = await downloadRaw(rawUrl, cachedPath);
+    if (entry.dead) {
+      try {
+        const fresh = readLinks();
+        if (fresh[key]) { delete fresh[key].dead; delete fresh[key].deadAt; fs.writeFileSync(LINKS_FILE, JSON.stringify(fresh, null, 2), "utf8"); }
+      } catch (_) {}
+    }
     onLog(`[download] ${key} — ${(bytes / 1024).toFixed(1)} KB`);
     return cachedPath;
   } catch (e) {
     onLog(`[download] ${key} — ${e.message}`);
     try { fs.unlinkSync(cachedPath); } catch (_) {}
+    const status = e?.response?.status;
+    if (status === 404 || status === 403) {
+      try {
+        const fresh = readLinks();
+        if (fresh[key]) {
+          fresh[key].dead   = true;
+          fresh[key].deadAt = new Date().toISOString();
+          fs.writeFileSync(LINKS_FILE, JSON.stringify(fresh, null, 2), "utf8");
+        }
+      } catch (_) {}
+    }
     return null;
   }
 }

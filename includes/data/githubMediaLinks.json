@@ -207,7 +207,9 @@
     "repo": "UPLOAD_MIZAI",
     "branch": "main",
     "uploadedAt": "2026-03-18T23:55:01.919Z",
-    "ext": ".mp4"
+    "ext": ".mp4",
+    "dead": true,
+    "deadAt": "2026-03-19T03:23:44.127Z"
   },
   "gai_1773878103278": {
     "rawUrl": "https://raw.githubusercontent.com/VLJNH-VN/UPLOAD_MIZAI/main/media/gai/api_1773878102426.mp4",
@@ -297,7 +299,9 @@
     "repo": "UPLOAD_MIZAI",
     "branch": "main",
     "uploadedAt": "2026-03-18T23:55:45.411Z",
-    "ext": ".mp4"
+    "ext": ".mp4",
+    "dead": true,
+    "deadAt": "2026-03-19T03:23:41.760Z"
   },
   "gai_1773878146682": {
     "rawUrl": "https://raw.githubusercontent.com/VLJNH-VN/UPLOAD_MIZAI/main/media/gai/api_1773878145543.mp4",
@@ -377,7 +381,9 @@
     "repo": "UPLOAD_MIZAI",
     "branch": "main",
     "uploadedAt": "2026-03-18T23:56:15.478Z",
-    "ext": ".jpeg"
+    "ext": ".jpeg",
+    "dead": true,
+    "deadAt": "2026-03-19T03:23:42.412Z"
   },
   "nhac_1773879889365": {
     "rawUrl": "https://raw.githubusercontent.com/VLJNH-VN/UPLOAD_MIZAI/main/media/nhac/api_1773879888565.aac",
@@ -1368,5 +1374,15 @@
     "branch": "main",
     "uploadedAt": "2026-03-19T03:11:50.664Z",
     "ext": ".mp4"
+  },
+  "thumb_1773890639155.jpg": {
+    "rawUrl": "https://raw.githubusercontent.com/VLJNH-VN/UPLOAD_MIZAI/main/media/images/thumb_1773890639155.jpg",
+    "apiUrl": "https://api.github.com/repos/VLJNH-VN/UPLOAD_MIZAI/contents/media/images/thumb_1773890639155.jpg?ref=main",
+    "ghPath": "media/images/thumb_1773890639155.jpg",
+    "owner": "VLJNH-VN",
+    "repo": "UPLOAD_MIZAI",
+    "branch": "main",
+    "uploadedAt": "2026-03-19T03:24:00.402Z",
+    "ext": ".jpg"
   }
 }

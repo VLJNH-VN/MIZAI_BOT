@@ -163,20 +163,31 @@ async function filterLiveLinks(links) {
 // Export
 // ─────────────────────────────────────────────────────────────────────────────
 
+const CONFIG_FILE = path.join(process.cwd(), "config.json");
+
+function readConfig() {
+  return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+}
+function saveConfig(obj) {
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(obj, null, 2), "utf-8");
+}
+
 module.exports = {
   config: {
     name: "api",
-    version: "3.0.0",
+    version: "3.1.0",
     hasPermssion: 2,
     credits: "VLjnh",
     description: "Quản lý kho link media mã hóa base64 lưu trên GitHub",
     commandCategory: "Admin",
     usages: [
-      "api add <tên>          — Reply vào media để upload GitHub",
-      "api fetch <tên> <url>  — Lấy nhiều URL media từ 1 endpoint",
-      "api check              — Xem danh sách kho",
-      "api del <tên>          — Xóa kho",
-      "api get <tên>          — Lấy link ngẫu nhiên",
+      "api add <tên>               — Reply vào media để upload GitHub",
+      "api fetch <tên> <url>       — Lấy nhiều URL media từ 1 endpoint",
+      "api check                   — Xem danh sách kho",
+      "api del <tên>               — Xóa kho",
+      "api get <tên>               — Lấy link ngẫu nhiên",
+      "api setrepo <owner/repo>    — Đổi repo GitHub upload",
+      "api settoken <token>        — Đổi GitHub token",
     ].join("\n"),
     cooldowns: 5,
   },
@@ -382,6 +393,111 @@ module.exports = {
 
         const url = kho[Math.floor(Math.random() * kho.length)];
         return send(`🔗 Link ngẫu nhiên từ kho "${khoName}":\n${url}`);
+      }
+
+      // ── api setrepo <owner/repo> [branch] ─────────────────────────────────
+      if (sub === "setrepo") {
+        const repoArg   = args[1]?.trim();
+        const branchArg = args[2]?.trim() || "main";
+
+        if (!repoArg || !/^[^/]+\/[^/]+$/.test(repoArg)) {
+          return send(
+            "⚠️ Cú pháp: api setrepo <owner/repo> [branch]\n" +
+            "Ví dụ: api setrepo TenBan/UploadRepo main\n\n" +
+            `⚙️ Repo hiện tại: ${global.config?.uploadRepo || "chưa set"}\n` +
+            `🌿 Branch: ${global.config?.branch || "main"}`
+          );
+        }
+
+        // Test repo có accessible không
+        await send(`🔍 Đang kiểm tra repo "${repoArg}"...`);
+        try {
+          const token = global.config?.githubToken;
+          const checkRes = await global.axios.get(
+            `https://api.github.com/repos/${repoArg}`,
+            {
+              headers: {
+                Authorization: token ? `Bearer ${token}` : undefined,
+                Accept: "application/vnd.github+json",
+              },
+              timeout: 10000,
+              validateStatus: s => true,
+            }
+          );
+          if (checkRes.status === 404) {
+            return send(`❌ Repo "${repoArg}" không tồn tại hoặc token không có quyền truy cập.`);
+          }
+          if (checkRes.status === 401) {
+            return send(`❌ Token GitHub không hợp lệ. Dùng: api settoken <token> trước.`);
+          }
+        } catch (e) {
+          return send(`❌ Không thể kết nối GitHub: ${e.message}`);
+        }
+
+        const cfg = readConfig();
+        const oldRepo = cfg.uploadRepo || "chưa set";
+        cfg.uploadRepo = repoArg;
+        cfg.branch     = branchArg;
+        saveConfig(cfg);
+
+        global.config.uploadRepo = repoArg;
+        global.config.branch     = branchArg;
+
+        global.startAutoGetData?.();
+
+        return send(
+          `✅ Đã cập nhật repo upload!\n` +
+          `━━━━━━━━━━━━━━━━\n` +
+          `🔄 Cũ: ${oldRepo}\n` +
+          `✨ Mới: ${repoArg}\n` +
+          `🌿 Branch: ${branchArg}\n` +
+          `━━━━━━━━━━━━━━━━\n` +
+          `💡 Giờ dùng api add để upload lên repo mới`
+        );
+      }
+
+      // ── api settoken <token> ───────────────────────────────────────────────
+      if (sub === "settoken") {
+        const tokenArg = args[1]?.trim();
+        if (!tokenArg) {
+          return send(
+            "⚠️ Cú pháp: api settoken <github_token>\n" +
+            "Ví dụ: api settoken ghp_xxxxxxxxxxxx\n\n" +
+            `⚙️ Token hiện tại: ${global.config?.githubToken ? global.config.githubToken.slice(0, 8) + "..." : "chưa set"}`
+          );
+        }
+
+        await send(`🔍 Đang xác thực token...`);
+        try {
+          const checkRes = await global.axios.get(
+            "https://api.github.com/user",
+            {
+              headers: {
+                Authorization: `Bearer ${tokenArg}`,
+                Accept: "application/vnd.github+json",
+              },
+              timeout: 10000,
+              validateStatus: s => true,
+            }
+          );
+          if (checkRes.status !== 200) {
+            return send(`❌ Token không hợp lệ (HTTP ${checkRes.status}). Kiểm tra lại token.`);
+          }
+          const username = checkRes.data?.login || "?";
+
+          const cfg = readConfig();
+          cfg.githubToken = tokenArg;
+          saveConfig(cfg);
+          global.config.githubToken = tokenArg;
+
+          return send(
+            `✅ Đã cập nhật GitHub token!\n` +
+            `👤 Tài khoản: ${username}\n` +
+            `🔑 Token: ${tokenArg.slice(0, 8)}...`
+          );
+        } catch (e) {
+          return send(`❌ Lỗi xác thực: ${e.message}`);
+        }
       }
 
       return send(

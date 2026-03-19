@@ -53,7 +53,7 @@ module.exports = {
         try {
           const res = await axios.get(url, {
             timeout: 10000,
-            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+            headers: { "User-Agent": global.userAgent }
           });
           if (res.status !== 200) return;
           const data = res.data[field];

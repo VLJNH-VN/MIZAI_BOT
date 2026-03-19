@@ -21,7 +21,7 @@ const SC_HOME = "https://soundcloud.com";
 const LIMIT   = 5;
 
 const HEADERS = {
-  "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "User-Agent":      global.userAgent,
   "Accept":          "application/json, text/javascript, */*; q=0.01",
   "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8",
   "Referer":         "https://soundcloud.com/",

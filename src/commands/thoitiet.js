@@ -18,7 +18,7 @@ module.exports = {
     try {
       const res = await axios.get(
         `https://wttr.in/${encodeURIComponent(location)}?format=j1`,
-        { timeout: 10000, headers: { "User-Agent": "MiZai-Bot/1.0" } }
+        { timeout: 10000, headers: { "User-Agent": global.userAgent } }
       );
 
       const data = res.data;

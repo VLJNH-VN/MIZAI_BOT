@@ -51,7 +51,7 @@ async function downloadFile(url, filePath) {
         responseType: "arraybuffer",
         timeout: 120000,
         maxContentLength: 500 * 1024 * 1024,
-        headers: { "User-Agent": "Mozilla/5.0" }
+        headers: { "User-Agent": global.userAgent }
     });
     fs.writeFileSync(filePath, Buffer.from(res.data));
 }

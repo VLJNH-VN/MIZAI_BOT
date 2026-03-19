@@ -65,7 +65,7 @@ async function uploadMediaToGithub(url, khoName, extHint) {
       responseType: "arraybuffer",
       timeout: 90000,
       maxContentLength: 200 * 1024 * 1024,
-      headers: { "User-Agent": "Mozilla/5.0" },
+      headers: { "User-Agent": global.userAgent },
     });
     fs.writeFileSync(tmpPath, Buffer.from(resp.data));
 
@@ -87,7 +87,7 @@ async function uploadMediaToGithub(url, khoName, extHint) {
 async function extractMediaUrlsFromEndpoint(sourceUrl) {
   const resp = await global.axios.get(sourceUrl, {
     timeout: 30000,
-    headers: { "User-Agent": "Mozilla/5.0" },
+    headers: { "User-Agent": global.userAgent },
     validateStatus: s => s < 500,
   });
 

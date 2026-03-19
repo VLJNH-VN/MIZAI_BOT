@@ -81,7 +81,7 @@ module.exports = {
         {
           headers: {
             Authorization: `token ${token}`,
-            "User-Agent": "mizai-bot",
+            "User-Agent": global.userAgent,
             Accept: "application/vnd.github+json"
           }
         }

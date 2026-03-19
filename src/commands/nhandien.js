@@ -25,7 +25,7 @@ async function fetchAudioBuffer(url) {
     timeout:          60_000,
     maxContentLength: 50 * 1024 * 1024,
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "User-Agent": global.userAgent,
     },
   });
   return Buffer.from(res.data);

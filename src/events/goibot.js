@@ -124,7 +124,7 @@ let _scClientId = null;
 async function getSCClientId() {
   if (_scClientId) return _scClientId;
   const res = await axios.get("https://soundcloud.com", {
-    headers: { "User-Agent": "Mozilla/5.0" }, timeout: 12000
+    headers: { "User-Agent": global.userAgent }, timeout: 12000
   });
   const scripts = [...res.data.matchAll(/src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g)].map(m => m[1]);
   for (const src of scripts.slice(-4)) {
@@ -162,7 +162,7 @@ async function getSCStreamUrl(transcodings, clientId) {
   const res = await axios.get(progressive.url, {
     params:  { client_id: clientId },
     timeout: 15000,
-    headers: { "User-Agent": "Mozilla/5.0" },
+    headers: { "User-Agent": global.userAgent },
   });
   const streamUrl = res.data?.url;
   if (!streamUrl) throw new Error("Không lấy được stream URL từ SoundCloud");
@@ -173,7 +173,7 @@ async function downloadAudio(streamUrl, outPath) {
   const res = await axios.get(streamUrl, {
     responseType: "stream",
     timeout:      120000,
-    headers:      { "User-Agent": "Mozilla/5.0" }
+    headers:      { "User-Agent": global.userAgent }
   });
   await new Promise((resolve, reject) => {
     const writer = fs.createWriteStream(outPath);
@@ -226,7 +226,7 @@ async function generatePollinationsImage({ prompt, modelKey = "flux", width, hei
     responseType: "arraybuffer",
     timeout,
     headers: {
-      "User-Agent": "Mozilla/5.0",
+      "User-Agent": global.userAgent,
       "Accept":     "image/*,*/*;q=0.8",
     },
     maxRedirects: 5,

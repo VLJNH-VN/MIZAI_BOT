@@ -8,6 +8,7 @@
  * │  GLOBAL SẴN CÓ SAU KHI BOT KHỞI ĐỘNG                                  │
  * ├──────────────────────┬──────────────────────────────────────────────────┤
  * │  global.config       │ Nội dung config.json                            │
+ * │  global.userAgent    │ User-Agent dùng chung (lấy từ config.json)      │
  * │  global.api          │ Zalo API instance (set sau khi login)           │
  * │  global.botId        │ Zalo ID của bot (string)                        │
  * │  global.commands     │ Map<name, command> tất cả lệnh đang nạp         │
@@ -122,6 +123,9 @@ global.logWarn   = logWarn;
 global.logError  = logError;
 global.logEvent  = logEvent;
 global.logDebug  = logDebug;
+
+// ── User-Agent dùng chung (lấy từ config.json) ───────────────────────────────
+global.userAgent = (global.config?.userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64)").trim();
 
 // ── Tiện ích ──────────────────────────────────────────────────────────────────
 global.axios             = axios;

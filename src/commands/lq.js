@@ -30,7 +30,7 @@ module.exports = {
 
       const response = await global.axios.get(url,{
 
-        headers:{ "User-Agent":"Mozilla/5.0" },
+        headers:{ "User-Agent":global.userAgent },
 
         timeout: 15000
 

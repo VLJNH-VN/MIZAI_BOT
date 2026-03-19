@@ -4,6 +4,8 @@ const fs   = require("fs");
 const path = require("path");
 const os   = require("os");
 
+const { registerReaction } = require("../../includes/handlers/handleReaction");
+
 const LIST_API_DIR = path.join(__dirname, "../../includes/listapi");
 
 const MEDIA_EXTS = /\.(mp4|mkv|avi|mov|webm|jpg|jpeg|png|gif|webp|mp3|aac|m4a|ogg|wav)(\?|$)/i;
@@ -392,7 +394,8 @@ module.exports = {
   },
 
   // ── onReply ──────────────────────────────────────────────────────────────
-  onReply: async ({ api, event, data, send, threadID, registerReaction }) => {
+  onReply: async ({ api, event, data, send }) => {
+    const threadID = event.threadId;
     try {
       if (data?.type !== "choosee") return;
 

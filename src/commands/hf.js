@@ -7,7 +7,7 @@ const getToken = () => global?.config?.hfToken || process.env.HF_TOKEN || "";
 
 const TEXT_MODEL  = "mistralai/Mistral-7B-Instruct-v0.3";
 const IMAGE_MODEL = "stabilityai/stable-diffusion-xl-base-1.0";
-const HF_API      = "https://api-inference.huggingface.co/models";
+const HF_API      = "https://router.huggingface.co/hf-inference/models";
 
 async function hfText(prompt) {
   const url = `${HF_API}/${TEXT_MODEL}/v1/chat/completions`;

@@ -22,16 +22,14 @@ const os   = require("os");
 // api-inference.huggingface.co đã ngừng hỗ trợ — chỉ dùng router mới
 const HF_ROUTER  = "https://router.huggingface.co/hf-inference/models";
 
-// ── Danh sách model ───────────────────────────────────────────────────────────
+// ── Danh sách model (chỉ models được hf-inference hỗ trợ) ────────────────────
 const MODELS = {
-  flux:       { id: "black-forest-labs/FLUX.1-dev",                    label: "FLUX.1 Dev (chất lượng cao)"    },
-  schnell:    { id: "black-forest-labs/FLUX.1-schnell",                 label: "FLUX.1 Schnell (nhanh)"         },
-  sdxl:       { id: "stabilityai/stable-diffusion-xl-base-1.0",        label: "Stable Diffusion XL"            },
-  lightning:  { id: "ByteDance/SDXL-Lightning",                         label: "SDXL-Lightning (siêu nhanh)"    },
-  hypersd:    { id: "ByteDance/Hyper-SD",                               label: "Hyper-SD (tốc độ + chất lượng)" },
+  schnell: { id: "black-forest-labs/FLUX.1-schnell",                label: "FLUX.1 Schnell (nhanh, mặc định)" },
+  sdxl:    { id: "stabilityai/stable-diffusion-xl-base-1.0",        label: "Stable Diffusion XL"              },
+  sd3:     { id: "stabilityai/stable-diffusion-3-medium-diffusers", label: "Stable Diffusion 3 Medium"        },
 };
 
-const DEFAULT_MODEL = "flux";
+const DEFAULT_MODEL = "schnell";
 
 // ── Token ─────────────────────────────────────────────────────────────────────
 function getToken() {
@@ -42,6 +40,7 @@ function hfHeaders() {
   return {
     Authorization : `Bearer ${getToken()}`,
     "Content-Type": "application/json",
+    "Accept"      : "image/jpeg,image/png,image/gif,image/*",
   };
 }
 
@@ -137,6 +136,7 @@ module.exports = {
       const modelList = Object.entries(MODELS)
         .map(([k, m]) => `  • ${k.padEnd(10)} — ${m.label}`)
         .join("\n");
+      const modelKeys = Object.keys(MODELS).join(" | ");
       return send(
         `╔══ HUGGING FACE AI ══╗\n` +
         `📤 Lệnh:\n` +
@@ -145,7 +145,7 @@ module.exports = {
         `  ${prefix}hf img <mô tả> --model <key>\n` +
         `  ${prefix}hf models\n` +
         `\n🎛️ Tùy chọn:\n` +
-        `  --model <key>     Chọn model (xem .hf models)\n` +
+        `  --model <key>     ${modelKeys}\n` +
         `  --size WxH        Kích thước ảnh (vd: 1024x768)\n` +
         `  --steps <n>       Số bước (vd: 20)\n` +
         `  --seed <n>        Seed cố định\n` +
@@ -229,7 +229,7 @@ module.exports = {
         return send(
           `❌ Tạo ảnh thất bại!\n` +
           `📋 Lỗi: ${raw.slice(0, 200)}\n` +
-          `💡 Thử đổi model: ${prefix}hf img ${prompt} --model schnell`
+          `💡 Thử model khác: ${prefix}hf img ${prompt} --model sdxl`
         );
       }
       return;

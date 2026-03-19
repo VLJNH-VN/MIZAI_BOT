@@ -64,12 +64,13 @@ function getVideoMetadata(filePath) {
         ).toString();
         const data = JSON.parse(out);
         const vs = data.streams?.find(s => s.codec_type === "video");
+        const rawDur = parseFloat(data.format?.duration || 0);
         return {
             width:    vs?.width    || 720,
             height:   vs?.height   || 1280,
-            duration: Math.round(parseFloat(data.format?.duration || 0))
+            duration: rawDur > 0 ? Math.max(1, Math.ceil(rawDur)) : 1
         };
-    } catch { return { width: 720, height: 1280, duration: 0 }; }
+    } catch { return { width: 720, height: 1280, duration: 1 }; }
 }
 
 function convertToAac(inputPath, outputPath) {
@@ -165,7 +166,7 @@ async function handleVideo(api, videoUrl, thumbnail, caption, threadId, threadTy
             thumbnailUrl: thumbnail || "",
             width: meta.width,
             height: meta.height,
-            duration: (duration || meta.duration) * 1000
+            duration: duration || meta.duration  // giây — sendVideo tự nhân 1000
         });
     } catch (err) {
         logWarn(`[AutoDown] Gửi video lỗi, thử gửi trực tiếp: ${err.message}`);
@@ -175,7 +176,7 @@ async function handleVideo(api, videoUrl, thumbnail, caption, threadId, threadTy
                 thumbnailUrl: thumbnail || "",
                 msg: caption,
                 width: 720, height: 1280,
-                duration: (duration || 0) * 1000,
+                duration: Math.max(1000, (duration || 1) * 1000),  // ms, tối thiểu 1s
                 ttl: 500_000
             }, threadId, threadType);
         } catch (err2) {

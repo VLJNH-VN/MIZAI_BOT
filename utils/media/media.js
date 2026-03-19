@@ -353,7 +353,9 @@ async function sendVideo(api, tmpPath, threadId, threadType, meta = {}) {
   const videoUrl = fileName ? `${fileUrl}/${fileName}` : fileUrl;
   const width    = meta.width    || 1280;
   const height   = meta.height   || 720;
-  const duration = meta.duration > 0 ? meta.duration : 1;  // tối thiểu 1s tránh Zalo hiện sai
+  // Zalo API nhận duration theo milliseconds — tất cả callers truyền giây, nhân 1000 ở đây.
+  const rawDur   = meta.duration > 0 ? meta.duration : 1;
+  const duration = rawDur * 1000;
   const msg      = meta.msg      || "";
 
   let thumbnailUrl = meta.thumbnailUrl || "";

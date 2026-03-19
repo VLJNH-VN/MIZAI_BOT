@@ -12,7 +12,8 @@ const { Reactions } = require("zca-js");
 
 const {
   sendToGroq, isEnabled, getBody,
-  getCurrentTimeInVietnam, TRIGGER_KEYWORDS, CACHE_DIR, handleNewUser
+  getCurrentTimeInVietnam, TRIGGER_KEYWORDS, CACHE_DIR, handleNewUser,
+  fetchImageAsBase64, extractImageUrl, extractUrls,
 } = require("../../utils/ai/goibot");
 
 const { fileHelpers } = require("../commands/file");
@@ -604,13 +605,48 @@ async function handleGoibot({ api, event }) {
     const { isBotAdmin } = require("../../utils/bot/botManager");
     const isAdmin = isBotAdmin(senderId);
 
+    // ── Phát hiện ảnh ──────────────────────────────────────────────────────────
+    const imageParts = [];
+    const imgUrlCurrent = extractImageUrl(raw);
+    const imgUrlQuote   = raw.quote ? extractImageUrl(raw.quote) : null;
+    const imgUrlToUse   = imgUrlCurrent || imgUrlQuote;
+
+    if (imgUrlToUse) {
+      try {
+        const imgData = await fetchImageAsBase64(imgUrlToUse);
+        imageParts.push(imgData);
+      } catch (imgErr) {
+        global.logWarn?.(`[goibot] Không tải được ảnh: ${imgErr?.message}`);
+      }
+    }
+
+    // ── Phát hiện URL ──────────────────────────────────────────────────────────
+    const urls = extractUrls(body);
+
+    const SEARCH_KEYWORDS = [
+      "tin tức", "tin mới", "mới nhất", "hôm nay", "hôm qua",
+      "thời tiết", "giá", "tỉ giá", "tỷ giá", "kết quả",
+      "bóng đá", "lịch thi", "thể thao", "sự kiện",
+      "news", "latest", "weather", "price", "score",
+      "vừa xảy ra", "gần đây", "hiện tại", "bây giờ",
+    ];
+    const useSearch = urls.length === 0 &&
+      SEARCH_KEYWORDS.some(kw => bodyLower.includes(kw));
+
+    const hasImage = imageParts.length > 0;
+    const hasUrl   = urls.length > 0;
+
     const userMessage = JSON.stringify({
       time: timenow, senderName: nameUser, content: body,
       threadID: threadId, senderID: senderId,
-      id_cua_bot: botId, hasQuote
+      id_cua_bot: botId, hasQuote, hasImage, hasUrl,
     }) + (isAdmin ? `\n${getTxContext(true)}` : "");
 
-    const responseText = await sendToGroq(userMessage, threadId);
+    const responseText = await sendToGroq(userMessage, threadId, {
+      imageParts,
+      useSearch,
+      urls,
+    });
 
     let botMsg;
     try {

@@ -1,6 +1,7 @@
 const { GoogleGenAI } = require("@google/genai");
-const fs   = require("fs");
-const path = require("path");
+const axios = require("axios");
+const fs    = require("fs");
+const path  = require("path");
 
 const DATA_FILE = path.join(__dirname, "..", "..", "includes", "data", "goibot.json");
 const CACHE_DIR = path.join(__dirname, "..", "..", "includes", "cache");
@@ -87,22 +88,34 @@ const SYSTEM_PROMPT = `Bạn là Mizai — một trợ lý AI nữ tính, dễ t
 5. **Tạo ảnh AI** — nếu người dùng muốn vẽ/tạo ảnh:
    - Đặt img.status = true
    - img.prompt = mô tả ảnh bằng tiếng Anh chi tiết (tự dịch nếu người dùng nói tiếng Việt)
-   - img.model = "flux" (mặc định, SDXL) | "flux-realism" (ảnh thực tế) | "flux-anime" (phong cách anime) | "flux-pro" (chất lượng cao) | "turbo" (rất nhanh) | "sana" (Sana 1.6B) | "any-dark" (phong cách tối/fantasy)
+   - img.model = "flux" | "flux-realism" | "flux-anime" | "flux-pro" | "turbo" | "sana" | "any-dark"
 
 6. **Điều khiển TX** — CHỈ dành cho Admin bot (isAdmin=true trong TX_DATA):
-   - Nếu admin bảo "cầu tài/xỉu X phiên": tx.status=true, tx.action="cau", tx.result="tài"/"xỉu", tx.phien=X (mặc định 1 nếu không nói)
-   - Nếu admin bảo "nhả X phiên" (người chơi thắng nhiều hơn): tx.status=true, tx.action="nha", tx.phien=X (mặc định 3)
+   - Nếu admin bảo "cầu tài/xỉu X phiên": tx.status=true, tx.action="cau", tx.result="tài"/"xỉu", tx.phien=X
+   - Nếu admin bảo "nhả X phiên": tx.status=true, tx.action="nha", tx.phien=X (mặc định 3)
    - Nếu admin bảo "tắt cầu": tx.status=true, tx.action="reset_cau"
    - Nếu admin bảo "tắt nhả": tx.status=true, tx.action="reset_nha"
-   - Nếu admin chỉ hỏi xem số liệu TX: đọc TX_DATA trong tin nhắn rồi trả lời text bình thường, tx.status=false
    - KHÔNG bao giờ set tx.status=true nếu isAdmin=false
+
+7. **Phân tích ảnh** — khi context chứa hasImage=true:
+   - Mô tả, phân tích nội dung ảnh được gửi kèm
+   - Trả lời câu hỏi liên quan đến ảnh đó
+   - Đặt content.text = kết quả phân tích chi tiết, tự nhiên
+
+8. **Tìm kiếm web** — khi người dùng hỏi tin tức, sự kiện mới nhất, thời tiết, giá cả...:
+   - Google Search đã được bật, hãy sử dụng thông tin tìm được để trả lời
+   - Trích dẫn nguồn ngắn gọn nếu cần thiết
+
+9. **Đọc link** — khi context chứa hasUrl=true:
+   - URL đã được phân tích, hãy dùng nội dung đó để trả lời
+   - Tóm tắt hoặc giải thích nội dung link theo yêu cầu người dùng
 
 ---
 
 QUAN TRỌNG: Luôn trả về JSON hợp lệ theo đúng cấu trúc sau, không thêm text ngoài JSON:
 {"content":{"text":"<câu trả lời của bạn>","thread_id":""},"nhac":{"status":false,"keyword":""},"tinh":{"status":false,"expr":""},"sticker":{"status":false,"keyword":""},"reaction":{"status":false,"type":""},"img":{"status":false,"prompt":"","model":"flux"},"tx":{"status":false,"action":"","result":"","phien":0}}`.trim();
 
-// ── Chat history (lưu theo định dạng Gemini SDK: role user/model, parts) ────────
+// ── Chat history ─────────────────────────────────────────────────────────────────
 const chatHistories = {};
 const HISTORY_MAX   = 20;
 
@@ -115,7 +128,7 @@ function clearChatHistory(threadId) {
   delete chatHistories[threadId];
 }
 
-// ── Quản lý key rotation ─────────────────────────────────────────────────────────
+// ── Key rotation ─────────────────────────────────────────────────────────────────
 const KEY_FILE_PATH = path.join(__dirname, "..", "..", "includes", "data", "key.json");
 
 function loadKeyData() {
@@ -127,14 +140,14 @@ function saveKeyData(data) {
   try { fs.writeFileSync(KEY_FILE_PATH, JSON.stringify(data, null, 2), "utf-8"); } catch {}
 }
 
-function getActiveGeminiKey() {
-  const data      = loadKeyData();
-  const allKeys   = Array.isArray(data.geminiKeys) ? data.geminiKeys : [];
-  const deadKeys  = new Set(Array.isArray(data.geminiDead) ? data.geminiDead : []);
-  const liveKeys  = allKeys.filter(k => !deadKeys.has(k));
-  if (liveKeys.length) return liveKeys[0];
+function getLiveKeys() {
+  const data    = loadKeyData();
+  const allKeys = Array.isArray(data.geminiKeys) ? data.geminiKeys : [];
+  const deadSet = new Set(Array.isArray(data.geminiDead) ? data.geminiDead : []);
+  const live    = allKeys.filter(k => !deadSet.has(k));
+  if (live.length) return live;
   const fallback = global?.config?.geminiKey || "";
-  if (fallback) return fallback;
+  if (fallback) return [fallback];
   throw new Error("Chưa có Gemini API key. Dùng .key add AIza... để thêm key.");
 }
 
@@ -145,52 +158,131 @@ function markGeminiKeyDead(key) {
     data.geminiDead.push(key);
     data.geminiLive = (data.geminiLive || []).filter(k => k !== key);
     saveKeyData(data);
-    global.logWarn?.(`[goibot] Đã đánh dấu Gemini key dead: ${key.slice(0, 8)}...`);
+    global.logWarn?.(`[goibot] Key ${key.slice(0, 8)}... hết quota, đã đánh dấu dead.`);
   }
 }
 
-// ── Gọi Gemini API với rotation key ──────────────────────────────────────────────
-async function sendToGroq(userMessage, threadId) {
-  const history  = getChatHistory(threadId);
+// ── Download ảnh → base64 ────────────────────────────────────────────────────────
+async function fetchImageAsBase64(url) {
+  const res = await axios.get(url, {
+    responseType: "arraybuffer",
+    timeout: 20000,
+    headers: { "User-Agent": global.userAgent || "Mozilla/5.0" },
+  });
+  const contentType = res.headers["content-type"] || "image/jpeg";
+  const mimeType    = contentType.split(";")[0].trim();
+  const base64      = Buffer.from(res.data).toString("base64");
+  return { mimeType, base64 };
+}
+
+// ── Lấy URL ảnh từ raw message ───────────────────────────────────────────────────
+function extractImageUrl(raw) {
+  if (!raw) return null;
+  const c = raw.content;
+  if (c && typeof c === "object") {
+    const url = c.url || c.normalUrl || c.hdUrl || c.href || c.fileUrl || c.downloadUrl || c.src;
+    if (url && /\.(jpg|jpeg|png|gif|webp)/i.test(url.split("?")[0])) return url;
+    if (url && !url.includes("zaloapp") && c.thumb) return c.thumb;
+  }
+  const attArr = Array.isArray(raw.attach) ? raw.attach : [];
+  for (const a of attArr) {
+    const url = a.url || a.normalUrl || a.hdUrl || a.href || a.fileUrl || a.src;
+    if (url) return url;
+  }
+  return null;
+}
+
+// ── Lấy URL từ text ──────────────────────────────────────────────────────────────
+function extractUrls(text) {
+  const matches = text.match(/https?:\/\/[^\s]+/g) || [];
+  return matches.filter(u => !u.includes("zalo.me") && !u.includes("zaloapp"));
+}
+
+// ── Gọi Gemini với rotation key ──────────────────────────────────────────────────
+/**
+ * @param {string} userMessage — tin nhắn text
+ * @param {string} threadId
+ * @param {object} [opts]
+ * @param {Array}  [opts.imageParts]  — [{mimeType, base64}] ảnh đính kèm
+ * @param {boolean} [opts.useSearch]  — bật Google Search grounding
+ * @param {string[]} [opts.urls]      — URLs để đọc nội dung
+ */
+async function sendToGroq(userMessage, threadId, opts = {}) {
+  const { imageParts = [], useSearch = false, urls = [] } = opts;
+  const history = getChatHistory(threadId);
+
+  const userParts = [];
+
+  if (imageParts.length > 0) {
+    for (const img of imageParts) {
+      userParts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
+    }
+  }
+
+  userParts.push({ text: userMessage });
+
   const contents = [
     ...history,
-    { role: "user", parts: [{ text: userMessage }] },
+    { role: "user", parts: userParts },
   ];
 
-  const data    = loadKeyData();
-  const allKeys = Array.isArray(data.geminiKeys) ? data.geminiKeys : [];
-  const deadSet = new Set(Array.isArray(data.geminiDead) ? data.geminiDead : []);
-  const liveKeys = allKeys.filter(k => !deadSet.has(k));
+  const tools = [];
+  if (useSearch) tools.push({ googleSearch: {} });
+  if (urls.length > 0) tools.push({ urlContext: {} });
 
-  const fallback = global?.config?.geminiKey || "";
-  const tryKeys  = liveKeys.length ? liveKeys : (fallback ? [fallback] : []);
-  if (!tryKeys.length) throw new Error("Chưa có Gemini API key. Dùng .key add AIza... để thêm key.");
+  const tryKeys = getLiveKeys();
+  let lastErr   = null;
 
-  let lastErr = null;
   for (const key of tryKeys) {
     try {
-      const ai       = new GoogleGenAI({ apiKey: key });
+      const ai = new GoogleGenAI({ apiKey: key });
+
+      const config = {
+        systemInstruction: SYSTEM_PROMPT,
+        temperature:       0.8,
+        maxOutputTokens:   2048,
+      };
+
+      if (tools.length === 0) {
+        config.responseMimeType = "application/json";
+      } else {
+        config.tools = tools;
+      }
+
       const response = await ai.models.generateContent({
         model: MODEL_NAME,
         contents,
-        config: {
-          systemInstruction: SYSTEM_PROMPT,
-          temperature:       0.8,
-          maxOutputTokens:   2048,
-          responseMimeType:  "application/json",
-        },
+        config,
       });
 
-      const assistantMsg = response.text || "";
-      history.push({ role: "user",  parts: [{ text: userMessage  }] });
+      let assistantMsg = response.text || "";
+
+      if (tools.length > 0) {
+        const jsonMatch = assistantMsg.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          assistantMsg = JSON.stringify({
+            content: { text: assistantMsg.trim(), thread_id: "" },
+            nhac: { status: false, keyword: "" },
+            tinh: { status: false, expr: "" },
+            sticker: { status: false, keyword: "" },
+            reaction: { status: false, type: "" },
+            img: { status: false, prompt: "", model: "flux" },
+            tx: { status: false, action: "", result: "", phien: 0 },
+          });
+        } else {
+          assistantMsg = jsonMatch[0];
+        }
+      }
+
+      history.push({ role: "user",  parts: [{ text: userMessage }] });
       history.push({ role: "model", parts: [{ text: assistantMsg }] });
       if (history.length > HISTORY_MAX) history.splice(0, history.length - HISTORY_MAX);
+
       return assistantMsg;
     } catch (err) {
       const msg = err?.message || "";
       if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota") || err?.status === 429) {
         markGeminiKeyDead(key);
-        global.logWarn?.(`[goibot] Key ${key.slice(0, 8)}... hết quota, thử key tiếp theo.`);
         lastErr = err;
         continue;
       }
@@ -255,5 +347,6 @@ async function handleNewUser({ api, threadId, userId }) {
 module.exports = {
   sendToGroq, setEnabled, isEnabled, clearChatHistory,
   getBody, getCurrentTimeInVietnam, TRIGGER_KEYWORDS,
-  CACHE_DIR, handleNewUser
+  CACHE_DIR, handleNewUser,
+  fetchImageAsBase64, extractImageUrl, extractUrls,
 };

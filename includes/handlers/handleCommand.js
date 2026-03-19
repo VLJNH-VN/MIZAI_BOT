@@ -163,7 +163,7 @@ async function handleCommand({ api, event, commands, prefix }) {
         `⏰ Uptime: ${formatUptime()}`
       );
 
-      try {
+      /*try {
         let videoPath = null;
 
         // Thử lấy từ index cache trước
@@ -204,7 +204,7 @@ async function handleCommand({ api, event, commands, prefix }) {
 
     const cfg = command.config || {};
     // Tên gốc của command (dùng cho cooldown, log) — ưu tiên cfg.name
-    const canonicalName = cfg.name ? String(cfg.name).toLowerCase() : commandName;
+    const canonicalName = cfg.name ? String(cfg.name).toLowerCase() : commandName;*/
 
     // ── Permission ─────────────────────────────────────────────────────────────
     const allowed = await checkPermission({

@@ -387,14 +387,25 @@ async function handleGoibot({ api, event }) {
   const lastCall = lastAiCall[userKey] || 0;
   if (now - lastCall < USER_AI_COOLDOWN_MS) {
     const waitSec = Math.ceil((USER_AI_COOLDOWN_MS - (now - lastCall)) / 1000);
-    await api.sendMessage({ msg: `⏳ Bạn gọi Mizai quá nhanh! Chờ ${waitSec}s nhé.`, quote: raw }, threadId, event.type);
+    try {
+      await api.sendMessage({ msg: `⏳ Bạn gọi Mizai quá nhanh! Chờ ${waitSec}s nhé.`, quote: raw }, threadId, event.type);
+    } catch {
+      await api.sendMessage({ msg: `⏳ Bạn gọi Mizai quá nhanh! Chờ ${waitSec}s nhé.` }, threadId, event.type);
+    }
     return;
   }
 
   isProcessing[userKey] = true;
   lastAiCall[userKey]   = now;
 
-  const send = async (msg) => api.sendMessage({ msg, quote: raw }, threadId, event.type);
+  // Gửi reply — fallback không quote nếu Zalo từ chối kiểu quote (vd: webchat)
+  const send = async (msg) => {
+    try {
+      return await api.sendMessage({ msg, quote: raw }, threadId, event.type);
+    } catch {
+      return await api.sendMessage({ msg }, threadId, event.type);
+    }
+  };
 
   try {
     const timenow  = getCurrentTimeInVietnam();

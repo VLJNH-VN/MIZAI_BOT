@@ -1,11 +1,11 @@
 {
   "keys": [
-    "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"
+    "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"
   ],
   "autoCheck": true,
-  "live": [],
-  "dead": [
-    "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"
+  "live": [
+    "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"
   ],
+  "dead": [],
   "no_balance": []
 }

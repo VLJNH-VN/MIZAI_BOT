@@ -8,7 +8,7 @@ module.exports = {
     version: "3.1.0",
     hasPermssion: 2,
     credits: "Ljzi",
-    description: "Tải / tạo command từ link hoặc reply code, reload ngay",
+    description: "Share / tải / tạo command mọi lệnh qua GitHub Gist, reload ngay",
     commandCategory: "Admin",
     usages: ".adc <tenlenh> [link] hoặc reply code",
     cooldowns: 0
@@ -31,16 +31,7 @@ module.exports = {
       delete require.cache[require.resolve(filePath)];
       const loaded = require(filePath);
       if (loaded?.config?.name) commands.set(loaded.config.name, loaded);
-
-      let ghUrl = "";
-      try {
-        ghUrl = await global.githubUpload(filePath, `commands/${name}.js`);
-      } catch (e) { /* không báo lỗi github nếu upload thất bại */ }
-
-      return send(
-        `✅ Đã tạo command từ reply: ${loaded?.config?.name || name}` +
-        (ghUrl ? `\n☁️ GitHub: ${ghUrl}` : "")
-      );
+      return send(`✅ Đã tạo command từ reply: ${loaded?.config?.name || name}`);
     }
 
     // 2. Tải command từ link
@@ -64,22 +55,45 @@ module.exports = {
         delete require.cache[require.resolve(filePath)];
         const loaded = require(filePath);
         if (loaded?.config?.name) commands.set(loaded.config.name, loaded);
-
-        let ghUrl = "";
-        try {
-          ghUrl = await global.githubUpload(filePath, `commands/${name}.js`);
-        } catch (e) { /* không báo lỗi github */ }
-
-        return send(
-          `✅ Đã cài command: ${loaded?.config?.name || name}` +
-          (ghUrl ? `\n☁️ GitHub: ${ghUrl}` : "")
-        );
+        return send(`✅ Đã cài command: ${loaded?.config?.name || name}`);
       } catch (err) {
         return send(`❎ Không tải được code\n${err.message}`);
       }
     }
 
-    // 3. Kiểm tra lệnh tồn tại
+    // 3. Share command qua GitHub Gist
     if (!fs.existsSync(filePath)) return send("❎ Lệnh không tồn tại. Hãy reply code hoặc nhập link để cài.");
+
+    try {
+      const code = fs.readFileSync(filePath, "utf8");
+      const token = global.config.githubToken;
+      if (!token) return send("❌ Chưa cấu hình githubToken trong config.json");
+
+      const res = await axios.post(
+        "https://api.github.com/gists",
+        {
+          description: `Command ${name}`,
+          public: true,
+          files: {
+            [`${name}.js`]: { content: code }
+          }
+        },
+        {
+          headers: {
+            Authorization: `token ${token}`,
+            "User-Agent": "mizai-bot",
+            Accept: "application/vnd.github+json"
+          }
+        }
+      );
+
+      const raw = res.data.files[`${name}.js`].raw_url;
+
+      return send(
+        `📤 Share command thành công\n\n📄 ${name}.js\n🔗 Raw URL: ${raw}`
+      );
+    } catch (err) {
+      return send(`⚠️ Lỗi tạo Gist:\n${err.response?.data?.message || err.message}`);
+    }
   }
 };

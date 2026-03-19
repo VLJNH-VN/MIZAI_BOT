@@ -131,15 +131,36 @@ async function handleAudio(api, audioUrl, thumbnail, caption, threadId, threadTy
     }
 }
 
+// ─── Convert video sang H.264 MP4 (tương thích Zalo) ─────────────────────────
+function convertToH264(inputPath, outputPath) {
+    execSync(
+        `ffmpeg -y -i "${inputPath}" -c:v libx264 -preset fast -crf 23 -c:a aac -movflags +faststart "${outputPath}"`,
+        { timeout: 120000, stdio: "pipe" }
+    );
+}
+
 // ─── Gửi video ────────────────────────────────────────────────────────────────
 async function handleVideo(api, videoUrl, thumbnail, caption, threadId, threadType, cacheDir, duration) {
+    const rawPath = path.join(cacheDir, `ad_raw_${Date.now()}.mp4`);
     const tmpPath = path.join(cacheDir, `ad_vid_${Date.now()}.mp4`);
 
     try {
-        await downloadFile(videoUrl, tmpPath);
-        const meta = getVideoMetadata(tmpPath);
+        await downloadFile(videoUrl, rawPath);
 
-        await sendVideo(api, tmpPath, threadId, threadType, {
+        // Convert sang H.264 để đảm bảo tương thích với Zalo
+        let uploadPath = rawPath;
+        try {
+            convertToH264(rawPath, tmpPath);
+            if (fs.existsSync(tmpPath) && fs.statSync(tmpPath).size > 0) {
+                uploadPath = tmpPath;
+            }
+        } catch (convErr) {
+            logWarn(`[AutoDown] Convert H.264 lỗi, dùng file gốc: ${convErr.message}`);
+        }
+
+        const meta = getVideoMetadata(uploadPath);
+
+        await sendVideo(api, uploadPath, threadId, threadType, {
             msg: caption,
             thumbnailUrl: thumbnail || "",
             width: meta.width,
@@ -161,7 +182,7 @@ async function handleVideo(api, videoUrl, thumbnail, caption, threadId, threadTy
             logWarn(`[AutoDown] Gửi trực tiếp cũng thất bại: ${err2.message}`);
         }
     } finally {
-        cleanupFiles([tmpPath], 0);
+        cleanupFiles([rawPath, tmpPath], 0);
     }
 }
 
@@ -190,6 +211,11 @@ function startAutoDown(api) {
     api.listener.on("message", async (msg) => {
         const threadId   = msg.threadId;
         const threadType = msg.type;
+
+        // ── Bỏ qua tin nhắn do chính bot gửi (tránh vòng lặp) ──────────────
+        const botId    = global.botId ? String(global.botId) : null;
+        const senderId = msg.data?.uidFrom ? String(msg.data.uidFrom) : null;
+        if (botId && senderId && senderId === botId) return;
 
         const content  = typeof msg.data?.content === "string" ? msg.data.content.trim() : "";
         const href     = typeof msg.data?.content?.href === "string" ? msg.data.content.href.trim() : "";

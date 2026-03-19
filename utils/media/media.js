@@ -366,8 +366,7 @@ async function sendVideo(api, tmpPath, threadId, threadType, meta = {}) {
     return await api.sendVideo(payload, threadId, threadType);
   } catch (e) {
     throw new Error(`[sendVideo lỗi] videoUrl=${videoUrl} | thumb=${thumbnailUrl} | ${e?.message || e}`);
-  }
-}
+  }}
 
 async function sendVoice(api, tmpPath, threadId, threadType) {
   if (!fs.existsSync(tmpPath)) throw new Error(`File không tồn tại: ${tmpPath}`);

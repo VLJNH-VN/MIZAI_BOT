@@ -9,9 +9,10 @@
     "6024931307373526012"
   ],
   "qrPath": "./qr.png",
-  "groqKeys": [
-    "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"
+  "dpk": [
+    "sk-54f034b343a84f6ea4f440df020cd19e"
   ],
+  "deepseekKey": "sk-54f034b343a84f6ea4f440df020cd19e",
   "hfToken": "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",
   "githubToken": "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",
   "repo": "VLJNH-VN/NOTE_MIZAI",

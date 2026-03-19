@@ -153,7 +153,7 @@ async function handleVideo(api, videoUrl, thumbnail, caption, threadId, threadTy
     try {
         await downloadFile(videoUrl, rawPath);
 
-        // Convert sang H.264 để đảm bảo tương thích với Zalo
+        // Convert sang H.264
         let uploadPath = rawPath;
         try {
             convertToH264(rawPath, tmpPath);
@@ -164,35 +164,87 @@ async function handleVideo(api, videoUrl, thumbnail, caption, threadId, threadTy
             logWarn(`[AutoDown] Convert H.264 lỗi, dùng file gốc: ${convErr.message}`);
         }
 
-        const meta = getVideoMetadata(uploadPath);
+        const meta     = getVideoMetadata(uploadPath);
+        const fileSize = fs.statSync(uploadPath).size;
 
-        const vidUploaded = await api.uploadAttachment([uploadPath], threadId, threadType);
-        const vidUrl = vidUploaded?.[0]?.fileUrl;
-        if (vidUrl) {
-          await api.sendVideo({
-            videoUrl:     vidUrl,
-            thumbnailUrl: thumbnail || "",
-            msg:          caption,
-            width:        meta.width,
-            height:       meta.height,
-            duration:     Math.max(1000, (duration || meta.duration || 1) * 1000),
-            ttl:          500_000,
-          }, threadId, threadType);
+        // ── Bước 1: Thử gửi qua uploadAttachment + sendVideo ─────────────────
+        try {
+            const uploaded = await api.uploadAttachment([uploadPath], threadId, threadType);
+            const vidUrl   = uploaded?.[0]?.fileUrl;
+            if (!vidUrl) throw new Error("uploadAttachment không trả về fileUrl");
+            await api.sendVideo({
+                videoUrl:     vidUrl,
+                thumbnailUrl: thumbnail || "",
+                msg:          caption,
+                width:        meta.width,
+                height:       meta.height,
+                duration:     Math.max(1000, (duration || meta.duration || 1) * 1000),
+                ttl:          500_000,
+            }, threadId, threadType);
+            return;
+        } catch (e1) {
+            logWarn(`[AutoDown] uploadAttachment thất bại: ${e1.message}`);
         }
-    } catch (err) {
-        logWarn(`[AutoDown] Gửi video lỗi, thử gửi trực tiếp: ${err.message}`);
+
+        // ── Bước 2: Thử sendMessage với attachments (cách đơn giản hơn) ──────
+        try {
+            await api.sendMessage(
+                { msg: caption, attachments: [uploadPath], ttl: 500_000 },
+                threadId, threadType
+            );
+            return;
+        } catch (e2) {
+            logWarn(`[AutoDown] sendMessage+attachment thất bại: ${e2.message}`);
+        }
+
+        // ── Bước 3: Thử GitHub upload lấy raw URL (chỉ nếu file < 24MB) ──────
+        if (fileSize < 24 * 1024 * 1024 && global.githubUpload) {
+            try {
+                const ghUrl = await global.githubUpload(
+                    uploadPath,
+                    `videos/ad_${Date.now()}.mp4`
+                );
+                if (ghUrl) {
+                    const rawUrl = ghUrl
+                        .replace("https://github.com/", "https://raw.githubusercontent.com/")
+                        .replace("/blob/", "/");
+                    await api.sendVideo({
+                        videoUrl:     rawUrl,
+                        thumbnailUrl: thumbnail || "",
+                        msg:          caption,
+                        width:        meta.width,
+                        height:       meta.height,
+                        duration:     Math.max(1000, (duration || meta.duration || 1) * 1000),
+                        ttl:          500_000,
+                    }, threadId, threadType);
+                    return;
+                }
+            } catch (e3) {
+                logWarn(`[AutoDown] GitHub upload thất bại: ${e3.message}`);
+            }
+        }
+
+        // ── Bước 4: Gửi URL gốc trực tiếp ────────────────────────────────────
         try {
             await api.sendVideo({
                 videoUrl,
                 thumbnailUrl: thumbnail || "",
                 msg: caption,
                 width: 720, height: 1280,
-                duration: Math.max(1000, (duration || 1) * 1000),  // ms, tối thiểu 1s
+                duration: Math.max(1000, (duration || 1) * 1000),
                 ttl: 500_000
             }, threadId, threadType);
-        } catch (err2) {
-            logWarn(`[AutoDown] Gửi trực tiếp cũng thất bại: ${err2.message}`);
+            return;
+        } catch (e4) {
+            logWarn(`[AutoDown] sendVideo URL gốc thất bại: ${e4.message}`);
         }
+
+        // ── Bước 5: Fallback cuối — gửi link text ────────────────────────────
+        await api.sendMessage(
+            { msg: `${caption}\n\n🔗 Link video:\n${videoUrl}` },
+            threadId, threadType
+        );
+
     } finally {
         cleanupFiles([rawPath, tmpPath], 0);
     }

@@ -200,22 +200,44 @@ const POLL_MODELS = {
 
 const FALLBACK_MODELS = ["flux", "turbo", "flux-realism"];
 
+const POLL_TIMEOUT = {
+  sana:    150000,
+  default: 120000,
+};
+
 async function generatePollinationsImage({ prompt, modelKey = "flux", width, height, seed }) {
   const params = new URLSearchParams({
     model:  modelKey,
-    width:  width  || 1024,
-    height: height || 1024,
     nologo: "true",
     nofeed: "true",
   });
-  if (seed != null) params.set("seed", seed);
 
-  const url = `${POLL_BASE}/${encodeURIComponent(prompt)}?${params.toString()}`;
+  if (modelKey !== "sana") {
+    params.set("width",  String(width  || 1024));
+    params.set("height", String(height || 1024));
+  }
+
+  if (seed != null) params.set("seed", String(seed));
+
+  const url     = `${POLL_BASE}/${encodeURIComponent(prompt)}?${params.toString()}`;
+  const timeout = POLL_TIMEOUT[modelKey] || POLL_TIMEOUT.default;
+
   const res = await axios.get(url, {
     responseType: "arraybuffer",
-    timeout:      90000,
-    headers: { "User-Agent": "Mozilla/5.0" },
+    timeout,
+    headers: {
+      "User-Agent": "Mozilla/5.0",
+      "Accept":     "image/*,*/*;q=0.8",
+    },
+    maxRedirects: 5,
   });
+
+  const contentType = res.headers?.["content-type"] || "";
+  if (!contentType.startsWith("image/")) {
+    const bodyText = Buffer.from(res.data).toString("utf8").slice(0, 200);
+    throw new Error(`API trả về không phải ảnh (${contentType}): ${bodyText}`);
+  }
+
   return Buffer.from(res.data);
 }
 

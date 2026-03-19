@@ -1,5 +1,6 @@
 const { handleCommand } = require("../../includes/handlers/handleCommand");
 const { handleReply } = require("../../includes/handlers/handleReply");
+const { handleUploadAttachments } = require("../../includes/handlers/handleUploadAttachments");
 const { isGroupRented } = require("../../includes/database/rent");
 
 async function handleListen({ api, event, commands, prefix }) {
@@ -206,6 +207,13 @@ async function handleMessage(params) {
     await handleCommand(params);
   } catch (err) {
     logError(`Lỗi handleCommand: ${err?.message || err}`);
+  }
+
+  // ── Xử lý đính kèm (ảnh, video, file, voice, gif, sticker) ────────────────
+  try {
+    await handleUploadAttachments(params);
+  } catch (err) {
+    logError(`Lỗi handleUploadAttachments: ${err?.message || err}`);
   }
 }
 

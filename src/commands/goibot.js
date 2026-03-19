@@ -141,11 +141,11 @@ module.exports = {
     commandCategory: "Admin",
     usages: [
       ".goibot on|off                  — Bật/tắt Mizai AI cho nhóm",
-      ".goibot img <mô tả>             — Tạo ảnh AI (tự dịch VN→EN)",
-      ".goibot img <mô tả> | <neg>     — Thêm negative prompt",
-      ".goibot img <mô tả> --model sdxl — Chọn model",
-      ".goibot img --help              — Hướng dẫn chi tiết",
-      ".goibot img models              — Danh sách model",
+      ".goibot tao_anh <mô tả>             — Tạo ảnh AI (tự dịch VN→EN)",
+      ".goibot tao_anh <mô tả> | <neg>     — Thêm negative prompt",
+      ".goibot tao_anh <mô tả> --model sdxl — Chọn model",
+      ".goibot tao_anh --help              — Hướng dẫn chi tiết",
+      ".goibot tao_anh models              — Danh sách model",
       ".goibot file [đường dẫn]        — Xem thư mục (admin)",
     ].join("\n"),
     cooldowns: 2,
@@ -156,7 +156,7 @@ module.exports = {
       const sub = (args[0] || "").toLowerCase();
 
       // ── Tạo ảnh AI (HF Inference) ───────────────────────────────────────
-      if (sub === "img") {
+      if (sub === "tao_anh") {
         if (!getHfToken()) {
           return send(
             "⛔ Chưa cấu hình HF Token.\n" +
@@ -165,11 +165,11 @@ module.exports = {
           );
         }
 
-        const imgArgs = args.slice(1);
-        const imgSub  = (imgArgs[0] || "").toLowerCase();
+        const taArgs = args.slice(1);
+        const taSub  = (taArgs[0] || "").toLowerCase();
 
         // ── Help ──────────────────────────────────────────────────────────
-        if (!imgArgs.length || imgSub === "--help" || imgSub === "help") {
+        if (!taArgs.length || taSub === "--help" || taSub === "help") {
           const modelList = Object.entries(HF_MODELS)
             .map(([k, m]) => `  • ${k.padEnd(10)} ${m.label}\n              └ ${m.desc}`)
             .join("\n");
@@ -178,10 +178,10 @@ module.exports = {
             `╔═══ 🎨 TÍNH NĂNG TẠO ẢNH AI ═══╗\n` +
             `\n` +
             `📌 CÁC LỆNH:\n` +
-            `  .goibot img <mô tả>             Tạo ảnh từ mô tả\n` +
-            `  .goibot img <mô tả> | <neg>     Thêm negative prompt\n` +
-            `  .goibot img models              Xem danh sách model\n` +
-            `  .goibot img --help              Xem hướng dẫn này\n` +
+            `  .goibot tao_anh <mô tả>             Tạo ảnh từ mô tả\n` +
+            `  .goibot tao_anh <mô tả> | <neg>     Thêm negative prompt\n` +
+            `  .goibot tao_anh models              Xem danh sách model\n` +
+            `  .goibot tao_anh --help              Xem hướng dẫn này\n` +
             `\n` +
             `⚙️ TÙY CHỌN:\n` +
             `  --model <key>    Chọn model (${modelKeys})\n` +
@@ -193,10 +193,10 @@ module.exports = {
             `🤖 MODEL:\n${modelList}\n` +
             `\n` +
             `💡 VÍ DỤ:\n` +
-            `  .goibot img chó corgi dễ thương ngồi trên cỏ\n` +
-            `  .goibot img cô gái anime tóc đỏ | blurry, nsfw\n` +
-            `  .goibot img futuristic city --model sdxl --size 1280x720\n` +
-            `  .goibot img con mèo trắng --steps 25 --seed 42\n` +
+            `  .goibot tao_anh chó corgi dễ thương ngồi trên cỏ\n` +
+            `  .goibot tao_anh cô gái anime tóc đỏ | blurry, nsfw\n` +
+            `  .goibot tao_anh futuristic city --model sdxl --size 1280x720\n` +
+            `  .goibot tao_anh con mèo trắng --steps 25 --seed 42\n` +
             `\n` +
             `🌏 Prompt tiếng Việt sẽ được tự động dịch sang tiếng Anh\n` +
             `   trước khi gửi cho AI để có kết quả tốt hơn.\n` +
@@ -205,7 +205,7 @@ module.exports = {
         }
 
         // ── Danh sách model ───────────────────────────────────────────────
-        if (imgSub === "models") {
+        if (taSub === "models") {
           const list = Object.entries(HF_MODELS)
             .map(([k, m]) =>
               `  🔹 ${k.padEnd(10)} — ${m.label}\n` +
@@ -218,13 +218,13 @@ module.exports = {
 
         // ── Tạo ảnh ───────────────────────────────────────────────────────
         const { prompt: rawPrompt, negativePrompt, modelKey, width, height, steps, seed } =
-          parseHfArgs(imgArgs);
+          parseHfArgs(taArgs);
 
         if (!rawPrompt) {
           return send(
             `❌ Thiếu mô tả ảnh.\n` +
-            `💡 Dùng: .goibot img <mô tả>\n` +
-            `📖 Xem hướng dẫn: .goibot img --help`
+            `💡 Dùng: .goibot tao_anh <mô tả>\n` +
+            `📖 Xem hướng dẫn: .goibot tao_anh --help`
           );
         }
 
@@ -252,7 +252,7 @@ module.exports = {
 
         try {
           const imgBuf  = await generateHfImage({ modelId: model.id, prompt, negativePrompt: negEn, width, height, steps, seed });
-          const tmpFile = path.join(os.tmpdir(), `goibot_img_${Date.now()}.jpg`);
+          const tmpFile = path.join(os.tmpdir(), `goibot_tao_anh_${Date.now()}.jpg`);
           fs.writeFileSync(tmpFile, imgBuf);
           try {
             await api.sendMessage(
@@ -268,14 +268,14 @@ module.exports = {
           if (msg.startsWith("MODEL_LOADING")) {
             return send(
               `⏳ Model đang khởi động${msg.replace("MODEL_LOADING", "")}, thử lại sau vài phút.\n` +
-              `💡 Hoặc thử model nhanh hơn: .goibot img ${rawPrompt} --model schnell`
+              `💡 Hoặc thử model nhanh hơn: .goibot tao_anh ${rawPrompt} --model schnell`
             );
           }
           logError?.(`[goibot/img] ${msg.slice(0, 300)}`);
           return send(
             `❌ Tạo ảnh thất bại!\n` +
             `📋 Lỗi: ${msg.slice(0, 200)}\n` +
-            `💡 Thử model khác: .goibot img ${rawPrompt} --model sdxl`
+            `💡 Thử model khác: .goibot tao_anh ${rawPrompt} --model sdxl`
           );
         }
         return;
@@ -331,9 +331,9 @@ module.exports = {
         "⚙️ Dùng:\n" +
         "  .goibot on                   — Bật Mizai AI\n" +
         "  .goibot off                  — Tắt Mizai AI\n" +
-        "  .goibot img <mô tả>          — Tạo ảnh AI (auto dịch VN→EN)\n" +
-        "  .goibot img --help           — Hướng dẫn chi tiết tạo ảnh\n" +
-        "  .goibot img models           — Danh sách model\n" +
+        "  .goibot tao_anh <mô tả>          — Tạo ảnh AI (auto dịch VN→EN)\n" +
+        "  .goibot tao_anh --help           — Hướng dẫn chi tiết tạo ảnh\n" +
+        "  .goibot tao_anh models           — Danh sách model\n" +
         "  .goibot file [path]          — Xem file máy chủ (admin)"
       );
     } catch (err) {

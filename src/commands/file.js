@@ -3,13 +3,12 @@
 const fs = require("fs");
 const {
   readFileSync, readdirSync, statSync, unlinkSync,
-  rmdirSync, copyFileSync, existsSync, renameSync, mkdirSync, createWriteStream
+  rmSync, copyFileSync, existsSync, renameSync, mkdirSync
 } = fs;
-const path   = require("path");
-const axios  = require("axios");
-const FormData = require("form-data");
+const path    = require("path");
+const axios   = require("axios");
 const archiver = require("archiver");
-const os     = require("os");
+const os      = require("os");
 
 const TMP_DIR = path.join(process.cwd(), "includes", "cache");
 
@@ -94,18 +93,15 @@ async function catboxUpload(stream) {
   return uploadToGithub(stream, "archive.zip", { folder: "media/files" });
 }
 
-/** Upload nội dung text lên pastebin tạm */
+/** Upload nội dung text lên dpaste.com */
 async function pastebinUpload(text) {
   try {
-    const res = await axios.post("https://api.mocky.io/api/mock", {
-      status: 200,
-      content: text,
-      content_type: "text/plain",
-      charset: "UTF-8",
-      secret: "zalobot",
-      expiration: "never"
-    }, { timeout: 15000 });
-    return res.data.link || null;
+    const res = await axios.post(
+      "https://dpaste.com/api/v2/",
+      new URLSearchParams({ content: text, syntax: "text", expiry_days: 7 }).toString(),
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" }, timeout: 15000 }
+    );
+    return res.data?.trim() || null;
   } catch {
     return null;
   }
@@ -242,7 +238,7 @@ module.exports = {
             if (!item) continue;
             const name = path.basename(item.dest);
             if (item.info.isFile())            { unlinkSync(item.dest); deleted.push(`📄 ${idxStr}. ${name}`); }
-            else if (item.info.isDirectory())  { rmdirSync(item.dest, { recursive: true }); deleted.push(`🗂️ ${idxStr}. ${name}`); }
+            else if (item.info.isDirectory())  { rmSync(item.dest, { recursive: true, force: true }); deleted.push(`🗂️ ${idxStr}. ${name}`); }
           }
 
           send(deleted.length

@@ -1,148 +1,180 @@
+"use strict";
+
+/**
+ * src/commands/menu.js
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Xem danh sách nhóm lệnh, thông tin lệnh.
+ * Reply số để xem lệnh trong nhóm → reply tiếp để xem chi tiết lệnh.
+ */
+
+const { registerReply } = require("../../includes/handlers/handleReply");
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+function commandsGroup(cmds) {
+  const array = [];
+  for (const cmd of cmds.values()) {
+    const { name, commandCategory } = cmd.config || {};
+    if (!name) continue;
+    const cat   = commandCategory || "Khác";
+    const found = array.find(i => i.commandCategory === cat);
+    if (!found) array.push({ commandCategory: cat, commandsName: [name] });
+    else found.commandsName.push(name);
+  }
+  array.sort((a, b) => b.commandsName.length - a.commandsName.length);
+  return array;
+}
+
+function infoCmds(cfg, p = ".") {
+  const permText = (n) =>
+    n == 0 ? "Thành Viên" : n == 1 ? "Quản Trị Viên Nhóm" : n == 2 ? "Admin Bot" : "Điều Hành";
+  return (
+    `╭── INFO ────⭓\n` +
+    `│ 📔 Tên lệnh: ${cfg.name}\n` +
+    `│ 🌴 Phiên bản: ${cfg.version || "1.0.0"}\n` +
+    `│ 🔐 Quyền hạn: ${permText(cfg.hasPermssion)}\n` +
+    `│ 👤 Tác giả: ${cfg.credits || "Không rõ"}\n` +
+    `│ 🌾 Mô tả: ${cfg.description || "Không có"}\n` +
+    `│ 📎 Thuộc nhóm: ${cfg.commandCategory || "Khác"}\n` +
+    `│ 📝 Cách dùng: ${p}${cfg.name} ${cfg.usages || ""}\n` +
+    `│ ⏳ Cooldown: ${cfg.cooldowns || 0}s\n` +
+    `╰─────────────⭓`
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 module.exports = {
   config: {
-    name: "menu",
-    version: "1.0.0",
-    hasPermssion: 0,
-    credits: "MiZai",
-    description: "Xem menu lệnh theo giao diện công nghệ",
+    name:            "menu",
+    version:         "1.1.1",
+    hasPermssion:    0,
+    credits:         "DC-Nam mod by Vtuan & DongDev (converted MiZai)",
+    description:     "Xem danh sách nhóm lệnh, thông tin lệnh",
     commandCategory: "Hệ Thống",
-    usages: "menu [tên lệnh]",
-    cooldowns: 3,
+    usages:          "[tên lệnh | all]",
+    cooldowns:       5,
   },
 
-  run: async ({ event, args, send, commands, prefix }) => {
+  run: async ({ args, send, commands, prefix }) => {
     const p    = prefix || ".";
     const cmds = commands && typeof commands.values === "function" ? commands : new Map();
-    const type = args[0] ? String(args[0]).toLowerCase().trim() : "";
+    const sub  = (args[0] || "").toLowerCase().trim();
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
-    const pad2  = (n) => String(n).padStart(2, "0");
-    const uptime = process.uptime();
-    const h = Math.floor((uptime % 86400) / 3600);
-    const m = Math.floor((uptime % 3600) / 60);
-    const s = Math.floor(uptime % 60);
-    const uptimeStr = `${pad2(h)}h ${pad2(m)}m ${pad2(s)}s`;
-    const memMb = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
+    // ── menu <tên lệnh> ───────────────────────────────────────────────────────
+    if (args.length >= 1 && sub !== "all") {
+      const key = args.join(" ").toLowerCase();
+      const cmd = cmds.get(key);
+      if (cmd) return send(infoCmds(cmd.config, p));
 
-    const W = 34;
-    const line   = "═".repeat(W);
-    const thinL  = "─".repeat(W);
-    const blank  = "║" + " ".repeat(W) + "║";
-
-    const centerRow = (text, ch = "║") => {
-      const len    = [...text].length;
-      const spaces = Math.max(0, W - len);
-      const left   = Math.floor(spaces / 2);
-      const right  = spaces - left;
-      return `${ch}${" ".repeat(left)}${text}${" ".repeat(right)}${ch}`;
-    };
-
-    const col = (icon, label, val) => {
-      const content = `${icon} ${label}: ${val}`;
-      const spaces  = Math.max(0, W - [...content].length - 1);
-      return `║ ${content}${" ".repeat(spaces)}║`;
-    };
-
-    const divider = (lc = "╠", rc = "╣", fc = "═") =>
-      `${lc}${"═".repeat(W)}${rc}`;
-
-    const thinDiv = () => `╟${"─".repeat(W)}╢`;
-
-    // ── Xem chi tiết một lệnh ─────────────────────────────────────────────
-    if (type) {
-      const found = cmds.get(type);
-      if (!found) {
-        return send(`❌ Không tìm thấy lệnh "${type}".\n💡 Dùng ${p}menu để xem danh sách.`);
+      // Gợi ý gần nhất (Levenshtein)
+      const allNames = Array.from(cmds.keys());
+      let best = null, bestScore = Infinity;
+      for (const name of allNames) {
+        const a = key, b = name;
+        const dp = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+        for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+        for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+        for (let i = 1; i <= a.length; i++)
+          for (let j = 1; j <= b.length; j++)
+            dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+        const d = dp[a.length][b.length];
+        if (d < bestScore) { bestScore = d; best = name; }
       }
-      const cfg  = found.config || {};
-      const perm = ["Thành Viên", "Admin Nhóm", "Admin Bot"][Number(cfg.hasPermssion ?? 0)] || "Không rõ";
-
-      return send(
-        `╔${line}╗\n` +
-        `${centerRow("◈  CHI TIẾT LỆNH  ◈")}\n` +
-        `${centerRow(`[ ${p}${cfg.name} ]`)}\n` +
-        `${divider()}\n` +
-        `${blank}\n` +
-        `${col("📌", "Mô tả   ", cfg.description || "Không có")}\n` +
-        `${col("🗂️ ", "Nhóm   ", cfg.commandCategory || "Khác")}\n` +
-        `${col("🔑", "Quyền   ", perm)}\n` +
-        `${col("⏳", "Cooldown", `${Number(cfg.cooldowns ?? 0)}s`)}\n` +
-        `${col("📖", "Dùng    ", `${p}${cfg.name} ${cfg.usages || ""}`)}\n` +
-        `${col("👤", "Credits ", cfg.credits || "Không rõ")}\n` +
-        `${col("🔖", "Phiên bản", `v${cfg.version || "1.0.0"}`)}\n` +
-        `${blank}\n` +
-        `╚${line}╝`
-      );
+      const maxDist = Math.max(1, Math.floor(Math.max(key.length, best?.length || 0) / 2));
+      const hint = best && bestScore <= maxDist ? `\n💡 Ý bạn là: ${p}${best}?` : "";
+      return send(`❌ Không tìm thấy lệnh "${key}".${hint}`);
     }
 
-    // ── Gom nhóm lệnh ────────────────────────────────────────────────────
-    const catIcons = {
-      "Hệ Thống":  "⚙️ ",
-      "Kinh Tế":   "💰",
-      "Quản Trị":  "🛡️ ",
-      "Tra Cứu":   "🔍",
-      "Game":      "🎮",
-      "Tiện ích":  "🛠️ ",
-      "Giải Trí":  "🎭",
-      "System":    "⚙️ ",
-    };
-
-    const categories = new Map();
-    const seen = new Set();
-    for (const cmd of cmds.values()) {
-      const cfg  = cmd?.config || {};
-      const name = String(cfg.name || "").trim();
-      if (!name || seen.has(name)) continue;
-      seen.add(name);
-      const cat = String(cfg.commandCategory || "Khác");
-      if (!categories.has(cat)) categories.set(cat, []);
-      categories.get(cat).push(name);
+    // ── menu all ──────────────────────────────────────────────────────────────
+    if (sub === "all") {
+      const seen = new Set();
+      let txt = `╭─────────────⭓\n`, count = 0;
+      for (const cmd of cmds.values()) {
+        const name = cmd?.config?.name;
+        if (!name || seen.has(name)) continue;
+        seen.add(name);
+        txt += `│ ${++count}. ${name} | ${cmd.config.description || ""}\n`;
+      }
+      txt += `╰─────────────⭓`;
+      return send(txt);
     }
 
-    const catEntries = Array.from(categories.entries()).sort((a, b) =>
-      a[0].localeCompare(b[0], "vi")
+    // ── menu (nhóm lệnh → reply để xem chi tiết) ─────────────────────────────
+    const data = commandsGroup(cmds);
+    let txt = `╭─────────────⭓\n`, count = 0;
+    for (const { commandCategory, commandsName } of data) {
+      txt += `│ ${++count}. ${commandCategory} || có ${commandsName.length} lệnh\n`;
+    }
+    txt += (
+      `├────────⭔\n` +
+      `│ 📝 Tổng có: ${cmds.size} lệnh\n` +
+      `│ ⏰ Reply từ 1 đến ${data.length} để chọn\n` +
+      `╰─────────────⭓`
     );
 
-    // ── Header ────────────────────────────────────────────────────────────
-    let msg = "";
-    msg += `╔${line}╗\n`;
-    msg += `${centerRow("◈◈◈  MIZAI BOT SYSTEM  ◈◈◈")}\n`;
-    msg += `${centerRow("[ COMMAND MENU v1.5.0 ]")}\n`;
-    msg += `${divider()}\n`;
-    msg += `${col("📡", "Trạng thái", "● ONLINE")}\n`;
-    msg += `${col("⏱️ ", "Uptime    ", uptimeStr)}\n`;
-    msg += `${col("💾", "RAM       ", `${memMb} MB`)}\n`;
-    msg += `${col("🔧", "Node.js   ", process.version)}\n`;
-    msg += `${divider()}\n`;
+    const sent = await send(txt);
+    const msgId =
+      sent?.message?.msgId ??
+      (Array.isArray(sent?.attachment) ? sent.attachment[0]?.msgId : null);
 
-    // ── Danh sách nhóm lệnh ───────────────────────────────────────────────
-    for (const [cat, names] of catEntries) {
-      names.sort((a, b) => a.localeCompare(b, "vi"));
-      const icon = catIcons[cat] || "📁";
+    if (msgId) {
+      registerReply({
+        messageId:   msgId,
+        commandName: "menu",
+        payload:     { case: "infoGr", data, prefix: p },
+      });
+    }
+  },
 
-      msg += `${centerRow(`${icon}  ${cat.toUpperCase()}  (${names.length})`)}\n`;
-      msg += `${thinDiv()}\n`;
+  onReply: async ({ api, event, data: replyData, send, registerReply: reg }) => {
+    const raw  = event?.data ?? {};
+    const body = typeof raw.content === "string"
+      ? raw.content
+      : (raw.content?.text || raw.content?.msg || "");
+    const num  = parseInt(body.trim(), 10);
 
-      const chunkSize = 3;
-      for (let i = 0; i < names.length; i += chunkSize) {
-        const chunk = names.slice(i, i + chunkSize);
-        const line2 = chunk.map(n => `▶ ${p}${n}`).join("   ");
-        const spaces = Math.max(0, W - [...line2].length - 1);
-        msg += `║ ${line2}${" ".repeat(spaces)}║\n`;
+    const { case: $case, data = [], prefix: p = "." } = replyData || {};
+
+    // ── Chọn nhóm → xem danh sách lệnh trong nhóm ────────────────────────────
+    if ($case === "infoGr") {
+      const item = data[num - 1];
+      if (!item) return send(`❎ "${body.trim()}" không nằm trong số thứ tự menu`);
+
+      let txt = `╭─────────────⭓\n│ ${item.commandCategory}\n├─────⭔\n`, count = 0;
+      for (const name of item.commandsName) txt += `│ ${++count}. ${name}\n`;
+      txt += (
+        `├────────⭔\n` +
+        `│ 🔎 Reply từ 1 đến ${item.commandsName.length} để xem chi tiết\n` +
+        `│ 📝 Dùng ${p}help <tên lệnh> để xem cách dùng\n` +
+        `╰─────────────⭓`
+      );
+
+      const sent = await send(txt);
+      const msgId =
+        sent?.message?.msgId ??
+        (Array.isArray(sent?.attachment) ? sent.attachment[0]?.msgId : null);
+
+      if (msgId && reg) {
+        reg({
+          messageId:   msgId,
+          commandName: "menu",
+          payload:     { case: "infoCmds", data: item.commandsName, prefix: p },
+        });
       }
-
-      msg += `${blank}\n`;
+      return;
     }
 
-    // ── Footer ─────────────────────────────────────────────────────────────
-    msg += `${divider()}\n`;
-    msg += `${col("📊", "Tổng cộng", `${seen.size} lệnh`)}\n`;
-    msg += `${blank}\n`;
-    msg += `${centerRow(`💡 ${p}menu <tên lệnh>  —  xem chi tiết`)}\n`;
-    msg += `${centerRow(`💡 ${p}help all  —  xem toàn bộ`)}\n`;
-    msg += `${blank}\n`;
-    msg += `╚${line}╝`;
+    // ── Chọn lệnh → xem chi tiết ─────────────────────────────────────────────
+    if ($case === "infoCmds") {
+      const name = data[num - 1];
+      if (!name) return send(`⚠️ "${body.trim()}" không nằm trong số thứ tự`);
 
-    return send(msg);
+      const cmds = global.commands;
+      const cmd  = cmds?.get?.(name);
+      if (!cmd) return send(`❌ Không tìm thấy lệnh "${name}"`);
+
+      return send(infoCmds(cmd.config, p));
+    }
   },
 };

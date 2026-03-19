@@ -9,8 +9,8 @@ const CACHE_DIR = path.join(__dirname, "..", "..", "includes", "cache");
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify({}));
 if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
 
-const DEEPSEEK_API_URL  = "https://api.deepseek.com/v1/chat/completions";
-const MODEL_NAME        = "deepseek-chat";
+const GROQ_API_URL      = "https://api.groq.com/openai/v1/chat/completions";
+const MODEL_NAME        = "llama-3.3-70b-versatile";
 const GENERATION_CONFIG = { temperature: 0.8, max_tokens: 2048 };
 
 const TRIGGER_KEYWORDS = [
@@ -132,10 +132,10 @@ function clearChatHistory(threadId) {
   delete chatHistories[threadId];
 }
 
-// ── DeepSeek API call ───────────────────────────────────────────────────────────
+// ── Groq API call ───────────────────────────────────────────────────────────────
 async function sendToGroq(userMessage, threadId) {
-  const key = global?.config?.deepseekKey || "";
-  if (!key) throw new Error("Chưa có DeepSeek API key. Thêm 'deepseekKey' vào config.json.");
+  const key = getActiveKey();
+  if (!key) throw new Error("Chưa có Groq API key. Dùng .key add gsk_... để thêm key.");
 
   const history  = getChatHistory(threadId);
   const messages = [
@@ -144,7 +144,7 @@ async function sendToGroq(userMessage, threadId) {
     { role: "user", content: userMessage }
   ];
 
-  const res = await axios.post(DEEPSEEK_API_URL, {
+  const res = await axios.post(GROQ_API_URL, {
     model: MODEL_NAME,
     messages,
     temperature: GENERATION_CONFIG.temperature,

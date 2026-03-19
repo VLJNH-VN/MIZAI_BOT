@@ -3,9 +3,9 @@
     "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"
   ],
   "autoCheck": true,
-  "live": [],
-  "dead": [
+  "live": [
     "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"
   ],
+  "dead": [],
   "no_balance": []
 }

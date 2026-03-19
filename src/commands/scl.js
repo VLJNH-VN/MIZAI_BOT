@@ -80,7 +80,7 @@ async function searchTracks(query) {
 
   const res = await axios.get(url, {
     params,
-    headers: { ...HEADERS, "Authorization": `OAuth ${clientId}` },
+    headers: HEADERS,
     timeout: 15000,
   });
 

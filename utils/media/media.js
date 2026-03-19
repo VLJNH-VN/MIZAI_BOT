@@ -339,22 +339,23 @@ async function sendVideo(api, tmpPath, threadId, threadType, meta = {}) {
   if (!thumbnailUrl) {
     const thumbPath = await extractThumb(tmpPath);
     if (thumbPath) {
+      // Thử 1: uploadAttachment (Zalo CDN)
       try {
         const thumbUploads = await api.uploadAttachment([thumbPath], threadId, threadType);
         const t = thumbUploads?.[0];
         if (t?.fileUrl) {
           thumbnailUrl = t.fileName ? `${t.fileUrl}/${t.fileName}` : t.fileUrl;
-        } else {
-          const keys = JSON.stringify(Object.keys(thumbUploads?.[0] || {}));
-          console.warn(`[sendVideo] thumb upload trả về không có fileUrl. Keys: ${keys}`);
         }
-      } catch (thumbErr) {
-        console.warn(`[sendVideo] thumb upload lỗi: ${thumbErr?.message || thumbErr}`);
-      } finally {
-        try { fs.unlinkSync(thumbPath); } catch (_) {}
+      } catch (_) {}
+
+      // Thử 2: nếu vẫn chưa có → upload lên GitHub (global.uploadImage)
+      if (!thumbnailUrl && typeof global.uploadImage === "function") {
+        try {
+          thumbnailUrl = await global.uploadImage(thumbPath, `thumb_${Date.now()}.jpg`);
+        } catch (_) {}
       }
-    } else {
-      console.warn(`[sendVideo] extractThumb thất bại cho: ${path.basename(tmpPath)}`);
+
+      try { fs.unlinkSync(thumbPath); } catch (_) {}
     }
   }
 

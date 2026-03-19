@@ -6,37 +6,6 @@
 const fs   = require("fs");
 const path = require("path");
 const { ThreadType } = require("zca-js");
-const { sendVideo, getVideoMeta, VIDEO_DIR } = require("../../utils/media/media");
-
-const VIDEO_EXTS = new Set([".mp4", ".mov", ".mkv", ".webm"]);
-
-function pickRandomVideo() {
-  try {
-    if (!fs.existsSync(VIDEO_DIR)) return null;
-    const files = fs.readdirSync(VIDEO_DIR).filter(f => {
-      const ext = path.extname(f).toLowerCase();
-      return VIDEO_EXTS.has(ext) && fs.statSync(path.join(VIDEO_DIR, f)).size > 0;
-    });
-    if (!files.length) return null;
-    return path.join(VIDEO_DIR, files[Math.floor(Math.random() * files.length)]);
-  } catch { return null; }
-}
-
-async function trySendVideo(api, threadID, type) {
-  try {
-    const videoPath = pickRandomVideo();
-    if (!videoPath) return;
-    const meta = getVideoMeta(videoPath);
-    await sendVideo(api, videoPath, threadID, type, {
-      width:    meta.width    || 1280,
-      height:   meta.height   || 720,
-      duration: meta.duration || 0,
-      msg:      "",
-    });
-  } catch (e) {
-    logWarn(`[auto] Gửi video random thất bại: ${e?.message}`);
-  }
-}
 
 const AUTOSEND_FILE = path.join(process.cwd(), "includes", "data", "autoSend.json");
 
@@ -84,7 +53,7 @@ module.exports = {
 
         // ── Không có sub-command → hướng dẫn ────────────────────────────────
         if (!sub) {
-            await send(
+            return send(
                 `╔══ LỆNH AUTO SEND ══╗\n` +
                 `  ${prefix}auto\n` +
                 `╚════════════════════╝\n` +
@@ -95,8 +64,6 @@ module.exports = {
                 `  ${prefix}auto off <STT>\n` +
                 `  ${prefix}auto remove <STT>`
             );
-            await trySendVideo(api, threadID, event.type);
-            return;
         }
 
         const configs = readAutoSend();
@@ -119,9 +86,7 @@ module.exports = {
             });
             msg += `╚════════════════════════╝\n`;
             msg += `💡 ${prefix}auto on/off/remove <STT>`;
-            await send(msg);
-            await trySendVideo(api, threadID, event.type);
-            return;
+            return send(msg);
         }
 
         // ── add ──────────────────────────────────────────────────────────────

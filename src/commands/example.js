@@ -49,15 +49,48 @@
 //  UPLOAD FILE / ẢNH:
 //    global.uploadImage(input, name?)
 //      input: URL công khai | đường dẫn file local | Buffer
-//      → Promise<string>  Link Catbox công khai
-//    global.imgur
-//      .uploadFromUrl(url)            → Promise<string> url ảnh
-//      .uploadFromBuffer(buf, name?)  → Promise<string> url ảnh
-//      .uploadFromFile(filePath)      → Promise<string> url ảnh
+//      → Promise<string>  rawUrl GitHub công khai (raw.githubusercontent.com)
 //    global.upload(filePaths, threadId, threadType)
 //      filePaths: string | string[]  (đường dẫn file local)
 //      → Promise<Array<{ fileUrl, ... }>>  Kết quả từ uploadAttachment
 //      Dùng khi cần lấy fileUrl để gửi video/audio qua api.sendVideo
+//
+//  GITHUB MEDIA (mã hóa base64 → lưu GitHub → giải mã):
+//    global.githubMedia.upload(filePath, options?)
+//      options: { folder?, key?, overwrite? }
+//      → Promise<{ key, rawUrl, apiUrl }>
+//    global.githubMedia.decode(keyOrApiUrl, outputPath?)
+//      → Promise<Buffer>  (lưu file nếu có outputPath)
+//    global.githubMedia.links()
+//      → object  (toàn bộ githubMediaLinks.json)
+//    Config cần thiết (config.json):
+//      githubToken  — Personal Access Token (scope: repo)
+//      uploadRepo   — "owner/repo" vd: "VLJNH-VN/UPLOAD_MIZAI"
+//      branch       — Nhánh (mặc định "main")
+//
+//  MEDIA CACHE (quản lý file đã giải mã từ GitHub):
+//    global.mediaCache.processAll(opts?)
+//      → Promise<{success,fail,total,saved}>  decode entry mới vào cache
+//    global.mediaCache.decodeOne(key, opts?)
+//      → Promise<string|null>  decode 1 entry theo key, trả về cachedPath
+//    global.mediaCache.loadIndex()
+//      → array  toàn bộ dataCache.json
+//    global.mediaCache.pickRandom(opts?)
+//      opts: { videoOnly?, ext? }
+//      → object|null  chọn ngẫu nhiên 1 entry có file trên disk
+//
+//  MESSAGE CACHE (cache in-memory tin nhắn gần đây):
+//    global.messageCache.store(event)                    — lưu tự động
+//    global.messageCache.getById(msgId, threadId?)       — tra theo msgId
+//    global.messageCache.getByCliId(cliMsgId, threadId?) — tra theo cliMsgId
+//    global.messageCache.getThread(threadId, limit?)     — lấy N tin gần nhất
+//
+//  RESOLVE QUOTE (lấy nội dung tin được reply đầy đủ):
+//    global.resolveQuote({ raw, api, threadId, event })
+//      → Promise<object|null>
+//      Trả về: { msgId, cliMsgId, uidFrom, content, attach,
+//                mediaUrl, ext, isMedia, isText, _source }
+//      _source: "quote" | "cache" | "history"
 //
 //  DATABASE:
 //    global.getDb()                         → Promise<db> — SQLite
@@ -98,6 +131,8 @@
 //    global.restartBot(reason?, delayMs?)   → khởi động lại bot
 //    global.checkGroqKey(key)               → Promise<{ key, status: "live"|"dead" }>
 //    global.setAutoCheck(boolean)           → bật/tắt tự động check key
+//    global.startAutoGetData()              → khởi động vòng lặp auto giải mã GitHub
+//    global.stopAutoGetData()               → dừng vòng lặp
 //
 // ─────────────────────────────────────────────────────────────────
 
@@ -109,7 +144,7 @@ module.exports = {
   config: {
     name        : "example",         // Tên lệnh — trùng tên file (không .js), viết thường
     aliases     : ["ex"],              // (tuỳ chọn) Alias thay thế
-    version     : "1.5",
+    version     : "2.0",
     hasPermssion: 0,                  // 0 = mọi người | 1 = admin nhóm | 2 = admin bot
     credits     : "LJZI x XBACH",
     description : "Mô tả lệnh này làm gì",
@@ -195,7 +230,7 @@ module.exports = {
 
     // ── 2. UPLOAD ẢNH / FILE ────────────────────────────────────
 
-    // Upload ảnh lên Catbox (trả về link công khai)
+    // Upload ảnh lên GitHub (trả về rawUrl công khai)
     // const link = await global.uploadImage("https://example.com/image.jpg");
     // const link = await global.uploadImage("/tmp/output.png");
     // const link = await global.uploadImage(buffer, "output.png");
@@ -204,7 +239,62 @@ module.exports = {
     // const [res] = await global.upload("/tmp/video.mp4", threadID, event.type);
     // await api.sendVideo({ videoUrl: res.fileUrl, ... }, threadID, event.type);
 
-    // ── 3. ECONOMY — HỆ THỐNG TIỀN ──────────────────────────────
+    // ── 3. GITHUB MEDIA (base64 encode → upload → decode) ───────
+
+    // Upload file media (mã hóa base64) lên GitHub
+    // const { key, rawUrl, apiUrl } = await global.githubMedia.upload("/tmp/video.mp4", {
+    //   folder: "media/videos",
+    //   key: "my_video_key",      // (tuỳ chọn) key tự đặt
+    //   overwrite: false          // (tuỳ chọn) ghi đè nếu đã tồn tại
+    // });
+    // await send(`Đã upload: ${rawUrl}`);
+
+    // Giải mã file từ GitHub về Buffer (hoặc lưu vào file)
+    // const buffer = await global.githubMedia.decode(key);
+    // const buffer = await global.githubMedia.decode(apiUrl, "/tmp/output.mp4");
+
+    // Xem toàn bộ danh sách media đã upload
+    // const links = global.githubMedia.links();
+
+    // ── 4. MEDIA CACHE (quản lý file đã decode từ GitHub) ────────
+
+    // Decode tất cả entry mới vào cache disk
+    // const result = await global.mediaCache.processAll();
+    // logInfo(`Cache: ${result.success} thành công, ${result.fail} lỗi`);
+
+    // Decode 1 entry cụ thể
+    // const cachedPath = await global.mediaCache.decodeOne("my_video_key");
+    // if (cachedPath) { /* dùng cachedPath để gửi video */ }
+
+    // Lấy toàn bộ index cache
+    // const index = global.mediaCache.loadIndex();
+
+    // Chọn ngẫu nhiên 1 video trong cache
+    // const entry = global.mediaCache.pickRandom({ videoOnly: true });
+    // const entry = global.mediaCache.pickRandom({ ext: ".mp4" });
+    // if (entry) { /* entry.cachedPath, entry.key, ... */ }
+
+    // ── 5. MESSAGE CACHE (tra cứu tin nhắn gần đây) ──────────────
+
+    // Lấy tin nhắn theo msgId
+    // const cached = global.messageCache.getById("msgId123", threadID);
+
+    // Lấy tin nhắn theo cliMsgId
+    // const cached = global.messageCache.getByCliId("cliMsgId456", threadID);
+
+    // Lấy 20 tin nhắn gần nhất của nhóm
+    // const recentMsgs = global.messageCache.getThread(threadID, 20);
+
+    // ── 6. RESOLVE QUOTE (lấy nội dung tin được reply) ───────────
+
+    // Lấy nội dung đầy đủ của tin nhắn được reply (hỗ trợ: quote → cache → history)
+    // const raw = event?.data || {};
+    // const quoted = await global.resolveQuote({ raw, api, threadId: threadID, event });
+    // if (!quoted) return send("❌ Không tìm thấy tin nhắn được reply!");
+    // if (quoted.isText) await send(`Nội dung: ${quoted.content}`);
+    // if (quoted.isMedia) await send(`Link media: ${quoted.mediaUrl}`);
+
+    // ── 7. ECONOMY — HỆ THỐNG TIỀN ──────────────────────────────
     // const eco = global.economy;
 
     // Lấy số dư
@@ -240,7 +330,7 @@ module.exports = {
     // const top = await eco.getTopUsers(10);
     // top.forEach((u, i) => { /* ... */ });
 
-    // ── 4. HTTP REQUEST ──────────────────────────────────────────
+    // ── 8. HTTP REQUEST ──────────────────────────────────────────
     // try {
     //   const res = await global.axios.get("https://api.example.com/data", {
     //     params: { q: input },
@@ -257,7 +347,7 @@ module.exports = {
     //   key: "value"
     // }, { headers: { Authorization: "Bearer TOKEN" }, timeout: 8000 });
 
-    // ── 5. SQLITE — TRUY VẤN DATABASE ───────────────────────────
+    // ── 9. SQLITE — TRUY VẤN DATABASE ───────────────────────────
     // const { run: dbRun, get: dbGet, all: dbAll } = require("../../includes/database/sqlite");
     // const db = await global.getDb();
     //
@@ -277,7 +367,7 @@ module.exports = {
     // await dbRun(db, "UPDATE my_table SET value = ? WHERE user_id = ?", [input, senderId]);
     // await dbRun(db, "DELETE FROM my_table WHERE user_id = ?", [senderId]);
 
-    // ── 6. ĐĂNG KÝ CHỜ REPLY ────────────────────────────────────
+    // ── 10. ĐĂNG KÝ CHỜ REPLY ───────────────────────────────────
     //  Bot gửi tin → người dùng reply vào → gọi onReply
     //
     // const msg       = await send(`❓ Bạn vừa nhập: "${input}"\n💬 Reply tin này để xác nhận.`);
@@ -291,7 +381,7 @@ module.exports = {
     //   });
     // }
 
-    // ── 7. ĐĂNG KÝ CHỜ CẢM XÚC (REACTION) ──────────────────────
+    // ── 11. ĐĂNG KÝ CHỜ CẢM XÚC (REACTION) ─────────────────────
     //  Bot gửi tin → người dùng thả cảm xúc → gọi onReaction
     //
     // const msg2   = await send("Thả ❤️ để xác nhận!");
@@ -305,7 +395,7 @@ module.exports = {
     //   });
     // }
 
-    // ── 8. ĐĂNG KÝ CHỜ THU HỒI TIN NHẮN (UNDO) ─────────────────
+    // ── 12. ĐĂNG KÝ CHỜ THU HỒI TIN NHẮN (UNDO) ────────────────
     //  Người dùng thu hồi tin → gọi onUndo
     //
     // const msg3   = await send("Tin nhắn này sẽ được theo dõi nếu bị thu hồi.");
@@ -432,5 +522,11 @@ module.exports = {
  *  Lấy msgId từ kết quả send:
  *    const msg   = await send("...");
  *    const msgId = msg?.message?.msgId || msg?.msgId || msg?.data?.msgId;
+ *
+ *  global.uploadImage    → rawUrl GitHub (raw.githubusercontent.com)
+ *  global.githubMedia    → upload/decode base64 media qua GitHub
+ *  global.mediaCache     → quản lý file đã decode từ GitHub trên disk
+ *  global.messageCache   → cache in-memory tin nhắn gần đây theo thread
+ *  global.resolveQuote   → lấy nội dung đầy đủ của tin nhắn được reply
  * ════════════════════════════════════════════════════════════════
  */

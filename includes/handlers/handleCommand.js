@@ -162,6 +162,8 @@ async function handleCommand({ api, event, commands, prefix }) {
         `📋 Gõ ${prefix}help để xem danh sách lệnh.\n` +
         `⏰ Uptime: ${formatUptime()}`
       );
+      return;
+    }
 
       /*try {
         let videoPath = null;

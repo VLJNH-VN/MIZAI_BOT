@@ -201,9 +201,11 @@ const POLL_MODELS = {
 const FALLBACK_MODELS = ["flux", "turbo", "flux-realism"];
 
 const POLL_TIMEOUT = {
-  sana:    150000,
-  default: 120000,
+  sana:    60000,
+  default: 40000,
 };
+
+const POLL_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 async function generatePollinationsImage({ prompt, modelKey = "flux", width, height, seed }) {
   const params = new URLSearchParams({
@@ -226,8 +228,8 @@ async function generatePollinationsImage({ prompt, modelKey = "flux", width, hei
     responseType: "arraybuffer",
     timeout,
     headers: {
-      "User-Agent": global.userAgent,
-      "Accept":     "image/*,*/*;q=0.8",
+      "User-Agent": POLL_UA,
+      "Accept":     "image/*, */*;q=0.8",
     },
     maxRedirects: 5,
   });

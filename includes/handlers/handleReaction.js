@@ -13,7 +13,10 @@ const DEFAULT_TTL_MS  = 10 * 60 * 1000;
 const reactionStore  = createTtlStore(DEFAULT_TTL_MS);
 
 // Zalo reaction code cho cảm xúc phẫn nộ (dùng Reactions enum từ zca-js)
-const ANGRY_ICONS = new Set([Reactions.ANGRY, Reactions.ANGRY_FACE]);
+// Reactions.ANGRY = ":-h" — đây là giá trị hợp lệ duy nhất trong zca-js
+const ANGRY_ICONS = new Set(
+  [Reactions.ANGRY].filter(Boolean)
+);
 
 
 /**

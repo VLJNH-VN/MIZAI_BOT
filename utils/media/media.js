@@ -325,39 +325,25 @@ function cleanupOldFiles() {
   });
 }
 
-async function extractAndUploadThumb(api, videoPath) {
+async function extractThumb(videoPath) {
   const thumbPath = path.join(tempDir, `thumb_${Date.now()}.jpg`);
   try {
     execSync(
       `ffmpeg -y -i "${videoPath}" -ss 0 -vframes 1 -q:v 5 "${thumbPath}"`,
       { stdio: "pipe", timeout: 15000 }
     );
-    if (!fs.existsSync(thumbPath)) return null;
-
-    const form = new FormData();
-    form.append("reqtype", "fileupload");
-    form.append("fileToUpload", fs.createReadStream(thumbPath), {
-      filename: path.basename(thumbPath),
-      contentType: "image/jpeg",
-    });
-
-    const res = await axios.post("https://catbox.moe/user/api.php", form, {
-      headers: form.getHeaders(),
-      timeout: 20000,
-    });
-
-    const url = typeof res.data === "string" ? res.data.trim() : null;
-    return url && url.startsWith("https://") ? url : null;
-  } catch (e) {
-    return null;
-  } finally {
+    if (!fs.existsSync(thumbPath) || fs.statSync(thumbPath).size === 0) return null;
+    return thumbPath;
+  } catch {
     try { fs.unlinkSync(thumbPath); } catch (_) {}
+    return null;
   }
 }
 
 async function sendVideo(api, tmpPath, threadId, threadType, meta = {}) {
   if (!fs.existsSync(tmpPath)) throw new Error(`File không tồn tại: ${tmpPath}`);
 
+  // Upload video
   let uploads;
   try {
     uploads = await api.uploadAttachment([tmpPath], threadId, threadType);
@@ -374,22 +360,34 @@ async function sendVideo(api, tmpPath, threadId, threadType, meta = {}) {
   const width    = meta.width    || 1280;
   const height   = meta.height   || 720;
   const duration = meta.duration || 0;
-  const msg      = meta.msg || "";
-  const fileSize = totalSize || 0;
+  const msg      = meta.msg      || "";
 
-  let thumb = meta.thumbnailUrl || "";
-  if (!thumb) {
-    thumb = await extractAndUploadThumb(api, tmpPath) || "";
+  // Upload thumbnail qua Zalo (đảm bảo URL hợp lệ với Zalo API)
+  let thumbnailUrl = meta.thumbnailUrl || "";
+  if (!thumbnailUrl) {
+    const thumbPath = await extractThumb(tmpPath);
+    if (thumbPath) {
+      try {
+        const thumbUploads = await api.uploadAttachment([thumbPath], threadId, threadType);
+        const t = thumbUploads?.[0];
+        if (t?.fileUrl) {
+          thumbnailUrl = t.fileName ? `${t.fileUrl}/${t.fileName}` : t.fileUrl;
+        }
+      } catch (_) {}
+      finally {
+        try { fs.unlinkSync(thumbPath); } catch (_) {}
+      }
+    }
   }
 
   try {
     return await api.sendVideo(
-      { videoUrl, thumbnailUrl: thumb, duration, width, height, msg, fileSize },
+      { videoUrl, thumbnailUrl, duration, width, height, msg },
       threadId,
       threadType
     );
   } catch (e) {
-    throw new Error(`[sendVideo lỗi] videoUrl=${videoUrl} | thumb=${thumb} | fileSize=${fileSize} | ${e?.message || e}`);
+    throw new Error(`[sendVideo lỗi] videoUrl=${videoUrl} | thumb=${thumbnailUrl} | ${e?.message || e}`);
   }
 }
 

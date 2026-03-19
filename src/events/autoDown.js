@@ -14,7 +14,8 @@ const tempDir = path.join(process.cwd(), "includes", "cache");
 const SETTINGS_FILE = path.join(process.cwd(), "includes", "data", "auto.json");
 
 // ─── API endpoints ─────────────────────────────────────────────────────────────
-const API_MEDIA = "https://yt-dlp-hwys.onrender.com/api/media";
+const API_MEDIA    = "https://yt-dlp-hwys.onrender.com/api/media";    // info + audio
+const API_DOWNLOAD = "https://yt-dlp-hwys.onrender.com/api/download"; // video
 
 // ─── Link hỗ trợ ──────────────────────────────────────────────────────────────
 const SUPPORTED_LINKS = [
@@ -85,33 +86,16 @@ function cleanupFiles(files, delay = 8000) {
     }, delay);
 }
 
-// ─── Lấy media info từ API (có retry) ────────────────────────────────────────
-async function getMediaInfo(url, retries = 2) {
+// ─── Helper: gọi API có retry (chỉ retry lỗi 5xx) ───────────────────────────
+async function fetchWithRetry(apiUrl, retries = 2) {
     let lastErr;
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            const res = await axios.get(`${API_MEDIA}?url=${encodeURIComponent(url)}`, { timeout: 90000 });
-            const raw = res.data;
-            if (!raw || typeof raw !== "object") throw new Error("API không trả về dữ liệu hợp lệ");
-
-            const medias = [];
-            if (raw.download_url)       medias.push({ type: "video", url: raw.download_url });
-            if (raw.download_audio_url) medias.push({ type: "audio", url: raw.download_audio_url });
-
-            if (medias.length === 0) throw new Error("API không trả về media hợp lệ");
-
-            return {
-                title:     raw.title     || "",
-                author:    raw.uploader  || raw.channel || "Unknown",
-                source:    (raw.platform || "").toLowerCase(),
-                thumbnail: raw.thumbnail || "",
-                duration:  raw.duration  || 0,
-                medias
-            };
+            const res = await axios.get(apiUrl, { timeout: 90000 });
+            return res.data;
         } catch (err) {
             lastErr = err;
             const status = err?.response?.status;
-            // Chỉ retry khi lỗi 5xx (server-side)
             if (status && status < 500) break;
             if (attempt < retries) {
                 logWarn(`[AutoDown] Lần thử ${attempt} thất bại (${err.message}), thử lại...`);
@@ -120,6 +104,34 @@ async function getMediaInfo(url, retries = 2) {
         }
     }
     throw lastErr;
+}
+
+// ─── Lấy info + audio từ /api/media ──────────────────────────────────────────
+async function getMediaInfo(url) {
+    const raw = await fetchWithRetry(`${API_MEDIA}?url=${encodeURIComponent(url)}`);
+    if (!raw || typeof raw !== "object") throw new Error("API media không trả về dữ liệu hợp lệ");
+
+    const medias = [];
+    if (raw.download_audio_url) medias.push({ type: "audio", url: raw.download_audio_url });
+
+    return {
+        title:     raw.title    || "",
+        author:    raw.uploader || raw.channel || "Unknown",
+        source:    (raw.platform || "").toLowerCase(),
+        thumbnail: raw.thumbnail || "",
+        duration:  raw.duration  || 0,
+        medias
+    };
+}
+
+// ─── Lấy URL video từ /api/download ──────────────────────────────────────────
+async function getVideoUrl(url) {
+    const raw = await fetchWithRetry(`${API_DOWNLOAD}?url=${encodeURIComponent(url)}`);
+    if (!raw || typeof raw !== "object") throw new Error("API download không trả về dữ liệu hợp lệ");
+
+    const videoUrl = raw.download_url || raw.url || raw.video_url || null;
+    if (!videoUrl) throw new Error("API download không trả về video URL");
+    return videoUrl;
 }
 
 // ─── Gửi audio ────────────────────────────────────────────────────────────────
@@ -309,10 +321,11 @@ function startAutoDown(api) {
         logInfo(`[AutoDown] Link: ${body}`);
 
         try {
+            // Lấy info + audio từ /api/media
             const data = await getMediaInfo(body);
 
             const mediaTitle = data.title?.trim() || "Downloaded Content";
-            const author     = data.author || data.unique_id || "Unknown";
+            const author     = data.author || "Unknown";
             const source     = (data.source || "").toLowerCase();
             const thumbnail  = data.thumbnail || "";
             const duration   = data.duration  || 0;
@@ -322,7 +335,7 @@ function startAutoDown(api) {
 
             const caption = `/-li 𝐀𝐮𝐭𝐨𝐃𝐨𝐰𝐧: ${platform}\n📄 ${mediaTitle}\n👤 ${author}`;
 
-            // ── Audio platforms ──────────────────────────────────────────────
+            // ── Audio platforms — dùng /api/media ────────────────────────────
             if (AUDIO_SOURCES.has(source)) {
                 const audio = data.medias.find(m => m.type === "audio");
                 if (!audio?.url) { logWarn("[AutoDown] Không có audio URL."); return; }
@@ -330,27 +343,35 @@ function startAutoDown(api) {
                 return;
             }
 
-            // ── TikTok / Douyin (có thể là slideshow ảnh) ───────────────────
+            // ── TikTok / Douyin: kiểm tra slideshow ảnh ─────────────────────
             if (source === "tiktok" || source === "douyin" || /(?:vm\.)?tiktok\.com|douyin\.com/.test(body)) {
-                const hasVideo = data.medias.some(m => m.type === "video");
-
-                if (!hasVideo) {
+                const images = data.medias.filter(m => m.type === "image");
+                if (images.length) {
                     await handleImages(api, data.medias, caption, threadId, threadType, tempDir);
-                } else {
-                    const video = data.medias.find(m => m.type === "video");
-                    if (video?.url) await handleVideo(api, video.url, thumbnail, caption, threadId, threadType, tempDir, duration);
+                    return;
+                }
+                // Video TikTok — dùng /api/download
+                try {
+                    const videoUrl = await getVideoUrl(body);
+                    await handleVideo(api, videoUrl, thumbnail, caption, threadId, threadType, tempDir, duration);
+                } catch (e) {
+                    logWarn(`[AutoDown] getVideoUrl TikTok thất bại: ${e.message}`);
+                    throw e;
                 }
                 return;
             }
 
             // ── Video platforms (YouTube, Facebook, Instagram, ...) ──────────
-            const video = data.medias.find(m => m.type === "video");
-            if (video?.url) {
-                await handleVideo(api, video.url, thumbnail, caption, threadId, threadType, tempDir, duration);
+            // Dùng /api/download để lấy URL video
+            try {
+                const videoUrl = await getVideoUrl(body);
+                await handleVideo(api, videoUrl, thumbnail, caption, threadId, threadType, tempDir, duration);
                 return;
+            } catch (e) {
+                logWarn(`[AutoDown] getVideoUrl thất bại: ${e.message}`);
             }
 
-            // ── Fallback: audio nếu không có video ───────────────────────────
+            // ── Fallback: audio nếu không tải được video ─────────────────────
             const audio = data.medias.find(m => m.type === "audio");
             if (audio?.url) {
                 await handleAudio(api, audio.url, thumbnail, caption, threadId, threadType, tempDir);

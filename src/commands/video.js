@@ -3,11 +3,11 @@
 /**
  * src/commands/video.js
  * ─────────────────────────────────────────────────────────────────────────────
- * Gửi video ngẫu nhiên từ global.mediaCache (filecache local đã giải mã).
+ * Gửi video ngẫu nhiên từ thư mục includes/cache/videos/ (đã tải về local).
  *
  * Lệnh:
- *   video          — Gửi video ngẫu nhiên từ cache
- *   video <số>     — Gửi video theo số thứ tự trong cache
+ *   video          — Gửi video ngẫu nhiên
+ *   video <số>     — Gửi video theo số thứ tự
  */
 
 const fs   = require("fs");
@@ -15,24 +15,23 @@ const path = require("path");
 
 const { sendVideo } = require("../../utils/media/media");
 
-const ROOT = process.cwd();
+const ROOT      = process.cwd();
+const VIDEO_DIR = path.join(ROOT, "includes", "cache", "videos");
+
+const VIDEO_EXTS = new Set([".mp4", ".mov", ".mkv", ".webm", ".flv"]);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Gửi video từ cached file lên Zalo
+// Lấy danh sách video có sẵn trong thư mục
 // ─────────────────────────────────────────────────────────────────────────────
-async function sendCachedVideo(api, entry, threadID, type) {
-  const fullPath = path.join(ROOT, entry.cachedPath);
+function getAvailableVideos() {
+  if (!fs.existsSync(VIDEO_DIR)) return [];
 
-  if (!fs.existsSync(fullPath) || fs.statSync(fullPath).size === 0) {
-    throw new Error(`File cache không tồn tại hoặc rỗng: ${entry.cachedPath}`);
-  }
-
-  await sendVideo(api, fullPath, threadID, type, {
-    width:    entry.width    || 1280,
-    height:   entry.height   || 720,
-    duration: entry.duration || 0,
-    msg:      "",
-  });
+  return fs.readdirSync(VIDEO_DIR)
+    .filter(f => VIDEO_EXTS.has(path.extname(f).toLowerCase()))
+    .map(f => path.join(VIDEO_DIR, f))
+    .filter(f => {
+      try { return fs.statSync(f).size > 0; } catch { return false; }
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,7 +44,7 @@ module.exports = {
     version:         "1.0.0",
     hasPermssion:    0,
     credits:         "MiZai",
-    description:     "Gửi video ngẫu nhiên từ filecache (global.mediaCache)",
+    description:     "Gửi video ngẫu nhiên từ kho video đã tải về",
     commandCategory: "Giải Trí",
     usages: [
       "video          — Gửi video ngẫu nhiên",
@@ -55,42 +54,33 @@ module.exports = {
   },
 
   run: async ({ api, event, args, send, threadID }) => {
-    const index = global.mediaCache.loadIndex();
+    const videos = getAvailableVideos();
 
-    if (!index || index.length === 0) {
+    if (videos.length === 0) {
       return send(
-        "📭 Cache trống.\n" +
-        "Dùng \"datat decode\" để giải mã video từ GitHub."
-      );
-    }
-
-    // Lọc chỉ video có file sẵn trên disk
-    const available = index.filter(e => {
-      if (!e.isVideo) return false;
-      const full = path.join(ROOT, e.cachedPath);
-      return fs.existsSync(full) && fs.statSync(full).size > 0;
-    });
-
-    if (available.length === 0) {
-      return send(
-        `⚠️ Cache có ${index.length} entry nhưng không có video nào sẵn sàng.\n` +
-        `Dùng "datat decode" để giải mã.`
+        "📭 Chưa có video nào trong kho.\n" +
+        "Hãy tải video về trước vào thư mục includes/cache/videos/"
       );
     }
 
     // Chọn theo số thứ tự hoặc ngẫu nhiên
-    let item;
+    let filePath;
     const num = parseInt(args[0]);
-    if (!isNaN(num) && num >= 1 && num <= available.length) {
-      item = available[num - 1];
+    if (!isNaN(num) && num >= 1 && num <= videos.length) {
+      filePath = videos[num - 1];
     } else {
-      item = available[Math.floor(Math.random() * available.length)];
+      filePath = videos[Math.floor(Math.random() * videos.length)];
     }
 
-    await send("⏳ Đang chuẩn bị video...");
+    await send(`⏳ Đang gửi video... (${path.basename(filePath)})`);
 
     try {
-      await sendCachedVideo(api, item, threadID, event.type);
+      await sendVideo(api, filePath, threadID, event.type, {
+        width:    1280,
+        height:   720,
+        duration: 0,
+        msg:      "",
+      });
     } catch (err) {
       global.logError?.(`[video] ${err?.message || err}`);
       return send("❌ Lỗi khi gửi video:\n" + (err?.message || "Lỗi không xác định"));

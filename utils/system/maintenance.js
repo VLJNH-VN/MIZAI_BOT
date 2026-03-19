@@ -247,7 +247,7 @@ async function _runCycle() {
     }
 
     const shuffled = allKeys.sort(() => Math.random() - 0.5).slice(0, MAX_FILES);
-    _log("logInfo", `[autoGetData] Bắt đầu giải mã ${shuffled.length} file...`);
+    //_log("logInfo", `[autoGetData] Bắt đầu giải mã ${shuffled.length} file...`);
 
     const decoded = [];
 
@@ -261,7 +261,7 @@ async function _runCycle() {
         if (cachedPath) {
           decoded.push({ key, cachedPath });
         } else {
-          _log("logWarn", `[autoGetData] ${key}: decodeOne trả về null (apiUrl lỗi hoặc file hỏng)`);
+          _log("logWarn", `[autoGetData] ${key}: tải trả về null (apiUrl lỗi hoặc file hỏng)`);
         }
       } catch (e) {
         _log("logWarn", `[autoGetData] ${key}: ${e.message}`);
@@ -269,15 +269,15 @@ async function _runCycle() {
     }
 
     if (decoded.length === 0 && shuffled.length > 0) {
-      _log("logWarn", `[autoGetData] Không decode được file nào (${shuffled.length} thử). Kiểm tra githubToken / apiUrl.`);
+      _log("logWarn", `[autoGetData] Không tải được file nào (${shuffled.length} thử). Kiểm tra githubToken / apiUrl.`);
     } else {
-      _log("logInfo", `[autoGetData] Đã giải mã ${decoded.length}/${shuffled.length} file — sẽ xóa sau 1 phút.`);
+      //_log("logInfo", `[autoGetData] Đã giải mã ${decoded.length}/${shuffled.length} file — sẽ xóa sau 1 phút.`);
     }
 
     setTimeout(() => {
       if (decoded.length > 0) {
         _removeDecodedFiles(decoded);
-        _log("logInfo", `[autoGetData] Đã xóa ${decoded.length} file cache. Bắt đầu chu kỳ mới.`);
+        //_log("logInfo", `[autoGetData] Đã xóa ${decoded.length} file cache. Bắt đầu chu kỳ mới.`);
       }
       _runCycle();
     }, CYCLE_MS);

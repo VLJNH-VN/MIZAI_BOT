@@ -19,9 +19,8 @@ const path = require("path");
 const os   = require("os");
 
 // ── Endpoint ──────────────────────────────────────────────────────────────────
-// Sử dụng HF Inference Router (mới nhất kể từ 2025)
+// api-inference.huggingface.co đã ngừng hỗ trợ — chỉ dùng router mới
 const HF_ROUTER  = "https://router.huggingface.co/hf-inference/models";
-const HF_LEGACY  = "https://api-inference.huggingface.co/models";
 
 // ── Danh sách model ───────────────────────────────────────────────────────────
 const MODELS = {
@@ -81,37 +80,27 @@ async function generateImage({ modelId, prompt, negativePrompt, width, height, s
   if (steps)          body.parameters.num_inference_steps = steps;
   if (seed != null)   body.parameters.seed               = seed;
 
-  // Thử endpoint mới (router) trước, fallback về legacy nếu lỗi
-  const urls = [
-    `${HF_ROUTER}/${modelId}`,
-    `${HF_LEGACY}/${modelId}`,
-  ];
+  const url = `${HF_ROUTER}/${modelId}`;
+  try {
+    const res = await global.axios.post(url, body, {
+      headers     : hfHeaders(),
+      responseType: "arraybuffer",
+      timeout     : 120000,
+    });
+    return Buffer.from(res.data);
+  } catch (err) {
+    const status  = err?.response?.status;
+    const errData = err?.response?.data ? Buffer.from(err.response.data).toString().slice(0, 300) : "";
 
-  let lastErr;
-  for (const url of urls) {
-    try {
-      const res = await global.axios.post(url, body, {
-        headers     : hfHeaders(),
-        responseType: "arraybuffer",
-        timeout     : 120000,
-      });
-      return Buffer.from(res.data);
-    } catch (err) {
-      const status  = err?.response?.status;
-      const errData = err?.response?.data ? Buffer.from(err.response.data).toString().slice(0, 300) : "";
-
-      // Model đang tải — báo ngay, không thử tiếp
-      if (status === 503) {
-        const est = errData.match(/estimated_time[":]+\s*([\d.]+)/)?.[1];
-        const wait = est ? `(≈${Math.ceil(parseFloat(est))}s)` : "";
-        throw new Error(`MODEL_LOADING ${wait}`);
-      }
-
-      lastErr = err;
-      logWarn(`[hf] ${url} → ${status || err.message}`);
+    // Model đang tải
+    if (status === 503) {
+      const est = errData.match(/estimated_time[":]+\s*([\d.]+)/)?.[1];
+      const wait = est ? `(≈${Math.ceil(parseFloat(est))}s)` : "";
+      throw new Error(`MODEL_LOADING ${wait}`);
     }
+
+    throw err;
   }
-  throw lastErr;
 }
 
 // ── Module export ─────────────────────────────────────────────────────────────

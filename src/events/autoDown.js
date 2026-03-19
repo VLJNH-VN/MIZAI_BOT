@@ -202,6 +202,33 @@ async function handleVideo(api, videoUrl, thumbnail, caption, threadId, threadTy
     try {
         await downloadFile(videoUrl, rawPath);
 
+        // ── Kiểm tra xem file tải về có stream video không ───────────────────
+        // Đôi khi API trả download_url nhưng lại stream ra audio (MP3/AAC)
+        let hasVideoStream = false;
+        try {
+            const probe = execSync(
+                `ffprobe -v error -select_streams v -show_entries stream=index -of csv=p=0 "${rawPath}"`,
+                { timeout: 10000, stdio: "pipe" }
+            ).toString().trim();
+            hasVideoStream = probe.length > 0;
+        } catch {}
+
+        if (!hasVideoStream) {
+            logWarn("[AutoDown] download_url trả về file không có video stream, chuyển sang gửi audio.");
+            // Chuyển sang AAC và gửi như voice
+            const aacPath = `${rawPath}.aac`;
+            try {
+                convertToAac(rawPath, aacPath);
+                const voiceUploaded = await api.uploadAttachment([aacPath], threadId, threadType);
+                const voiceUrl = voiceUploaded?.[0]?.fileUrl;
+                if (voiceUrl) await api.sendVoice({ voiceUrl, ttl: 500_000 }, threadId, threadType);
+                else await api.sendMessage({ msg: caption, ttl: 300_000 }, threadId, threadType);
+            } finally {
+                cleanupFiles([rawPath, aacPath], 0);
+            }
+            return;
+        }
+
         // Convert sang H.264
         let uploadPath = rawPath;
         try {

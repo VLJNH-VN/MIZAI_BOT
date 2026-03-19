@@ -202,7 +202,7 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
         logWarn(`[AutoDown] sendVideo direct URL thất bại: ${e1.message}`);
     }
 
-    // ── Bước 2: Download → convert H264 → sendMessage+attachments ────────────
+    // ── Bước 2: Download → convert H264 → tìm URL công khai → sendVideo ────────
     const uid      = uniqueId();
     const rawPath  = path.join(tempDir, `ad_raw_${uid}.mp4`);
     const h264Path = path.join(tempDir, `ad_h264_${uid}.mp4`);
@@ -225,9 +225,35 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
             logWarn(`[AutoDown] Convert H.264 lỗi, dùng file gốc: ${e.message}`);
         }
 
-        const meta = probeStreams(uploadPath);
-        logInfo(`[AutoDown] Gửi file video: ${path.basename(uploadPath)} (${meta.width}x${meta.height}, ${meta.duration}s)`);
+        const meta     = probeStreams(uploadPath);
+        const fileSize = fs.statSync(uploadPath).size;
+        logInfo(`[AutoDown] Video local: ${path.basename(uploadPath)} (${meta.width}x${meta.height}, ${meta.duration}s, ${(fileSize / 1024 / 1024).toFixed(1)}MB)`);
 
+        // ── Bước 2a: GitHub upload → api.sendVideo (GitHub raw URL là URL công khai)
+        // Zalo stream được từ raw.githubusercontent.com, tránh lỗi proxy URL render.com
+        if (typeof global.githubUpload === "function" && fileSize < 50 * 1024 * 1024) {
+            try {
+                const repoPath = `autodown/vid_${uid}.mp4`;
+                const ghUrl    = await global.githubUpload(uploadPath, repoPath);
+                if (ghUrl) {
+                    await api.sendVideo({
+                        videoUrl:     ghUrl,
+                        thumbnailUrl: info.thumbnail || "",
+                        msg:          caption,
+                        width:        meta.width    || info.width  || 720,
+                        height:       meta.height   || info.height || 1280,
+                        duration:     meta.duration * 1000,
+                        ttl:          500_000,
+                    }, threadId, threadType);
+                    logInfo("[AutoDown] sendVideo (GitHub CDN) thành công.");
+                    return;
+                }
+            } catch (egh) {
+                logWarn(`[AutoDown] GitHub upload/sendVideo thất bại: ${egh.message}`);
+            }
+        }
+
+        // ── Bước 2b: sendMessage + attachments (file fallback) ───────────────
         try {
             await api.sendMessage(
                 { msg: caption, attachments: [uploadPath], ttl: 500_000 },

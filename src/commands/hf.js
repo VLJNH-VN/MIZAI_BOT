@@ -13,15 +13,18 @@ const path = require("path");
 const os   = require("os");
 const axios = require("axios");
 
-const HF_TOKEN = process.env.HF_TOKEN;
-const HF_API   = "https://api-inference.huggingface.co/models";
+const HF_API = "https://api-inference.huggingface.co/models";
 
 const MODELS = {
   img: "black-forest-labs/FLUX.1-schnell",
 };
 
+function getToken() {
+  return process.env.HF_TOKEN || global.config?.hfToken || "";
+}
+
 function hfHeaders() {
-  return { Authorization: `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" };
+  return { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" };
 }
 
 async function generateImage(prompt) {
@@ -46,7 +49,7 @@ module.exports = {
   },
 
   run: async ({ api, event, args, send, prefix, threadID }) => {
-    if (!HF_TOKEN) return send("⛔ Chưa cấu hình HF_TOKEN.");
+    if (!getToken()) return send("⛔ Chưa cấu hình HF Token (hfToken trong config.json hoặc biến môi trường HF_TOKEN).");
 
     const sub = (args[0] || "").toLowerCase().trim();
 

@@ -167,7 +167,7 @@ module.exports = {
     name: "api",
     version: "3.0.0",
     hasPermssion: 2,
-    credits: "DongDev (port: MiZai)",
+    credits: "VLjnh",
     description: "Quản lý kho link media mã hóa base64 lưu trên GitHub",
     commandCategory: "Admin",
     usages: [
@@ -291,7 +291,7 @@ module.exports = {
         for (let i = 0; i < mediaUrls.length; i++) {
           const u = mediaUrls[i];
           try {
-            await send(`⏳ [${i + 1}/${mediaUrls.length}] Đang xử lý...`);
+            //await send(`⏳ [${i + 1}/${mediaUrls.length}] Đang xử lý...`);
             const rawUrl = await uploadMediaToGithub(u, khoName);
             kho.push(rawUrl);
             added++;

@@ -11,6 +11,7 @@ const { registerReply } = require("../../includes/handlers/handleReply");
 const { getUserMoney, updateUserMoney } = require("../../includes/database/economy");
 const { resolveSenderName }             = require("../../includes/database/infoCache");
 const { isBotAdmin, isGroupAdmin }      = require("../../utils/bot/botManager");
+const { parseMentionIds }               = require("../../utils/bot/messageUtils");
 
 const ROOT       = process.cwd();
 const TX_DIR     = path.join(ROOT, "includes", "data", "taixiu");
@@ -57,9 +58,17 @@ function addHistory(uid, entry) {
 }
 
 function getTargetId(raw) {
-  const mentions = raw?.mentions || {};
-  const keys = Object.keys(mentions);
-  if (keys.length > 0) return String(keys[0]);
+  // Parse mentionInfo (Zalo format: JSON string array of {uid, length, offset})
+  const mentionInfo = raw?.mentionInfo;
+  if (mentionInfo) {
+    try {
+      const arr = typeof mentionInfo === "string" ? JSON.parse(mentionInfo) : mentionInfo;
+      if (Array.isArray(arr)) {
+        const ids = arr.map(m => String(m.uid || "")).filter(uid => uid && uid !== "0");
+        if (ids.length > 0) return ids[0];
+      }
+    } catch {}
+  }
   const quote = raw?.quote || raw?.replyMsg || null;
   if (quote?.ownerId) return String(quote.ownerId);
   return null;

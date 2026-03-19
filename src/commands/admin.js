@@ -39,12 +39,34 @@ function isNumericUid(uid) {
   return uid && /^\d{5,}$/.test(String(uid).trim());
 }
 
-function extractUid(args, event) {
-  const mentions = event?.data?.mentions;
-  if (mentions && typeof mentions === "object") {
-    const keys = Object.keys(mentions).filter(k => k && k.trim() && k !== "0");
-    if (keys.length > 0) return keys[0];
+function parseMentionIds(event) {
+  const raw = event?.data;
+  if (!raw) return [];
+
+  // Zalo gửi mentionInfo dạng JSON string: [{"uid":"123","length":8,"offset":0}]
+  const mentionInfo = raw.mentionInfo;
+  if (mentionInfo) {
+    try {
+      const arr = typeof mentionInfo === "string" ? JSON.parse(mentionInfo) : mentionInfo;
+      if (Array.isArray(arr)) {
+        return arr.map(m => String(m.uid || "")).filter(uid => uid && uid !== "0");
+      }
+    } catch {}
   }
+
+  // Fallback: nếu có field mentions dạng object (một số version zca-js)
+  const mentions = raw.mentions;
+  if (mentions && typeof mentions === "object" && !Array.isArray(mentions)) {
+    return Object.keys(mentions).filter(k => k && k !== "0");
+  }
+
+  return [];
+}
+
+function extractUid(args, event) {
+  const ids = parseMentionIds(event);
+  if (ids.length > 0) return ids[0];
+
   for (let i = 1; i < args.length; i++) {
     const candidate = String(args[i]).trim();
     if (isNumericUid(candidate)) return candidate;

@@ -1,9 +1,10 @@
 const { isBotAdmin } = require("../../utils/bot/botManager");
+const { parseMentionIds } = require("../../utils/bot/messageUtils");
 
 module.exports = {
   config: {
     name: "id",
-    version: "1.1.0",
+    version: "1.2.0",
     hasPermssion: 0,
     credits: "MiZai",
     description: "Xem Zalo ID của bạn hoặc của người được tag",
@@ -13,11 +14,9 @@ module.exports = {
   },
 
   run: async ({ event, send, senderId }) => {
-    const mentions = event?.data?.mentions;
-    if (mentions && Object.keys(mentions).length > 0) {
-      const lines = Object.entries(mentions)
-        .map(([uid, name]) => `👤 ${name || uid}: ${uid}`)
-        .join("\n");
+    const ids = parseMentionIds(event);
+    if (ids.length > 0) {
+      const lines = ids.map(uid => `👤 UID: ${uid}`).join("\n");
       return send(`🆔 ID của người được tag:\n${lines}`);
     }
 

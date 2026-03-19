@@ -1,4 +1,5 @@
 const { ThreadType } = require("zca-js");
+const { parseMentionIds } = require("../../utils/bot/messageUtils");
 
 module.exports = {
   config: {
@@ -17,8 +18,7 @@ module.exports = {
       return send("⛔ Lệnh này chỉ dùng được trong nhóm.");
     }
 
-    const mentions  = event?.data?.mentions || {};
-    const mentionIds = Object.keys(mentions);
+    const mentionIds = parseMentionIds(event);
 
     if (mentionIds.length === 0) {
       return send(`⚠️ Vui lòng tag người cần kick.\nVí dụ: ${prefix}kick @tên_người`);
@@ -43,8 +43,7 @@ module.exports = {
         await api.removeUserFromGroup(uid, threadID);
         kicked++;
       } catch (err) {
-        const name = mentions[uid]?.dName || uid;
-        failed.push(name);
+        failed.push(uid);
       }
     }
 

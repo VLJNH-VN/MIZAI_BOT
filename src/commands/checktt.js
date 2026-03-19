@@ -1,5 +1,6 @@
 const { ThreadType } = require("zca-js");
 const { getTopForGroup, recordMessage } = require("../events/tuongTac");
+const { parseMentionIds } = require("../../utils/bot/messageUtils");
 
 module.exports = {
   config: {
@@ -23,9 +24,8 @@ module.exports = {
       return send("⛔ Lệnh này chỉ dùng được trong nhóm.");
     }
 
-    const sub      = (args[0] || "").toLowerCase();
-    const mentions = event?.data?.mentions || {};
-    const mentionIds = Object.keys(mentions);
+    const sub        = (args[0] || "").toLowerCase();
+    const mentionIds = parseMentionIds(event);
 
     let period = "day";
     let title  = "NGÀY";
@@ -37,7 +37,7 @@ module.exports = {
       const top = getTopForGroup(threadID, "day").find(u => u.uid === uid);
       const topW = getTopForGroup(threadID, "week").find(u => u.uid === uid);
       const topM = getTopForGroup(threadID, "month").find(u => u.uid === uid);
-      const name = mentions[uid]?.dName || uid;
+      const name = uid;
       return send(
         `╭─────「 TƯƠNG TÁC – ${name} 」─────⭓\n` +
         `│ 📅 Hôm nay  : ${top?.count   || 0} tin nhắn\n` +

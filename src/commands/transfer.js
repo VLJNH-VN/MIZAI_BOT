@@ -1,5 +1,6 @@
 const { transferMoney, getUserMoney, formatMoney } = require("../../includes/database/economy");
 const { resolveSenderName } = require("../../includes/database/infoCache");
+const { parseMentionIds } = require("../../utils/bot/messageUtils");
 
 module.exports = {
   config: {
@@ -18,8 +19,8 @@ module.exports = {
     const userId = raw?.uidFrom ? String(raw.uidFrom) : null;
     if (!userId) return send("❌ Không thể xác định người dùng!");
 
-    const mentions = raw?.mentions;
-    if (!mentions || Object.keys(mentions).length === 0) {
+    const mentionIds = parseMentionIds(event);
+    if (mentionIds.length === 0) {
       return send(
         `💸 Hướng Dẫn Chuyển Tiền\n` +
         `━━━━━━━━━━━━━━━━\n` +
@@ -29,7 +30,7 @@ module.exports = {
       );
     }
 
-    const targetId = String(Object.keys(mentions)[0]);
+    const targetId = mentionIds[0];
     if (targetId === userId) return send("❌ Không thể tự chuyển tiền cho chính mình!");
 
     const amountStr = args.find((a) => /^\d+$/.test(a));

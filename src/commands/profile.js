@@ -1,5 +1,6 @@
 const { getUserData, formatMoney, getLevel } = require("../../includes/database/economy");
 const { resolveSenderName } = require("../../includes/database/infoCache");
+const { parseMentionIds } = require("../../utils/bot/messageUtils");
 
 module.exports = {
   config: {
@@ -17,10 +18,8 @@ module.exports = {
     const raw = event?.data || {};
     const fromId = raw?.uidFrom ? String(raw.uidFrom) : null;
 
-    const mentions = raw?.mentions;
-    const targetId = (mentions && Object.keys(mentions).length > 0)
-      ? String(Object.keys(mentions)[0])
-      : fromId;
+    const mentionIds = parseMentionIds(event);
+    const targetId = mentionIds.length > 0 ? mentionIds[0] : fromId;
 
     if (!targetId) return send("❌ Không thể xác định người dùng!");
 

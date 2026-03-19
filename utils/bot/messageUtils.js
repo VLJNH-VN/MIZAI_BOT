@@ -311,4 +311,30 @@ async function processGaiData({ sleepMs = 0, onLog, onProgress } = {}) {
   return { success: successCount, fail: failCount, total: pendingUrls.length, saved: existingData.length };
 }
 
-module.exports = { extractBody, resolveQuote, processGaiData };
+// ── Parse mention UIDs từ event Zalo ──────────────────────────────────────────
+// Zalo gửi mentionInfo dạng JSON string: [{"uid":"123","length":8,"offset":0}]
+// event.data.mentions là undefined — phải parse từ event.data.mentionInfo
+function parseMentionIds(event) {
+  const raw = event?.data;
+  if (!raw) return [];
+
+  const mentionInfo = raw.mentionInfo;
+  if (mentionInfo) {
+    try {
+      const arr = typeof mentionInfo === "string" ? JSON.parse(mentionInfo) : mentionInfo;
+      if (Array.isArray(arr)) {
+        return arr.map(m => String(m.uid || "")).filter(uid => uid && uid !== "0");
+      }
+    } catch {}
+  }
+
+  // Fallback: một số phiên bản có field mentions dạng object
+  const mentions = raw.mentions;
+  if (mentions && typeof mentions === "object" && !Array.isArray(mentions)) {
+    return Object.keys(mentions).filter(k => k && k !== "0");
+  }
+
+  return [];
+}
+
+module.exports = { extractBody, resolveQuote, processGaiData, parseMentionIds };

@@ -9,6 +9,7 @@
  */
 
 const { registerReaction } = require("../../includes/handlers/handleReaction");
+const { parseMentionIds } = require("../../utils/bot/messageUtils");
 
 function fmtTime(ts) {
   const d  = new Date(ts);
@@ -58,9 +59,9 @@ module.exports = {
 
     // ── Xác định UID ─────────────────────────────────────────────────────────
     let uid;
-    const mentions = raw.mentions || {};
-    if (Object.keys(mentions).length) {
-      uid = String(Object.keys(mentions)[0]).replace(/&mibextid=.*/g, "");
+    const mentionIds = parseMentionIds(event);
+    if (mentionIds.length > 0) {
+      uid = mentionIds[0];
     } else if (raw.quote?.ownerId || raw.msgReply?.ownerId) {
       uid = String(raw.quote?.ownerId || raw.msgReply?.ownerId);
     } else if (args[0]) {

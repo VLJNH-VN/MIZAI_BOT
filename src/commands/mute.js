@@ -1,6 +1,7 @@
 const fs   = require("fs");
 const path = require("path");
 const { ThreadType } = require("zca-js");
+const { parseMentionIds } = require("../../utils/bot/messageUtils");
 
 const MUTE_FILE = path.join(__dirname, "../../includes/data/muted.json");
 
@@ -57,8 +58,7 @@ module.exports = {
       return send("⛔ Lệnh này chỉ dùng được trong nhóm.");
     }
 
-    const mentions   = event?.data?.mentions || {};
-    const mentionIds = Object.keys(mentions);
+    const mentionIds = parseMentionIds(event);
     const sub        = (args[0] || "").toLowerCase();
 
     if (sub === "list") {
@@ -106,8 +106,7 @@ module.exports = {
     const data = readMuted();
     for (const uid of mentionIds) {
       const key  = `${threadID}:${uid}`;
-      const name = mentions[uid]?.dName || uid;
-      data[key]  = { name, mutedAt: Date.now(), expireAt };
+      data[key]  = { name: uid, mutedAt: Date.now(), expireAt };
     }
     saveMuted(data);
 

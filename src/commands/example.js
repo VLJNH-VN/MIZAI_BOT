@@ -34,7 +34,7 @@
 //      .prefix             → prefix hiện tại (vd: ".")
 //      .ownerId            → Zalo ID chủ bot
 //      .adminBotIds        → mảng ID admin bot
-//      .groqKeys           → mảng API key Groq
+//      .geminiKey          → Gemini API key đang hoạt động
 //    global.api            → Zalo API instance
 //    global.axios          → HTTP client (axios)
 //    global.botId          → Zalo ID của bot (string)

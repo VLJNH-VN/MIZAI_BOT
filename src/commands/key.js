@@ -53,9 +53,17 @@ async function checkGeminiKey(key) {
   } catch (err) {
     const status = err?.status || err?.response?.status || 0;
     const msg    = err?.message || "";
-    if (status === 429 || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
-      return { key, status: "no_balance", note: "hết quota" };
+    const is429  = status === 429 || msg.includes("RESOURCE_EXHAUSTED");
+    if (is429) {
+      const m = msg.toLowerCase();
+      const quotaExhausted = m.includes("daily") || m.includes("monthly") ||
+        m.includes("billing") || m.includes("exceeded your quota") ||
+        m.includes("quota exceeded");
+      if (quotaExhausted) return { key, status: "no_balance", note: "hết quota ngày/tháng" };
+      return { key, status: "rate_limit", note: "rate-limit tạm thời, key vẫn còn dùng được" };
     }
+    if (status === 401 || msg.includes("API_KEY_INVALID") || msg.includes("invalid api key"))
+      return { key, status: "dead", error: "API key không hợp lệ" };
     return { key, status: "dead", error: msg.slice(0, 100) };
   }
 }
@@ -83,10 +91,9 @@ async function checkGroqKey(key) {
 
 // ── Cập nhật active Gemini key vào global + config ─────────────────────────────
 function syncActiveGeminiKey(data) {
-  const liveKeys = data.geminiKeys.filter(
-    k => !data.geminiDead.includes(k) && !data.geminiLive.includes(k) || data.geminiLive.includes(k)
-  );
-  const activeKey = data.geminiLive[0] || liveKeys[0] || "";
+  const deadSet  = new Set(Array.isArray(data.geminiDead) ? data.geminiDead : []);
+  const liveKeys = (data.geminiKeys || []).filter(k => !deadSet.has(k));
+  const activeKey = liveKeys[0] || "";
   if (activeKey) {
     if (global.config) global.config.geminiKey = activeKey;
     try {
@@ -138,19 +145,20 @@ module.exports = {
         const result = await checkGeminiKey(newKey);
 
         data.geminiKeys.push(newKey);
-        if (result.status === "live") {
-          data.geminiLive = [...new Set([...data.geminiLive, newKey])];
+        if (result.status === "live" || result.status === "rate_limit") {
           data.geminiDead = data.geminiDead.filter(k => k !== newKey);
         } else {
           data.geminiDead = [...new Set([...data.geminiDead, newKey])];
-          data.geminiLive = data.geminiLive.filter(k => k !== newKey);
         }
         saveData(data);
         syncActiveGeminiKey(data);
 
-        const short  = `${newKey.slice(0, 8)}...${newKey.slice(-4)}`;
-        const icon   = result.status === "live" ? "✅" : result.status === "no_balance" ? "💳" : "❌";
-        const note   = result.status === "live" ? "Live" : result.note || result.error || result.status;
+        const short = `${newKey.slice(0, 8)}...${newKey.slice(-4)}`;
+        const icon  = result.status === "live"       ? "✅"
+                    : result.status === "rate_limit"  ? "⏳"
+                    : result.status === "no_balance"  ? "💳" : "❌";
+        const note  = result.status === "live"       ? "Live — sẵn sàng dùng"
+                    : result.note || result.error || result.status;
         return send(`${icon} Đã thêm Gemini key: ${short}\n📊 Trạng thái: ${note}\n📦 Tổng Gemini: ${data.geminiKeys.length} key`);
       }
 
@@ -270,7 +278,9 @@ module.exports = {
         const result = target.startsWith("AIza")
           ? await checkGeminiKey(target)
           : await checkGroqKey(target);
-        const icon  = result.status === "live" ? "✅" : result.status === "no_balance" ? "💳" : "❌";
+        const icon  = result.status === "live"       ? "✅"
+                    : result.status === "rate_limit"  ? "⏳"
+                    : result.status === "no_balance"  ? "💳" : "❌";
         const short = `${target.slice(0, 8)}...${target.slice(-4)}`;
         const note  = result.note ? ` (${result.note})` : "";
         return send(`${icon} ${short}\n📊 ${result.status.toUpperCase()}${note}${result.error ? `\n⚠️ ${result.error}` : ""}`);
@@ -280,14 +290,15 @@ module.exports = {
       if (!total) return send("📋 Chưa có key nào để kiểm tra.");
       await send(`🔍 Đang check ${total} key (${data.geminiKeys.length} Gemini + ${data.keys.length} Groq)...`);
 
-      const gLive = [], gDead = [], gNoBalance = [];
+      const gLive = [], gRateLimit = [], gDead = [], gNoBalance = [];
       for (const k of data.geminiKeys) {
         const r = await checkGeminiKey(k);
-        if (r.status === "live")       gLive.push(k);
-        else if (r.status === "no_balance") gNoBalance.push(k);
-        else                           gDead.push(k);
+        if (r.status === "live")             gLive.push(k);
+        else if (r.status === "rate_limit")  gRateLimit.push(k);
+        else if (r.status === "no_balance")  gNoBalance.push(k);
+        else                                 gDead.push(k);
       }
-      data.geminiLive = gLive;
+      data.geminiLive = [...gLive, ...gRateLimit];
       data.geminiDead = [...gDead, ...gNoBalance];
 
       const rLive = [], rDead = [], rNoBalance = [];
@@ -309,6 +320,7 @@ module.exports = {
         `📊 KẾT QUẢ CHECK\n${"━".repeat(22)}\n` +
         `🤖 Gemini:\n` +
         `  ✅ Live: ${gLive.length}\n${fmt(gLive) || "  —"}\n` +
+        `  ⏳ Rate-limit (vẫn dùng được): ${gRateLimit.length}\n${fmt(gRateLimit) || "  —"}\n` +
         `  💳 Hết quota: ${gNoBalance.length}\n${fmt(gNoBalance) || "  —"}\n` +
         `  ❌ Dead: ${gDead.length}\n${fmt(gDead) || "  —"}\n\n` +
         `🦙 Groq:\n` +
@@ -386,7 +398,7 @@ module.exports = {
       `.key autocheck      — Bật/tắt auto check\n` +
       `${"━".repeat(22)}\n` +
       `🤖 Gemini đang dùng: ${gmShort}\n` +
-      `📦 Gemini: ${data.geminiKeys.length} | ✅ ${data.geminiLive.length} live\n` +
+      `📦 Gemini: ${data.geminiKeys.length} | ✅ ${(data.geminiKeys.length - data.geminiDead.length)} còn dùng được\n` +
       `📦 Groq: ${data.keys.length} | ✅ ${(data.live || []).length} live\n` +
       `🔄 Auto check: ${data.autoCheck ? "✅ Bật" : "❌ Tắt"}`
     );

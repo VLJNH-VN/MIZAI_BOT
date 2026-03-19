@@ -65,13 +65,16 @@ function getVideoMeta(filePath) {
     ).toString();
     const data = JSON.parse(out);
     const vs   = data.streams?.find(s => s.codec_type === "video");
+    const rawDur = parseFloat(data.format?.duration || 0);
+    // Dùng Math.ceil và tối thiểu 1s để tránh Zalo hiển thị "1s" do duration=0
+    const duration = rawDur > 0 ? Math.max(1, Math.ceil(rawDur)) : 1;
     return {
       width:    vs?.width    || 0,
       height:   vs?.height   || 0,
-      duration: Math.round(parseFloat(data.format?.duration || 0)),
+      duration,
     };
   } catch (_) {
-    return { width: 0, height: 0, duration: 0 };
+    return { width: 0, height: 0, duration: 1 };
   }
 }
 
@@ -350,7 +353,7 @@ async function sendVideo(api, tmpPath, threadId, threadType, meta = {}) {
   const videoUrl = fileName ? `${fileUrl}/${fileName}` : fileUrl;
   const width    = meta.width    || 1280;
   const height   = meta.height   || 720;
-  const duration = meta.duration || 0;
+  const duration = meta.duration > 0 ? meta.duration : 1;  // tối thiểu 1s tránh Zalo hiện sai
   const msg      = meta.msg      || "";
 
   let thumbnailUrl = meta.thumbnailUrl || "";

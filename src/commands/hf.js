@@ -40,7 +40,7 @@ function hfHeaders() {
   return {
     Authorization : `Bearer ${getToken()}`,
     "Content-Type": "application/json",
-    "Accept"      : "image/jpeg,image/png,image/gif,image/*",
+    "Accept"      : "image/jpeg",
   };
 }
 

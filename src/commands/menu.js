@@ -7,7 +7,24 @@
  * Reply số để xem lệnh trong nhóm → reply tiếp để xem chi tiết lệnh.
  */
 
+const fs   = require("fs");
+const path = require("path");
 const { registerReply } = require("../../includes/handlers/handleReply");
+const { sendVideo, getVideoMeta, VIDEO_DIR } = require("../../utils/media/media");
+
+const VIDEO_EXTS = new Set([".mp4", ".mov", ".mkv", ".webm"]);
+
+function pickRandomVideo() {
+  try {
+    if (!fs.existsSync(VIDEO_DIR)) return null;
+    const files = fs.readdirSync(VIDEO_DIR).filter(f => {
+      const ext = path.extname(f).toLowerCase();
+      return VIDEO_EXTS.has(ext) && fs.statSync(path.join(VIDEO_DIR, f)).size > 0;
+    });
+    if (!files.length) return null;
+    return path.join(VIDEO_DIR, files[Math.floor(Math.random() * files.length)]);
+  } catch { return null; }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -56,7 +73,7 @@ module.exports = {
     cooldowns:       5,
   },
 
-  run: async ({ args, send, commands, prefix }) => {
+  run: async ({ api, event, args, send, commands, prefix }) => {
     const p    = prefix || ".";
     const cmds = commands && typeof commands.values === "function" ? commands : new Map();
     const sub  = (args[0] || "").toLowerCase().trim();
@@ -124,6 +141,21 @@ module.exports = {
         commandName: "menu",
         payload:     { case: "infoGr", data, prefix: p },
       });
+    }
+
+    try {
+      const videoPath = pickRandomVideo();
+      if (videoPath) {
+        const meta = getVideoMeta(videoPath);
+        await sendVideo(api, videoPath, event.threadId, event.type, {
+          width:    meta.width    || 1280,
+          height:   meta.height   || 720,
+          duration: meta.duration || 0,
+          msg:      "",
+        });
+      }
+    } catch (e) {
+      logWarn(`[menu] Gửi video random thất bại: ${e?.message}`);
     }
   },
 

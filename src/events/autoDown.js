@@ -178,11 +178,31 @@ function cleanupOldFiles() {
 setInterval(cleanupOldFiles, 5 * 60 * 1000);
 
 // ─── Gửi VIDEO ─────────────────────────────────────────────────────────────────
-// Flow đúng để video phát inline trong Zalo:
-//   Bước 1: uploadAttachment (local file → Zalo CDN)  → lấy fileUrl CDN
-//   Bước 2: sendVideo({ videoUrl: cdnUrl, thumbnailUrl: null, ... }) → video phát được
-//   Fallback: sendMessage + attachments → gửi như file nếu step trên lỗi
+// sendVideo: info = { thumbnail, duration, width, height }
+//   Bước 1: api.sendVideo với URL gốc công khai (HEAD request thành công → Zalo phát inline)
+//   Bước 2: Download → convert H264 → sendMessage+attachments (file fallback)
+//   Bước 3: gửi link text
 async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
+    // ── Bước 1: Thử api.sendVideo với URL gốc công khai ──────────────────────
+    // URL tikwm/yt-dlp là CDN công khai → HEAD request trả về Content-Length đúng
+    // Zalo nhận params hợp lệ → phát video inline trong chat
+    try {
+        await api.sendVideo({
+            videoUrl,
+            thumbnailUrl: info.thumbnail || "",
+            msg:          caption,
+            width:        info.width    || 720,
+            height:       info.height   || 1280,
+            duration:     (info.duration || 0) * 1000,
+            ttl:          500_000,
+        }, threadId, threadType);
+        logInfo("[AutoDown] sendVideo (inline) thành công.");
+        return;
+    } catch (e1) {
+        logWarn(`[AutoDown] sendVideo direct URL thất bại: ${e1.message}`);
+    }
+
+    // ── Bước 2: Download → convert H264 → sendMessage+attachments ────────────
     const uid      = uniqueId();
     const rawPath  = path.join(tempDir, `ad_raw_${uid}.mp4`);
     const h264Path = path.join(tempDir, `ad_h264_${uid}.mp4`);
@@ -196,7 +216,6 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
             return;
         }
 
-        // Convert sang H264 baseline cho Zalo tương thích
         let uploadPath = rawPath;
         try {
             convertToH264(rawPath, h264Path);
@@ -207,30 +226,8 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
         }
 
         const meta = probeStreams(uploadPath);
-        logInfo(`[AutoDown] Upload video: ${path.basename(uploadPath)} (${meta.width}x${meta.height}, ${meta.duration}s)`);
+        logInfo(`[AutoDown] Gửi file video: ${path.basename(uploadPath)} (${meta.width}x${meta.height}, ${meta.duration}s)`);
 
-        // ── Bước 1: upload lên Zalo CDN → sendVideo (video phát inline) ──────
-        try {
-            const uploaded = await api.uploadAttachment([uploadPath], threadId, threadType);
-            const cdnUrl   = uploaded?.[0]?.fileUrl;
-            if (!cdnUrl) throw new Error("uploadAttachment không trả về fileUrl");
-
-            await api.sendVideo({
-                videoUrl:     cdnUrl,
-                thumbnailUrl: null,                      // FIX: null thay vì "" rỗng
-                msg:          caption,
-                width:        meta.width,
-                height:       meta.height,
-                duration:     meta.duration * 1000,      // milliseconds
-                ttl:          500_000,
-            }, threadId, threadType);
-            logInfo("[AutoDown] sendVideo (inline) thành công.");
-            return;
-        } catch (e1) {
-            logWarn(`[AutoDown] sendVideo inline thất bại: ${e1.message}`);
-        }
-
-        // ── Bước 2: sendMessage + attachments (gửi như file — fallback) ──────
         try {
             await api.sendMessage(
                 { msg: caption, attachments: [uploadPath], ttl: 500_000 },
@@ -242,7 +239,7 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
             logWarn(`[AutoDown] sendMessage attachment thất bại: ${e2.message}`);
         }
 
-        // ── Bước 3: gửi link text ────────────────────────────────────────────
+        // ── Bước 3: gửi link text ─────────────────────────────────────────────
         await api.sendMessage(
             { msg: `${caption}\n\n🔗 ${videoUrl}`, ttl: 300_000 },
             threadId, threadType
@@ -355,7 +352,12 @@ async function handleTikTokTikwm(api, url, threadId, threadType) {
     // Video (không watermark)
     const videoUrl = d.play || d.wmplay;
     if (videoUrl) {
-        await sendVideo(api, videoUrl, { thumbnail: d.cover || "", duration: d.duration || 0 }, caption, threadId, threadType);
+        await sendVideo(api, videoUrl, {
+            thumbnail: d.cover   || "",
+            duration:  d.duration || 0,
+            width:     d.width   || 576,
+            height:    d.height  || 1024,
+        }, caption, threadId, threadType);
         return;
     }
 
@@ -394,7 +396,7 @@ async function handleTikTok(api, url, threadId, threadType) {
     const videoUrl = r.videoSD || r.videoNoWatermark || r.videoHD
         || r.video?.noWatermark || r.video?.watermark;
     if (videoUrl) {
-        await sendVideo(api, videoUrl, { thumbnail: "", duration: 0 }, caption, threadId, threadType);
+        await sendVideo(api, videoUrl, { thumbnail: "", duration: 0, width: 0, height: 0 }, caption, threadId, threadType);
         return;
     }
 
@@ -479,7 +481,12 @@ async function handleOther(api, url, threadId, threadType) {
             || formats.find(f => f.quality === "video+audio")
             || formats.find(f => f.vcodec && f.vcodec !== "none" && f.vcodec !== null);
         const videoUrl = buildDownloadUrl(pageUrl, videoFmt?.format_id || "bestvideo+bestaudio/best");
-        await sendVideo(api, videoUrl, { thumbnail, duration }, caption, threadId, threadType);
+        await sendVideo(api, videoUrl, {
+            thumbnail,
+            duration,
+            width:  videoFmt?.width  || 0,
+            height: videoFmt?.height || 0,
+        }, caption, threadId, threadType);
         return;
     }
 

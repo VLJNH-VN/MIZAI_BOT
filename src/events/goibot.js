@@ -723,14 +723,16 @@ async function handleGoibot({ api, event }) {
     const msg      = err?.response?.data?.error?.message || err?.stderr || err?.message || String(err);
     const msgLower = msg.toLowerCase();
     global.logError?.(`[goibot] Lỗi: ${msg}`);
-    if (msgLower.includes("429") || msgLower.includes("rate_limit") || msgLower.includes("too many"))
-      await send("⏳ Mizai bận quá, thử lại sau ít phút nhé.");
-    else if (msgLower.includes("401") || msgLower.includes("invalid_api_key"))
-      await send("🔑 Gemini API key không hợp lệ. Cập nhật key mới bằng .key add AIza...");
-    else if (msgLower.includes("402") || msgLower.includes("quota") || msgLower.includes("resource_exhausted"))
-      await send("💳 Gemini key hết quota. Cập nhật key mới bằng .key add AIza...");
+    if (msgLower.includes("rate-limit") || msgLower.includes("rate_limit") || msgLower.includes("too many") || msgLower.includes("cooldown"))
+      await send("⏳ Mizai đang bận, thử lại sau ít giây nhé.");
+    else if (msgLower.includes("hết quota") || msgLower.includes("resource_exhausted") || msgLower.includes("quota"))
+      await send("💳 Key AI hết quota rồi. Thêm key mới bằng .key add nhé!");
+    else if (msgLower.includes("không có") && msgLower.includes("key"))
+      await send("🔑 Chưa có API key nào. Dùng .key add AIza... hoặc .key add gsk_... để thêm.");
+    else if (msgLower.includes("401") || msgLower.includes("invalid_api_key") || msgLower.includes("invalid key"))
+      await send("🔑 API key không hợp lệ. Kiểm tra lại bằng .key check nhé.");
     else
-      await send("❌ Lỗi Mizai AI: " + msg.slice(0, 120));
+      await send("❌ Lỗi Mizai: " + msg.slice(0, 120));
   } finally {
     isProcessing[userKey] = false;
   }

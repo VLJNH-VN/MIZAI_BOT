@@ -9,7 +9,9 @@ const CACHE_DIR = path.join(__dirname, "..", "..", "includes", "cache");
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify({}));
 if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
 
-const MODEL_NAME = "gemini-2.0-flash";
+const GEMINI_MODEL = "gemini-2.0-flash";
+const GROQ_MODEL   = "llama-3.3-70b-versatile";
+const GROQ_URL     = "https://api.groq.com/openai/v1/chat/completions";
 
 const TRIGGER_KEYWORDS = [
   "mizai", "mi zai", "mì zai",
@@ -33,7 +35,7 @@ const SYSTEM_PROMPT = `Bạn là Mizai — một trợ lý AI nữ tính, dễ t
 
 ### 🗣️ CÁCH GIAO TIẾP:
 - Luôn trả lời bằng **tiếng Việt**, giọng tự nhiên như người thật — không máy móc, không như ChatGPT
-- Không bao giờ nhắc đến OpenAI, Groq, API, mô hình, token, lập trình...
+- Không bao giờ nhắc đến OpenAI, Groq, Gemini, API, mô hình, token, lập trình...
 - Không nhận mình là AI hay công cụ — Mizai là "người thật" trong mắt người dùng
 - Xưng "mình" hoặc "Mizai", gọi người dùng là "bạn" hoặc tên của họ
 
@@ -115,7 +117,10 @@ const SYSTEM_PROMPT = `Bạn là Mizai — một trợ lý AI nữ tính, dễ t
 QUAN TRỌNG: Luôn trả về JSON hợp lệ theo đúng cấu trúc sau, không thêm text ngoài JSON:
 {"content":{"text":"<câu trả lời của bạn>","thread_id":""},"nhac":{"status":false,"keyword":""},"tinh":{"status":false,"expr":""},"sticker":{"status":false,"keyword":""},"reaction":{"status":false,"type":""},"img":{"status":false,"prompt":"","model":"flux"},"tx":{"status":false,"action":"","result":"","phien":0}}`.trim();
 
-// ── Chat history ─────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════════
+//  CHAT HISTORY — lưu dạng trung lập, convert khi cần
+// ════════════════════════════════════════════════════════════════════════════════
+// Mỗi entry: { role: "user"|"assistant", text: string }
 const chatHistories = {};
 const HISTORY_MAX   = 20;
 
@@ -128,7 +133,27 @@ function clearChatHistory(threadId) {
   delete chatHistories[threadId];
 }
 
-// ── Key rotation ─────────────────────────────────────────────────────────────────
+function pushHistory(threadId, userText, assistantText) {
+  const h = getChatHistory(threadId);
+  h.push({ role: "user",      text: userText      });
+  h.push({ role: "assistant", text: assistantText });
+  if (h.length > HISTORY_MAX) h.splice(0, h.length - HISTORY_MAX);
+}
+
+function historyToGroq(history) {
+  return history.map(e => ({ role: e.role, content: e.text }));
+}
+
+function historyToGemini(history) {
+  return history.map(e => ({
+    role  : e.role === "assistant" ? "model" : "user",
+    parts : [{ text: e.text }],
+  }));
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  KEY DATA HELPERS
+// ════════════════════════════════════════════════════════════════════════════════
 const KEY_FILE_PATH = path.join(__dirname, "..", "..", "includes", "data", "key.json");
 
 function loadKeyData() {
@@ -140,20 +165,33 @@ function saveKeyData(data) {
   try { fs.writeFileSync(KEY_FILE_PATH, JSON.stringify(data, null, 2), "utf-8"); } catch {}
 }
 
-function getLiveKeys() {
+// ── Groq live keys ───────────────────────────────────────────────────────────────
+function getLiveGroqKeys() {
+  const data    = loadKeyData();
+  const allKeys = Array.isArray(data.keys) ? data.keys : [];
+  const deadSet = new Set([
+    ...(Array.isArray(data.dead)       ? data.dead       : []),
+    ...(Array.isArray(data.no_balance) ? data.no_balance : []),
+  ]);
+  return allKeys.filter(k => !deadSet.has(k));
+}
+
+// ── Gemini live keys ─────────────────────────────────────────────────────────────
+function getLiveGeminiKeys() {
   const data    = loadKeyData();
   const allKeys = Array.isArray(data.geminiKeys) ? data.geminiKeys : [];
   const deadSet = new Set(Array.isArray(data.geminiDead) ? data.geminiDead : []);
   const live    = allKeys.filter(k => !deadSet.has(k));
   if (live.length) return live;
   const fallback = global?.config?.geminiKey || "";
-  if (fallback) return [fallback];
-  throw new Error("Chưa có Gemini API key. Dùng .key add AIza... để thêm key.");
+  return fallback ? [fallback] : [];
 }
 
-// ── Cooldown tạm thời (rate-limit) vs dead thật (hết quota ngày) ─────────────────
-const _keyCooldown = new Map(); // key → timestamp hết cooldown
-const RATE_LIMIT_COOLDOWN_MS = 60 * 1000; // 60 giây nghỉ
+// ════════════════════════════════════════════════════════════════════════════════
+//  COOLDOWN — dùng chung cho cả Groq và Gemini
+// ════════════════════════════════════════════════════════════════════════════════
+const _keyCooldown = new Map();
+const RATE_LIMIT_COOLDOWN_MS = 65 * 1000;
 
 function isKeyCoolingDown(key) {
   const until = _keyCooldown.get(key);
@@ -163,11 +201,24 @@ function isKeyCoolingDown(key) {
   return false;
 }
 
-function putKeyCooldown(key) {
+function putKeyCooldown(key, label) {
   _keyCooldown.set(key, Date.now() + RATE_LIMIT_COOLDOWN_MS);
-  global.logWarn?.(`[goibot] Key ${key.slice(0, 8)}... bị rate-limit, nghỉ 60s.`);
+  global.logWarn?.(`[goibot][${label}] Key ${key.slice(0, 8)}... bị rate-limit, nghỉ 65s.`);
 }
 
+// ── Mark Groq dead ───────────────────────────────────────────────────────────────
+function markGroqKeyDead(key) {
+  const data = loadKeyData();
+  if (!Array.isArray(data.dead)) data.dead = [];
+  if (!data.dead.includes(key)) {
+    data.dead.push(key);
+    data.live = (data.live || []).filter(k => k !== key);
+    saveKeyData(data);
+    global.logWarn?.(`[goibot][Groq] Key ${key.slice(0, 8)}... hết quota, đã dead.`);
+  }
+}
+
+// ── Mark Gemini dead ─────────────────────────────────────────────────────────────
 function markGeminiKeyDead(key) {
   const data = loadKeyData();
   if (!Array.isArray(data.geminiDead)) data.geminiDead = [];
@@ -175,11 +226,11 @@ function markGeminiKeyDead(key) {
     data.geminiDead.push(key);
     data.geminiLive = (data.geminiLive || []).filter(k => k !== key);
     saveKeyData(data);
-    global.logWarn?.(`[goibot] Key ${key.slice(0, 8)}... hết quota ngày, đã đánh dấu dead.`);
+    global.logWarn?.(`[goibot][Gemini] Key ${key.slice(0, 8)}... hết quota, đã dead.`);
   }
 }
 
-// Phân tích lỗi: rate-limit tạm thời hay hết quota thật?
+// Phân biệt rate-limit tạm vs hết quota thật
 function isQuotaExhausted(errMsg) {
   const m = errMsg.toLowerCase();
   return (
@@ -189,7 +240,164 @@ function isQuotaExhausted(errMsg) {
   );
 }
 
-// ── Download ảnh → base64 ────────────────────────────────────────────────────────
+// ── JSON fallback wrapper ────────────────────────────────────────────────────────
+function wrapTextAsJson(text) {
+  return JSON.stringify({
+    content : { text: text.trim(), thread_id: "" },
+    nhac    : { status: false, keyword: "" },
+    tinh    : { status: false, expr: "" },
+    sticker : { status: false, keyword: "" },
+    reaction: { status: false, type: "" },
+    img     : { status: false, prompt: "", model: "flux" },
+    tx      : { status: false, action: "", result: "", phien: 0 },
+  });
+}
+
+function extractJson(text) {
+  const m = text.match(/\{[\s\S]*\}/);
+  return m ? m[0] : wrapTextAsJson(text);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  GỌI GROQ (chủ đạo — text only)
+// ════════════════════════════════════════════════════════════════════════════════
+async function callGroq(userMessage, historyEntries) {
+  const keys = getLiveGroqKeys();
+  if (!keys.length) return null;
+
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...historyToGroq(historyEntries),
+    { role: "user",   content: userMessage },
+  ];
+
+  let lastErr = null;
+  for (const key of keys) {
+    if (isKeyCoolingDown(key)) continue;
+    try {
+      const res = await axios.post(
+        GROQ_URL,
+        { model: GROQ_MODEL, messages, max_tokens: 2048, temperature: 0.8,
+          response_format: { type: "json_object" } },
+        { headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+          timeout: 30000 }
+      );
+      return res.data?.choices?.[0]?.message?.content || null;
+    } catch (err) {
+      const status = err?.response?.status || 0;
+      const msg    = err?.response?.data?.error?.message || err?.message || "";
+      if (status === 429 || msg.includes("rate_limit") || msg.includes("Rate limit")) {
+        putKeyCooldown(key, "Groq");
+        lastErr = err;
+        continue;
+      }
+      if (status === 402 || msg.includes("quota") || msg.includes("billing")) {
+        markGroqKeyDead(key);
+        lastErr = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  const anyAvailable = keys.some(k => !isKeyCoolingDown(k));
+  if (!anyAvailable) global.logWarn?.("[goibot][Groq] Tất cả key đang cooldown, fallback Gemini.");
+  return null;
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  GỌI GEMINI (backup + vision + search + URL)
+// ════════════════════════════════════════════════════════════════════════════════
+async function callGemini(userMessage, historyEntries, opts = {}) {
+  const { imageParts = [], useSearch = false, urls = [] } = opts;
+
+  const keys = getLiveGeminiKeys();
+  if (!keys.length) throw new Error("Không có Gemini key nào. Dùng .key add AIza... để thêm.");
+
+  const userParts = [];
+  for (const img of imageParts) {
+    userParts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
+  }
+  userParts.push({ text: userMessage });
+
+  const contents = [
+    ...historyToGemini(historyEntries),
+    { role: "user", parts: userParts },
+  ];
+
+  const tools = [];
+  if (useSearch) tools.push({ googleSearch: {} });
+  if (urls.length > 0) tools.push({ urlContext: {} });
+
+  let lastErr = null;
+  for (const key of keys) {
+    if (isKeyCoolingDown(key)) continue;
+    try {
+      const ai     = new GoogleGenAI({ apiKey: key });
+      const config = {
+        systemInstruction: SYSTEM_PROMPT,
+        temperature:       0.8,
+        maxOutputTokens:   2048,
+      };
+      if (tools.length > 0) {
+        config.tools = tools;
+      } else {
+        config.responseMimeType = "application/json";
+      }
+
+      const response     = await ai.models.generateContent({ model: GEMINI_MODEL, contents, config });
+      const assistantMsg = response.text || "";
+      return tools.length > 0 ? extractJson(assistantMsg) : assistantMsg;
+    } catch (err) {
+      const msg   = err?.message || "";
+      const is429 = err?.status === 429 || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429");
+      if (is429) {
+        if (isQuotaExhausted(msg)) markGeminiKeyDead(key);
+        else putKeyCooldown(key, "Gemini");
+        lastErr = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  const anyAvailable = keys.some(k => !isKeyCoolingDown(k));
+  if (!anyAvailable) throw new Error("Tất cả Gemini key đang bị rate-limit, thử lại sau ít giây nhé!");
+  throw lastErr || new Error("Tất cả Gemini key đều hết quota.");
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  HÀM CHÍNH — Groq trước, Gemini backup
+//  Nếu có ảnh / search / URL → luôn dùng Gemini (chỉ Gemini hỗ trợ)
+// ════════════════════════════════════════════════════════════════════════════════
+async function sendToGroq(userMessage, threadId, opts = {}) {
+  const { imageParts = [], useSearch = false, urls = [] } = opts;
+  const history  = getChatHistory(threadId);
+  const needGemini = imageParts.length > 0 || useSearch || urls.length > 0;
+
+  let resultText = null;
+  let usedEngine = "Groq";
+
+  if (!needGemini) {
+    resultText = await callGroq(userMessage, history);
+    if (resultText !== null) {
+      usedEngine = "Groq";
+    }
+  }
+
+  if (resultText === null) {
+    usedEngine = "Gemini";
+    resultText = await callGemini(userMessage, history, { imageParts, useSearch, urls });
+  }
+
+  global.logInfo?.(`[goibot] Engine: ${usedEngine}`);
+  pushHistory(threadId, userMessage, resultText);
+  return resultText;
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  MEDIA HELPERS
+// ════════════════════════════════════════════════════════════════════════════════
 async function fetchImageAsBase64(url) {
   const res = await axios.get(url, {
     responseType: "arraybuffer",
@@ -202,7 +410,6 @@ async function fetchImageAsBase64(url) {
   return { mimeType, base64 };
 }
 
-// ── Lấy URL ảnh từ raw message ───────────────────────────────────────────────────
 function extractImageUrl(raw) {
   if (!raw) return null;
   const c = raw.content;
@@ -219,120 +426,14 @@ function extractImageUrl(raw) {
   return null;
 }
 
-// ── Lấy URL từ text ──────────────────────────────────────────────────────────────
 function extractUrls(text) {
   const matches = text.match(/https?:\/\/[^\s]+/g) || [];
   return matches.filter(u => !u.includes("zalo.me") && !u.includes("zaloapp"));
 }
 
-// ── Gọi Gemini với rotation key ──────────────────────────────────────────────────
-/**
- * @param {string} userMessage — tin nhắn text
- * @param {string} threadId
- * @param {object} [opts]
- * @param {Array}  [opts.imageParts]  — [{mimeType, base64}] ảnh đính kèm
- * @param {boolean} [opts.useSearch]  — bật Google Search grounding
- * @param {string[]} [opts.urls]      — URLs để đọc nội dung
- */
-async function sendToGroq(userMessage, threadId, opts = {}) {
-  const { imageParts = [], useSearch = false, urls = [] } = opts;
-  const history = getChatHistory(threadId);
-
-  const userParts = [];
-
-  if (imageParts.length > 0) {
-    for (const img of imageParts) {
-      userParts.push({ inlineData: { mimeType: img.mimeType, data: img.base64 } });
-    }
-  }
-
-  userParts.push({ text: userMessage });
-
-  const contents = [
-    ...history,
-    { role: "user", parts: userParts },
-  ];
-
-  const tools = [];
-  if (useSearch) tools.push({ googleSearch: {} });
-  if (urls.length > 0) tools.push({ urlContext: {} });
-
-  const tryKeys = getLiveKeys();
-  let lastErr   = null;
-
-  for (const key of tryKeys) {
-    if (isKeyCoolingDown(key)) continue;
-
-    try {
-      const ai = new GoogleGenAI({ apiKey: key });
-
-      const config = {
-        systemInstruction: SYSTEM_PROMPT,
-        temperature:       0.8,
-        maxOutputTokens:   2048,
-      };
-
-      if (tools.length === 0) {
-        config.responseMimeType = "application/json";
-      } else {
-        config.tools = tools;
-      }
-
-      const response = await ai.models.generateContent({
-        model: MODEL_NAME,
-        contents,
-        config,
-      });
-
-      let assistantMsg = response.text || "";
-
-      if (tools.length > 0) {
-        const jsonMatch = assistantMsg.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-          assistantMsg = JSON.stringify({
-            content: { text: assistantMsg.trim(), thread_id: "" },
-            nhac: { status: false, keyword: "" },
-            tinh: { status: false, expr: "" },
-            sticker: { status: false, keyword: "" },
-            reaction: { status: false, type: "" },
-            img: { status: false, prompt: "", model: "flux" },
-            tx: { status: false, action: "", result: "", phien: 0 },
-          });
-        } else {
-          assistantMsg = jsonMatch[0];
-        }
-      }
-
-      history.push({ role: "user",  parts: [{ text: userMessage }] });
-      history.push({ role: "model", parts: [{ text: assistantMsg }] });
-      if (history.length > HISTORY_MAX) history.splice(0, history.length - HISTORY_MAX);
-
-      return assistantMsg;
-    } catch (err) {
-      const msg = err?.message || "";
-      const is429 = err?.status === 429 || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429");
-
-      if (is429) {
-        if (isQuotaExhausted(msg)) {
-          markGeminiKeyDead(key);
-        } else {
-          putKeyCooldown(key);
-        }
-        lastErr = err;
-        continue;
-      }
-      throw err;
-    }
-  }
-
-  const available = tryKeys.filter(k => !isKeyCoolingDown(k));
-  if (available.length === 0) {
-    throw new Error("Tất cả Gemini key đang bị rate-limit, thử lại sau ít giây nhé!");
-  }
-  throw lastErr || new Error("Tất cả Gemini key đều hết quota.");
-}
-
-// ── Data helpers ────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════════
+//  DATA / TOGGLE HELPERS
+// ════════════════════════════════════════════════════════════════════════════════
 function readData() {
   try { return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8")); } catch { return {}; }
 }
@@ -341,7 +442,6 @@ function writeData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
-// ── Toggle on/off ───────────────────────────────────────────────────────────────
 function setEnabled(threadId, value) {
   const data = readData();
   data[threadId] = value;
@@ -355,7 +455,6 @@ function isEnabled(threadId) {
   return !!data[threadId];
 }
 
-// ── Utils ───────────────────────────────────────────────────────────────────────
 function getBody(event) {
   const raw = event?.data || {};
   const c   = raw.content;
@@ -374,7 +473,6 @@ function getCurrentTimeInVietnam() {
   return `${days[vn.getDay()]} - ${vn.toLocaleDateString("vi-VN")} - ${vn.toLocaleTimeString("vi-VN")}`;
 }
 
-// ── Welcome new member ──────────────────────────────────────────────────────────
 async function handleNewUser({ api, threadId, userId }) {
   if (!isEnabled(threadId)) return;
   const name = await api.getUserInfo(userId)

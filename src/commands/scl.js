@@ -1,17 +1,20 @@
 "use strict";
 
 /**
- * src/commands/scl.js
- * ─────────────────────────────────────────────────────────────────────────────
- * Tìm kiếm nhạc SoundCloud → reply số → tải & gửi sendVoice.
+ * src/commands/scl.js — SoundCloud search + download + GitHub upload → sendVoice
+ *
+ * Flow khi reply số:
+ *   1. Lấy progressive transcoding URL từ data track (đã lưu lúc search)
+ *   2. Gọi URL đó + client_id → nhận direct mp3 link
+ *   3. Tải mp3 → buffer
+ *   4. Upload buffer lên GitHub → rawUrl công khai
+ *   5. api.sendVoice({ voiceUrl: rawUrl }) — không cần uploadAttachment
  */
 
 const fs   = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
 
-const { registerReply }       = require("../../includes/handlers/handleReply");
-const { sendVoice, tempDir }  = require("../../utils/media/media");
+const { registerReply } = require("../../includes/handlers/handleReply");
 
 const SC_API  = "https://api-v2.soundcloud.com";
 const SC_HOME = "https://soundcloud.com";
@@ -25,9 +28,7 @@ const HEADERS = {
   "Origin":          "https://soundcloud.com",
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Client ID (cache 1 giờ)
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Client ID cache ──────────────────────────────────────────────────────────
 let _clientId = null;
 let _clientAt = 0;
 
@@ -35,8 +36,7 @@ async function getClientId() {
   if (_clientId && Date.now() - _clientAt < 3_600_000) return _clientId;
 
   const axios = global.axios;
-  const home  = await axios.get(SC_HOME, { headers: HEADERS, timeout: 15000 });
-  const html  = home.data;
+  const html  = (await axios.get(SC_HOME, { headers: HEADERS, timeout: 15000 })).data;
 
   const urls = [];
   const re   = /src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g;
@@ -53,9 +53,7 @@ async function getClientId() {
   throw new Error("Không lấy được client_id từ SoundCloud");
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tìm kiếm track
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Search tracks (lưu transcodings để dùng khi download) ───────────────────
 async function searchTracks(query) {
   const clientId = await getClientId();
   const res = await global.axios.get(`${SC_API}/search/tracks`, {
@@ -65,88 +63,98 @@ async function searchTracks(query) {
   });
 
   return (res.data?.collection || []).map(t => ({
-    id:       t.id,
-    title:    t.title,
-    username: t.user?.username  || "Không rõ",
-    fullName: t.user?.full_name || t.user?.username || "Không rõ",
-    permalink: t.permalink_url,
-    duration:  t.duration,
-    plays:     t.playback_count,
-    likes:     t.likes_count,
+    id:           t.id,
+    title:        t.title,
+    username:     t.user?.username  || "Không rõ",
+    fullName:     t.user?.full_name || t.user?.username || "Không rõ",
+    permalink:    t.permalink_url,
+    duration:     t.duration,
+    plays:        t.playback_count,
+    likes:        t.likes_count,
+    transcodings: t.media?.transcodings || [],   // <-- lưu để download sau
   }));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Lấy URL stream (mp3 128k) từ track ID
-// ─────────────────────────────────────────────────────────────────────────────
-async function getStreamUrl(trackId) {
+// ─── Lấy direct mp3 URL từ transcoding ───────────────────────────────────────
+async function resolveStreamUrl(transcodings) {
   const clientId = await getClientId();
-  const res = await global.axios.get(`${SC_API}/tracks/${trackId}/streams`, {
-    params:  { client_id: clientId },
-    headers: HEADERS,
-    timeout: 15000,
+  const axios    = global.axios;
+
+  // Ưu tiên progressive (direct mp3) trước HLS
+  const sorted = [...transcodings].sort((a, b) => {
+    const score = t => (t.format?.protocol === "progressive" ? 0 : 1);
+    return score(a) - score(b);
   });
-  return res.data?.http_mp3_128_url || res.data?.preview_mp3_128_url || null;
+
+  for (const tc of sorted) {
+    if (!tc.url) continue;
+    try {
+      const res = await axios.get(tc.url, {
+        params:  { client_id: clientId },
+        headers: HEADERS,
+        timeout: 15000,
+      });
+      const url = res.data?.url;
+      if (url) return { url, isHls: tc.format?.protocol === "hls" };
+    } catch (_) {}
+  }
+  throw new Error("Không lấy được stream URL từ transcodings");
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tải mp3 về rồi convert sang AAC
-// ─────────────────────────────────────────────────────────────────────────────
-async function downloadAsAac(mp3Url) {
-  const ts    = Date.now();
-  const mp3   = path.join(tempDir, `scl_${ts}.mp3`);
-  const aac   = path.join(tempDir, `scl_${ts}.aac`);
-
-  // Tải mp3
+// ─── Tải mp3 từ direct URL → Buffer ──────────────────────────────────────────
+async function downloadMp3Buffer(mp3Url) {
   const res = await global.axios.get(mp3Url, {
     responseType: "arraybuffer",
     timeout:      120_000,
     maxContentLength: 50 * 1024 * 1024,
     headers: { "User-Agent": HEADERS["User-Agent"] },
   });
-  fs.writeFileSync(mp3, Buffer.from(res.data));
-
-  // Convert → AAC
-  execSync(`ffmpeg -y -i "${mp3}" -c:a aac -b:a 128k "${aac}"`, {
-    stdio: "pipe", timeout: 60_000,
-  });
-
-  try { fs.unlinkSync(mp3); } catch (_) {}
-  return aac;
+  return Buffer.from(res.data);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Tải HLS → mp3 qua ffmpeg (khi progressive không có) ────────────────────
+function downloadHlsToBuffer(m3u8Url) {
+  const { execSync } = require("child_process");
+  const tmpOut = path.join(
+    require("../../utils/media/media").tempDir,
+    `scl_hls_${Date.now()}.mp3`
+  );
+  execSync(
+    `ffmpeg -y -i "${m3u8Url}" -c:a libmp3lame -q:a 4 "${tmpOut}"`,
+    { stdio: "pipe", timeout: 90_000 }
+  );
+  const buf = fs.readFileSync(tmpOut);
+  try { fs.unlinkSync(tmpOut); } catch (_) {}
+  return buf;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtDuration(ms) {
-  const s   = Math.floor(ms / 1000);
-  const min = Math.floor(s / 60);
-  const sec = s % 60;
-  return `${min}:${String(sec).padStart(2, "0")}`;
+  const s = Math.floor(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 function fmtNum(n) {
   if (!n) return "0";
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
-  if (n >= 1_000)     return (n / 1_000).toFixed(1) + "K";
+  if (n >= 1_000_000) return (n / 1e6).toFixed(1) + "M";
+  if (n >= 1_000)     return (n / 1e3).toFixed(1) + "K";
   return String(n);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Command
 // ─────────────────────────────────────────────────────────────────────────────
 module.exports = {
   config: {
     name:            "scl",
     aliases:         ["soundcloud", "sc"],
-    version:         "2.0.0",
+    version:         "3.0.0",
     hasPermssion:    0,
     credits:         "MiZai",
-    description:     "Tìm & tải nhạc SoundCloud (sendVoice)",
+    description:     "Tìm & tải nhạc SoundCloud → GitHub → sendVoice",
     commandCategory: "Giải Trí",
     usages:          "<từ khóa>",
     cooldowns:       5,
   },
 
+  // ── Tìm kiếm ────────────────────────────────────────────────────────────────
   run: async ({ args, send }) => {
     const query = args.join(" ").trim();
     if (!query) return send("🎵 Dùng: scl <từ khóa>\nVí dụ: scl bóng phù hoa TVS");
@@ -157,7 +165,7 @@ module.exports = {
     try {
       tracks = await searchTracks(query);
     } catch (err) {
-      global.logError?.(`[scl] ${err?.message || err}`);
+      global.logError?.(`[scl] search: ${err?.message || err}`);
       return send("❌ Lỗi tìm kiếm: " + (err?.message || "Không xác định"));
     }
 
@@ -177,12 +185,15 @@ module.exports = {
     }
   },
 
+  // ── Xử lý reply ─────────────────────────────────────────────────────────────
   onReply: async ({ api, event, data, send }) => {
     const { tracks = [] } = data || {};
     if (!tracks.length) return send("❌ Hết dữ liệu. Vui lòng tìm lại.");
 
     const raw    = event?.data ?? {};
-    const body   = typeof raw.content === "string" ? raw.content : (raw.content?.text || raw.content?.msg || "");
+    const body   = typeof raw.content === "string"
+      ? raw.content
+      : (raw.content?.text || raw.content?.msg || "");
     const choice = parseInt(body.trim(), 10);
 
     if (isNaN(choice) || choice < 1 || choice > tracks.length) {
@@ -191,35 +202,57 @@ module.exports = {
 
     const t = tracks[choice - 1];
 
-    await send(
-      `⏳ Đang tải: ${t.title}\n` +
-      `👤 ${t.fullName}  ⏱ ${fmtDuration(t.duration)}`
-    );
-
-    // Lấy stream URL
-    let mp3Url;
-    try {
-      mp3Url = await getStreamUrl(t.id);
-    } catch (err) {
-      global.logError?.(`[scl] getStream: ${err?.message || err}`);
-      return send("❌ Không lấy được link stream: " + (err?.message || err));
+    if (!t.transcodings?.length) {
+      return send("❌ Bài này không có dữ liệu stream. Vui lòng thử bài khác.");
     }
 
-    if (!mp3Url) return send("❌ SoundCloud không cung cấp link tải cho bài này.");
+    await send(`⏳ Đang tải: ${t.title}\n👤 ${t.fullName}  ⏱ ${fmtDuration(t.duration)}`);
 
-    // Tải & convert sang AAC
-    let aacPath;
+    // 1. Lấy direct URL từ transcodings
+    let streamInfo;
     try {
-      fs.mkdirSync(tempDir, { recursive: true });
-      aacPath = await downloadAsAac(mp3Url);
+      streamInfo = await resolveStreamUrl(t.transcodings);
+    } catch (err) {
+      global.logError?.(`[scl] resolveStream: ${err?.message || err}`);
+      return send("❌ Không lấy được stream: " + err.message);
+    }
+
+    global.logInfo?.(`[scl] stream url (isHls=${streamInfo.isHls}): ${streamInfo.url.slice(0, 80)}...`);
+
+    // 2. Tải audio → buffer
+    let audioBuf;
+    try {
+      if (streamInfo.isHls) {
+        audioBuf = downloadHlsToBuffer(streamInfo.url);
+      } else {
+        audioBuf = await downloadMp3Buffer(streamInfo.url);
+      }
     } catch (err) {
       global.logError?.(`[scl] download: ${err?.message || err}`);
-      return send("❌ Lỗi tải nhạc: " + (err?.message || err));
+      return send("❌ Lỗi tải nhạc: " + err.message);
     }
 
-    // Gửi sendVoice
+    global.logInfo?.(`[scl] downloaded ${(audioBuf.length / 1024).toFixed(0)} KB`);
+
+    // 3. Upload lên GitHub → rawUrl công khai
+    let rawUrl;
     try {
-      await sendVoice(api, aacPath, event.threadId, event.type);
+      const fileName = `scl_${t.id}_${Date.now()}.mp3`;
+      rawUrl = await global.uploadImage(audioBuf, fileName);
+    } catch (err) {
+      global.logError?.(`[scl] github upload: ${err?.message || err}`);
+      return send("❌ Lỗi upload GitHub: " + err.message);
+    }
+
+    global.logInfo?.(`[scl] github rawUrl: ${rawUrl}`);
+
+    // 4. Gửi voice bằng rawUrl GitHub
+    try {
+      await api.sendVoice(
+        { voiceUrl: rawUrl, ttl: 0 },
+        event.threadId,
+        event.type
+      );
       await send(
         `✅ Download SoundCloud\n` +
         `📝 ${t.title}\n` +
@@ -228,9 +261,7 @@ module.exports = {
       );
     } catch (err) {
       global.logError?.(`[scl] sendVoice: ${err?.message || err}`);
-      return send("❌ Lỗi gửi audio: " + (err?.message || err));
-    } finally {
-      try { if (aacPath && fs.existsSync(aacPath)) fs.unlinkSync(aacPath); } catch (_) {}
+      return send("❌ Lỗi gửi audio: " + err.message);
     }
   },
 };

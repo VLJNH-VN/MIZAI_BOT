@@ -9,8 +9,8 @@ const CACHE_DIR = path.join(__dirname, "..", "..", "includes", "cache");
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify({}));
 if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
 
-const GROQ_API_URL      = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL_NAME        = "llama-3.3-70b-versatile";
+const GEMINI_API_URL    = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const MODEL_NAME        = "gemini-2.0-flash";
 const GENERATION_CONFIG = { temperature: 0.8, max_tokens: 2048 };
 
 const TRIGGER_KEYWORDS = [
@@ -132,10 +132,10 @@ function clearChatHistory(threadId) {
   delete chatHistories[threadId];
 }
 
-// ── Groq API call ───────────────────────────────────────────────────────────────
+// ── Gemini API call ──────────────────────────────────────────────────────────────
 async function sendToGroq(userMessage, threadId) {
-  const key = getActiveKey();
-  if (!key) throw new Error("Chưa có Groq API key. Dùng .key add gsk_... để thêm key.");
+  const key = global?.config?.geminiKey || "";
+  if (!key) throw new Error("Chưa có Gemini API key. Dùng .key add AIza... để thêm key.");
 
   const history  = getChatHistory(threadId);
   const messages = [
@@ -144,7 +144,7 @@ async function sendToGroq(userMessage, threadId) {
     { role: "user", content: userMessage }
   ];
 
-  const res = await axios.post(GROQ_API_URL, {
+  const res = await axios.post(GEMINI_API_URL, {
     model: MODEL_NAME,
     messages,
     temperature: GENERATION_CONFIG.temperature,

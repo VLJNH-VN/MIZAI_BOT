@@ -78,23 +78,23 @@ module.exports = {
     // ── Thêm key ──────────────────────────────────────────────────────────────
     if (sub === "add") {
       const newKey = args[1]?.trim();
-      if (!newKey) return send("⚠️ Vui lòng nhập API key.\nVD: .key add gsk_... (Groq)\n    .key add sk-... (DeepSeek)");
+      if (!newKey) return send("⚠️ Vui lòng nhập API key.\nVD: .key add gsk_... (Groq)\n    .key add AIza... (Gemini)");
 
-      // DeepSeek key (sk-...)
-      if (newKey.startsWith("sk-")) {
+      // Gemini key (AIza...)
+      if (newKey.startsWith("AIza")) {
         try {
           const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
-          cfg.deepseekKey = newKey;
+          cfg.geminiKey = newKey;
           fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf-8");
-          if (global.config) global.config.deepseekKey = newKey;
-          const short = `${newKey.slice(0, 6)}...${newKey.slice(-4)}`;
-          return send(`✅ Đã cập nhật DeepSeek key: ${short}`);
+          if (global.config) global.config.geminiKey = newKey;
+          const short = `${newKey.slice(0, 8)}...${newKey.slice(-4)}`;
+          return send(`✅ Đã cập nhật Gemini key: ${short}`);
         } catch (e) {
           return send(`❌ Lỗi lưu key: ${e.message}`);
         }
       }
 
-      if (!newKey.startsWith("gsk_")) return send("⚠️ Key không hợp lệ.\nGroq key bắt đầu bằng gsk_...\nDeepSeek key bắt đầu bằng sk-...");
+      if (!newKey.startsWith("gsk_")) return send("⚠️ Key không hợp lệ.\nGroq key: gsk_...\nGemini key: AIza...");
 
       const data = loadData();
       if (data.keys.includes(newKey)) return send("⚠️ Key này đã tồn tại.");
@@ -212,21 +212,21 @@ module.exports = {
     // ── Hướng dẫn ─────────────────────────────────────────────────────────────
     const data = loadData();
     const liveCount = (data.live || []).length;
-    let dsKey = "";
-    try { dsKey = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8")).deepseekKey || ""; } catch {}
-    const dsShort = dsKey ? `${dsKey.slice(0, 6)}...${dsKey.slice(-4)}` : "(chưa có)";
+    let gmKey = "";
+    try { gmKey = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8")).geminiKey || ""; } catch {}
+    const gmShort = gmKey ? `${gmKey.slice(0, 8)}...${gmKey.slice(-4)}` : "(chưa có)";
     return send(
       `🔑 Quản lý API Key\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `.key add <key>    — Thêm key\n` +
-      `  gsk_... → Groq | sk-... → DeepSeek\n` +
+      `  gsk_... → Groq | AIza... → Gemini\n` +
       `.key del <key|số> — Xoá Groq key\n` +
       `.key list         — Danh sách Groq key\n` +
       `.key check        — Check tất cả Groq key\n` +
       `.key check <key>  — Check 1 Groq key\n` +
       `.key autocheck    — Bật/tắt auto check\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `🤖 DeepSeek: ${dsShort}\n` +
+      `🤖 Gemini (AI Chat): ${gmShort}\n` +
       `📦 Groq tổng: ${data.keys.length} | ✅ Live: ${liveCount}\n` +
       `🔄 Auto check: ${data.autoCheck ? "✅ Bật" : "❌ Tắt"}`
     );

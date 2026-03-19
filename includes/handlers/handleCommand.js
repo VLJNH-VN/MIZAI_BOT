@@ -8,6 +8,7 @@ const { registerReaction } = require("./handleReaction");
 const { registerUndo } = require("./handleUndo");
 const fs = require("fs");
 const path = require("path");
+const { sendVideo, pickRandom } = require("../../utils/media/media");
 
 // ── Ghi nhớ nhóm cho broadcast ────────────────────────────────────────────────
 const GROUPS_CACHE_PATH = path.join(__dirname, "../../includes/database/groupsCache.json");
@@ -161,6 +162,23 @@ async function handleCommand({ api, event, commands, prefix }) {
         `📋 Gõ ${prefix}help để xem danh sách lệnh.\n` +
         `⏰ Uptime: ${formatUptime()}`
       );
+
+      try {
+        const entry = pickRandom({ videoOnly: true });
+        if (entry) {
+          const ROOT = process.cwd();
+          const fullPath = path.join(ROOT, entry.cachedPath);
+          await sendVideo(api, fullPath, threadID, event.type, {
+            width:    entry.width    || 1280,
+            height:   entry.height   || 720,
+            duration: entry.duration || 0,
+            msg:      "",
+          });
+        }
+      } catch (e) {
+        logWarn(`[handleCommand] Gửi video random thất bại: ${e?.message}`);
+      }
+
       return;
     }
 

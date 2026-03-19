@@ -11,16 +11,16 @@ function startKeepAlive() {
     for (const url of SERVERS) {
       try {
         const res = await axios.get(url, { timeout: 15000 });
-        logInfo(`[KeepAlive] Ping ${url} → ${res.status}`);
+        logInfo(`[UPTIME] Ping ${url} → ${res.status}`);
       } catch (err) {
-        logWarn(`[KeepAlive] Ping ${url} thất bại: ${err?.message}`);
+        logWarn(`[UPTIME] Ping ${url} thất bại: ${err?.message}`);
       }
     }
   }
 
   ping();
   setInterval(ping, INTERVAL_MS);
-  logInfo(`[KeepAlive] Đã khởi động, ping mỗi ${INTERVAL_MS / 60000} phút.`);
+  logInfo(`[UPYIME] Đã khởi động, ping mỗi ${INTERVAL_MS / 60000} phút.`);
 }
 
 module.exports = { startKeepAlive };

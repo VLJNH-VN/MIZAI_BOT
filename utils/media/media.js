@@ -99,6 +99,7 @@ async function decodeOne(key, opts = {}) {
   const links = readLinks();
   const entry = links[key];
   if (!entry) throw new Error(`[media] Không tìm thấy key "${key}" trong githubMediaLinks.json`);
+  if (entry.dead) return null;
 
   ensureDirs();
 

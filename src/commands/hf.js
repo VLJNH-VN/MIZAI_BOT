@@ -6,8 +6,8 @@ const path = require("path");
 const getToken = () => global?.config?.hfToken || process.env.HF_TOKEN || "";
 
 const TEXT_MODEL  = "mistralai/Mistral-7B-Instruct-v0.3";
-const IMAGE_MODEL = "black-forest-labs/FLUX.1-schnell";
 const HF_API      = "https://router.huggingface.co/hf-inference/models";
+const POLL_IMG_URL = "https://image.pollinations.ai/prompt";
 
 async function hfText(prompt) {
   const url = `${HF_API}/${TEXT_MODEL}/v1/chat/completions`;
@@ -31,22 +31,21 @@ async function hfText(prompt) {
 }
 
 async function hfImage(prompt) {
-  const url = `${HF_API}/${IMAGE_MODEL}`;
-  const res  = await global.axios.post(
-    url,
-    { inputs: prompt },
-    {
-      headers: {
-        Authorization      : `Bearer ${getToken()}`,
-        "Content-Type"     : "application/json",
-        "x-wait-for-model" : "true"
-      },
-      responseType: "arraybuffer",
-      timeout     : 120_000
-    }
-  );
+  const seed = Math.floor(Math.random() * 999999);
+  const encoded = encodeURIComponent(prompt);
+  const url = `${POLL_IMG_URL}/${encoded}?width=1024&height=1024&model=flux&seed=${seed}&nologo=true&enhance=false`;
 
-  if (!res.data || res.data.byteLength < 1000) {
+  const res = await global.axios.get(url, {
+    responseType: "arraybuffer",
+    timeout     : 120_000,
+    headers     : { "User-Agent": global.userAgent || "Mozilla/5.0" }
+  });
+
+  const contentType = res.headers?.["content-type"] || "";
+  if (!contentType.startsWith("image/")) {
+    throw new Error("API trả về không phải ảnh, thử lại sau.");
+  }
+  if (!res.data || res.data.byteLength < 500) {
     throw new Error("API trả về dữ liệu rỗng, thử lại sau.");
   }
   return Buffer.from(res.data);

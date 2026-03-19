@@ -4,8 +4,6 @@ const fs   = require("fs");
 const path = require("path");
 
 const HF_TOKEN  = () => global?.config?.hfToken || process.env.HF_TOKEN || "";
-const SR_MODEL  = "caidas/swin2SR-realworld-sr-x4-64-bsrgan-psnr";
-const HF_API    = "https://api-inference.huggingface.co/models";
 
 async function fetchImageBuffer(url) {
   const res = await global.axios.get(url, {
@@ -33,37 +31,16 @@ async function sharpSharpen(inputBuf, level = "normal") {
     .toBuffer();
 }
 
-async function hfUpscale(inputBuf) {
-  const url = `${HF_API}/${SR_MODEL}`;
-
-  const res = await global.axios.post(
-    url,
-    inputBuf,
-    {
-      headers: {
-        Authorization : `Bearer ${HF_TOKEN()}`,
-        "Content-Type": "image/jpeg"
-      },
-      responseType  : "arraybuffer",
-      timeout       : 120_000,
-      validateStatus: (s) => s < 500
-    }
-  );
-
-  if (res.status !== 200) {
-    let errMsg = `HTTP ${res.status}`;
-    try {
-      const txt = Buffer.from(res.data).toString("utf8");
-      const obj = JSON.parse(txt);
-      errMsg = obj?.error || obj?.message || txt.slice(0, 120);
-    } catch (_) {}
-    throw new Error(errMsg);
-  }
-
-  if (!res.data || res.data.byteLength < 500) {
-    throw new Error("API trả về dữ liệu rỗng.");
-  }
-  return Buffer.from(res.data);
+async function sharpUpscale2x(inputBuf) {
+  const sharp = require("sharp");
+  const meta = await sharp(inputBuf).metadata();
+  const newW = Math.min((meta.width  || 512) * 2, 4096);
+  const newH = Math.min((meta.height || 512) * 2, 4096);
+  return sharp(inputBuf)
+    .resize(newW, newH, { kernel: sharp.kernel.lanczos3 })
+    .sharpen({ sigma: 1.2, m1: 1.5, m2: 2.0 })
+    .jpeg({ quality: 95 })
+    .toBuffer();
 }
 
 async function getImageFromEvent(event, api) {
@@ -107,7 +84,7 @@ module.exports = {
         `  ${prefix}${commandName} nhe     → Làm nét nhẹ\n` +
         `  ${prefix}${commandName} normal  → Làm nét vừa (mặc định)\n` +
         `  ${prefix}${commandName} manh    → Làm nét mạnh\n` +
-        `  ${prefix}${commandName} ai      → AI upscale 4x (HuggingFace)\n` +
+        `  ${prefix}${commandName} ai      → Upscale 2x (Lanczos + làm nét)\n` +
         `━━━━━━━━━━━━━━━━\n` +
         `Lưu ý: Chế độ ai cần vài giây xử lý.`
       );
@@ -125,7 +102,7 @@ module.exports = {
       nhe   : "Làm nét nhẹ",
       normal: "Làm nét vừa",
       manh  : "Làm nét mạnh",
-      ai    : "AI Super-Resolution 4x"
+      ai    : "Upscale 2x (Lanczos + Sharpen)"
     }[mode];
 
     await send(`🔧 Đang xử lý: ${modeLabel}...`);
@@ -143,24 +120,12 @@ module.exports = {
 
     try {
       if (mode === "ai") {
-        if (!HF_TOKEN()) {
-          return send("❌ Chưa cấu hình hfToken trong config.json!");
-        }
-        outputBuf = await hfUpscale(inputBuf);
+        outputBuf = await sharpUpscale2x(inputBuf);
       } else {
         outputBuf = await sharpSharpen(inputBuf, mode);
       }
     } catch (err) {
       logError(`[lamet] xử lý ảnh: ${err.message}`);
-      if (err?.response?.status === 503 || err.message?.includes("503")) {
-        return send("⏳ Model AI đang khởi động, thử lại sau 30 giây!");
-      }
-      if (err?.response?.status === 413 || err.message?.includes("413")) {
-        return send("❌ Ảnh quá lớn cho AI upscale! Dùng chế độ normal/manh thay thế.");
-      }
-      if (err.message?.includes("404") || err.message?.includes("HTTP 404")) {
-        return send("❌ Model AI upscale hiện không khả dụng. Dùng chế độ nhe/normal/manh thay thế.");
-      }
       return send(`❌ Lỗi xử lý ảnh: ${err.message}`);
     }
 

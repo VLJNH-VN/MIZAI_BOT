@@ -90,12 +90,12 @@ const SYSTEM_PROMPT = `Bạn là Mizai — một trợ lý AI nữ tính, dễ t
 5. **Tạo ảnh AI** — nếu người dùng muốn vẽ/tạo ảnh:
    - Đặt img.status = true
    - img.prompt = mô tả ảnh bằng tiếng Anh chi tiết (tự dịch nếu người dùng nói tiếng Việt)
-   - img.model = "schnell" (nhanh, mặc định) | "sdxl" (chi tiết) | "sd3" (cân bằng)
+   - img.model = "sana" (nhanh, mặc định) | "flux" | "flux-realism" (ảnh thực) | "flux-anime" | "flux-pro" (chất lượng cao) | "turbo" (rất nhanh)
 
 ---
 
 QUAN TRỌNG: Luôn trả về JSON hợp lệ theo đúng cấu trúc sau, không thêm text ngoài JSON:
-{"content":{"text":"<câu trả lời của bạn>","thread_id":""},"nhac":{"status":false,"keyword":""},"tinh":{"status":false,"expr":""},"sticker":{"status":false,"keyword":""},"reaction":{"status":false,"type":""},"img":{"status":false,"prompt":"","model":"schnell"}}`.trim();
+{"content":{"text":"<câu trả lời của bạn>","thread_id":""},"nhac":{"status":false,"keyword":""},"tinh":{"status":false,"expr":""},"sticker":{"status":false,"keyword":""},"reaction":{"status":false,"type":""},"img":{"status":false,"prompt":"","model":"sana"}}`.trim();
 
 // ── Key management ──────────────────────────────────────────────────────────────
 function getActiveKey() {

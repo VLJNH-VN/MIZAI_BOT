@@ -149,16 +149,39 @@ function convertToAac(inputPath, outputPath) {
     );
 }
 
+// ─── Cleanup (tích hợp từ utility — xóa file tạm sau khi gửi xong) ─────────────
 function cleanup(...files) {
     setTimeout(() => {
         files.forEach(f => {
             try { if (f && fs.existsSync(f)) fs.unlinkSync(f); } catch {}
         });
-    }, 8000);
+    }, 10000);
 }
 
+function cleanupOldFiles() {
+    const exts   = new Set([".mp4", ".mp3", ".aac", ".jpg", ".jpeg", ".png", ".webp", ".tmp"]);
+    const maxAge = 5 * 60 * 1000;
+    const now    = Date.now();
+    try {
+        if (!fs.existsSync(tempDir)) return;
+        fs.readdirSync(tempDir).forEach(file => {
+            if (!exts.has(path.extname(file).toLowerCase())) return;
+            const full = path.join(tempDir, file);
+            try {
+                if (now - fs.statSync(full).mtimeMs > maxAge) fs.unlinkSync(full);
+            } catch {}
+        });
+    } catch {}
+}
+
+// Chạy cleanup định kỳ mỗi 5 phút
+setInterval(cleanupOldFiles, 5 * 60 * 1000);
+
 // ─── Gửi VIDEO ─────────────────────────────────────────────────────────────────
-// Dùng sendMessage + attachments (không dùng api.sendVideo — zca-js báo lỗi tham số)
+// Flow đúng để video phát inline trong Zalo:
+//   Bước 1: uploadAttachment (local file → Zalo CDN)  → lấy fileUrl CDN
+//   Bước 2: sendVideo({ videoUrl: cdnUrl, thumbnailUrl: null, ... }) → video phát được
+//   Fallback: sendMessage + attachments → gửi như file nếu step trên lỗi
 async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
     const uid      = uniqueId();
     const rawPath  = path.join(tempDir, `ad_raw_${uid}.mp4`);
@@ -173,7 +196,7 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
             return;
         }
 
-        // Convert sang H264 cho Zalo tương thích
+        // Convert sang H264 baseline cho Zalo tương thích
         let uploadPath = rawPath;
         try {
             convertToH264(rawPath, h264Path);
@@ -183,23 +206,43 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
             logWarn(`[AutoDown] Convert H.264 lỗi, dùng file gốc: ${e.message}`);
         }
 
-        // Dùng normalizeAttachment để xác nhận type trước khi gửi
-        const fname = path.basename(uploadPath);
-        const att   = normalizeAttachment({ fileUrl: uploadPath, fname }, "video");
-        logInfo(`[AutoDown] Gửi file type=${att?.type || "video"} | ${fname}`);
+        const meta = probeStreams(uploadPath);
+        logInfo(`[AutoDown] Upload video: ${path.basename(uploadPath)} (${meta.width}x${meta.height}, ${meta.duration}s)`);
 
-        // Gửi qua sendMessage + attachments (cách hoạt động trong zca-js)
+        // ── Bước 1: upload lên Zalo CDN → sendVideo (video phát inline) ──────
+        try {
+            const uploaded = await api.uploadAttachment([uploadPath], threadId, threadType);
+            const cdnUrl   = uploaded?.[0]?.fileUrl;
+            if (!cdnUrl) throw new Error("uploadAttachment không trả về fileUrl");
+
+            await api.sendVideo({
+                videoUrl:     cdnUrl,
+                thumbnailUrl: null,                      // FIX: null thay vì "" rỗng
+                msg:          caption,
+                width:        meta.width,
+                height:       meta.height,
+                duration:     meta.duration * 1000,      // milliseconds
+                ttl:          500_000,
+            }, threadId, threadType);
+            logInfo("[AutoDown] sendVideo (inline) thành công.");
+            return;
+        } catch (e1) {
+            logWarn(`[AutoDown] sendVideo inline thất bại: ${e1.message}`);
+        }
+
+        // ── Bước 2: sendMessage + attachments (gửi như file — fallback) ──────
         try {
             await api.sendMessage(
                 { msg: caption, attachments: [uploadPath], ttl: 500_000 },
                 threadId, threadType
             );
+            logInfo("[AutoDown] sendMessage attachment thành công.");
             return;
-        } catch (e1) {
-            logWarn(`[AutoDown] sendMessage video thất bại: ${e1.message}`);
+        } catch (e2) {
+            logWarn(`[AutoDown] sendMessage attachment thất bại: ${e2.message}`);
         }
 
-        // Fallback: gửi link text
+        // ── Bước 3: gửi link text ────────────────────────────────────────────
         await api.sendMessage(
             { msg: `${caption}\n\n🔗 ${videoUrl}`, ttl: 300_000 },
             threadId, threadType
@@ -219,11 +262,6 @@ async function sendAudio(api, audioUrl, info, caption, threadId, threadType) {
         await downloadFile(audioUrl, rawPath);
         convertToAac(rawPath, aacPath);
 
-        // Dùng normalizeAttachment để xác nhận type audio
-        const fname = path.basename(aacPath);
-        const att   = normalizeAttachment({ fileUrl: aacPath, fname }, "audio");
-        logInfo(`[AutoDown] Gửi file type=${att?.type || "audio"} | ${fname}`);
-
         // Gửi thumbnail + caption trước
         if (info.thumbnail) {
             try {
@@ -232,23 +270,26 @@ async function sendAudio(api, audioUrl, info, caption, threadId, threadType) {
                 thumbs.push(tp);
             } catch {}
         }
-        await api.sendMessage(
-            { msg: caption, attachments: thumbs.length ? thumbs : [], ttl: 500_000 },
-            threadId, threadType
-        );
+        if (caption || thumbs.length) {
+            await api.sendMessage(
+                { msg: caption, attachments: thumbs.length ? thumbs : undefined, ttl: 500_000 },
+                threadId, threadType
+            );
+        }
 
-        // Gửi voice qua global.upload → sendVoice
+        // ── Gửi voice: upload → sendVoice ────────────────────────────────────
         try {
-            const uploaded = await global.upload(aacPath, threadId, threadType);
+            const uploaded = await api.uploadAttachment([aacPath], threadId, threadType);
             const voiceUrl = uploaded?.[0]?.fileUrl;
-            if (!voiceUrl) throw new Error("Không có fileUrl từ upload");
+            if (!voiceUrl) throw new Error("uploadAttachment không trả về fileUrl");
             await api.sendVoice({ voiceUrl, ttl: 500_000 }, threadId, threadType);
+            logInfo("[AutoDown] sendVoice thành công.");
             return;
         } catch (e1) {
             logWarn(`[AutoDown] sendVoice thất bại: ${e1.message}`);
         }
 
-        // Fallback: gửi file audio thường
+        // ── Fallback: gửi file audio ──────────────────────────────────────────
         await api.sendMessage(
             { msg: caption, attachments: [aacPath], ttl: 500_000 },
             threadId, threadType

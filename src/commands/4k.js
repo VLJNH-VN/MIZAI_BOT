@@ -5,7 +5,7 @@ const path = require("path");
 
 const HF_TOKEN  = () => global?.config?.hfToken || process.env.HF_TOKEN || "";
 const SR_MODEL  = "caidas/swin2SR-realworld-sr-x4-64-bsrgan-psnr";
-const HF_API    = "https://router.huggingface.co/hf-inference/models";
+const HF_API    = "https://api-inference.huggingface.co/models";
 
 async function fetchImageBuffer(url) {
   const res = await global.axios.get(url, {

@@ -37,8 +37,9 @@ async function hfImage(prompt) {
     { inputs: prompt },
     {
       headers: {
-        Authorization : `Bearer ${getToken()}`,
-        "Content-Type": "application/json"
+        Authorization      : `Bearer ${getToken()}`,
+        "Content-Type"     : "application/json",
+        "x-wait-for-model" : "true"
       },
       responseType: "arraybuffer",
       timeout     : 120_000

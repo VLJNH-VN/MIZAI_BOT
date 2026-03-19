@@ -268,7 +268,7 @@ async function downloadAudio(streamUrl, outPath) {
 // ════════════════════════════════════════════════════════════════════════════════
 //  ẢNH AI — HuggingFace Inference API
 // ════════════════════════════════════════════════════════════════════════════════
-const HF_API_BASE = "https://api-inference.huggingface.co/models";
+const HF_API_BASE = "https://router.huggingface.co/hf-inference/models";
 
 const HF_MODELS = {
   flux:           { id: "stabilityai/stable-diffusion-xl-base-1.0",                  label: "SDXL",             w: 1024, h: 1024, steps: 40, cfg: 7.5 },

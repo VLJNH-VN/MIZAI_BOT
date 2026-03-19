@@ -85,26 +85,41 @@ function cleanupFiles(files, delay = 8000) {
     }, delay);
 }
 
-// ─── Lấy media info từ API ────────────────────────────────────────────────────
-async function getMediaInfo(url) {
-    const res  = await axios.get(`${API_MEDIA}?url=${encodeURIComponent(url)}`, { timeout: 90000 });
-    const raw  = res.data;
-    if (!raw || typeof raw !== "object") throw new Error("API không trả về dữ liệu hợp lệ");
+// ─── Lấy media info từ API (có retry) ────────────────────────────────────────
+async function getMediaInfo(url, retries = 2) {
+    let lastErr;
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const res = await axios.get(`${API_MEDIA}?url=${encodeURIComponent(url)}`, { timeout: 90000 });
+            const raw = res.data;
+            if (!raw || typeof raw !== "object") throw new Error("API không trả về dữ liệu hợp lệ");
 
-    const medias = [];
-    if (raw.download_url)       medias.push({ type: "video", url: raw.download_url });
-    if (raw.download_audio_url) medias.push({ type: "audio", url: raw.download_audio_url });
+            const medias = [];
+            if (raw.download_url)       medias.push({ type: "video", url: raw.download_url });
+            if (raw.download_audio_url) medias.push({ type: "audio", url: raw.download_audio_url });
 
-    if (medias.length === 0) throw new Error("API không trả về media hợp lệ");
+            if (medias.length === 0) throw new Error("API không trả về media hợp lệ");
 
-    return {
-        title:     raw.title     || "",
-        author:    raw.uploader  || raw.channel || "Unknown",
-        source:    (raw.platform || "").toLowerCase(),
-        thumbnail: raw.thumbnail || "",
-        duration:  raw.duration  || 0,
-        medias
-    };
+            return {
+                title:     raw.title     || "",
+                author:    raw.uploader  || raw.channel || "Unknown",
+                source:    (raw.platform || "").toLowerCase(),
+                thumbnail: raw.thumbnail || "",
+                duration:  raw.duration  || 0,
+                medias
+            };
+        } catch (err) {
+            lastErr = err;
+            const status = err?.response?.status;
+            // Chỉ retry khi lỗi 5xx (server-side)
+            if (status && status < 500) break;
+            if (attempt < retries) {
+                logWarn(`[AutoDown] Lần thử ${attempt} thất bại (${err.message}), thử lại...`);
+                await new Promise(r => setTimeout(r, 3000 * attempt));
+            }
+        }
+    }
+    throw lastErr;
 }
 
 // ─── Gửi audio ────────────────────────────────────────────────────────────────
@@ -352,7 +367,19 @@ function startAutoDown(api) {
             logWarn("[AutoDown] Không tìm được media phù hợp trong kết quả API.");
 
         } catch (err) {
+            const status = err?.response?.status;
             logWarn(`[AutoDown] Lỗi: ${err.message}`);
+            try {
+                let msg;
+                if (status === 500 || status === 502 || status === 503) {
+                    msg = `⚠️ AutoDown: Không thể tải media từ link này (máy chủ phản hồi lỗi ${status}). Vui lòng thử lại sau.`;
+                } else if (status === 404) {
+                    msg = `⚠️ AutoDown: Không tìm thấy media tại link này.`;
+                } else {
+                    msg = `⚠️ AutoDown: Không thể tải media — ${err.message}`;
+                }
+                await api.sendMessage({ msg, ttl: 300_000 }, threadId, threadType);
+            } catch {}
         }
     });
 }

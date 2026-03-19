@@ -42,6 +42,15 @@
  * │  global.checkGroqKey(key) → Promise<{ key, status: "live"|"dead" }>   │
  * │  global.setAutoCheck(boolean)  → void  Bật/tắt tự động check key      │
  * ├──────────────────────┬──────────────────────────────────────────────────┤
+ * │  global.githubUpload(localFilePath, repoFilePath, options?)            │
+ * │    → Promise<string>  download_url trên GitHub                         │
+ * │    options: { repo, branch, message }                                  │
+ * │    Mặc định dùng config.uploadRepo, config.branch                      │
+ * │  global.githubDownload(repoFilePath, localFilePath, options?)          │
+ * │    → Promise<string>  localFilePath đã lưu                             │
+ * │    options: { repo, branch }                                           │
+ * │    Mặc định dùng config.repo, config.branch                            │
+ * ├──────────────────────┬──────────────────────────────────────────────────┤
  * │  global.logInfo(msg)   │ [INFO]  xanh lá                               │
  * │  global.logWarn(msg)   │ [WARN]  vàng                                  │
  * │  global.logError(msg)  │ [ERROR] đỏ                                    │
@@ -155,5 +164,86 @@ function setApi(apiInstance) {
     return result;
   };
 }
+
+// ── GitHub Upload / Download ──────────────────────────────────────────────────
+/**
+ * global.githubUpload(localFilePath, repoFilePath, options?)
+ *   Upload file local lên GitHub (uploadRepo trong config).
+ *   @param {string} localFilePath  - Đường dẫn file local cần upload
+ *   @param {string} repoFilePath   - Đường dẫn đích trong repo (vd: "media/video.mp4")
+ *   @param {object} [options]      - { repo, branch, message }
+ *   @returns {Promise<string>}     - download_url của file trên GitHub
+ *
+ * global.githubDownload(repoFilePath, localFilePath, options?)
+ *   Download file từ GitHub (repo trong config) về local.
+ *   @param {string} repoFilePath   - Đường dẫn file trong repo (vd: "data/config.json")
+ *   @param {string} localFilePath  - Đường dẫn local để lưu file
+ *   @param {object} [options]      - { repo, branch }
+ *   @returns {Promise<string>}     - localFilePath đã lưu
+ */
+(function registerGithubHelpers() {
+  const fs   = require("fs");
+  const path = require("path");
+
+  global.githubUpload = async (localFilePath, repoFilePath, options = {}) => {
+    const token  = global.config?.githubToken;
+    const repo   = options.repo   || global.config?.uploadRepo || global.config?.repo;
+    const branch = options.branch || global.config?.branch || "main";
+
+    if (!token) throw new Error("[githubUpload] Thiếu githubToken trong config.json");
+    if (!repo)  throw new Error("[githubUpload] Thiếu repo/uploadRepo trong config.json");
+
+    const content = fs.readFileSync(localFilePath);
+    const base64  = content.toString("base64");
+    const apiUrl  = `https://api.github.com/repos/${repo}/contents/${repoFilePath}`;
+    const headers = {
+      Authorization: `token ${token}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "MIZAI_BOT"
+    };
+
+    // Lấy sha nếu file đã tồn tại (để update)
+    let sha;
+    try {
+      const existing = await axios.get(apiUrl, { headers, params: { ref: branch } });
+      sha = existing.data.sha;
+    } catch (_) { /* file chưa tồn tại → tạo mới */ }
+
+    const body = {
+      message: options.message || `upload: ${path.basename(repoFilePath)}`,
+      content: base64,
+      branch
+    };
+    if (sha) body.sha = sha;
+
+    const res = await axios.put(apiUrl, body, { headers });
+    return res.data?.content?.download_url || null;
+  };
+
+  global.githubDownload = async (repoFilePath, localFilePath, options = {}) => {
+    const token  = global.config?.githubToken;
+    const repo   = options.repo   || global.config?.repo;
+    const branch = options.branch || global.config?.branch || "main";
+
+    if (!token) throw new Error("[githubDownload] Thiếu githubToken trong config.json");
+    if (!repo)  throw new Error("[githubDownload] Thiếu repo trong config.json");
+
+    const apiUrl  = `https://api.github.com/repos/${repo}/contents/${repoFilePath}`;
+    const headers = {
+      Authorization: `token ${token}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "MIZAI_BOT"
+    };
+
+    const res = await axios.get(apiUrl, { headers, params: { ref: branch } });
+
+    const fileContent = Buffer.from(res.data.content, "base64");
+    const dir = path.dirname(localFilePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(localFilePath, fileContent);
+
+    return localFilePath;
+  };
+})();
 
 module.exports = { setApi };

@@ -34,15 +34,36 @@ async function sharpSharpen(inputBuf, level = "normal") {
 }
 
 async function hfUpscale(inputBuf) {
-  const url = `${HF_API}/${SR_MODEL}`;
-  const res  = await global.axios.post(url, inputBuf, {
-    headers: {
-      Authorization  : `Bearer ${HF_TOKEN()}`,
-      "Content-Type" : "application/octet-stream"
-    },
-    responseType: "arraybuffer",
-    timeout     : 120_000
-  });
+  const url    = `${HF_API}/${SR_MODEL}`;
+  const b64    = inputBuf.toString("base64");
+
+  const res = await global.axios.post(
+    url,
+    { inputs: b64 },
+    {
+      headers: {
+        Authorization : `Bearer ${HF_TOKEN()}`,
+        "Content-Type": "application/json"
+      },
+      responseType: "arraybuffer",
+      timeout     : 120_000,
+      validateStatus: (s) => s < 500
+    }
+  );
+
+  if (res.status !== 200) {
+    let errMsg = `HTTP ${res.status}`;
+    try {
+      const txt = Buffer.from(res.data).toString("utf8");
+      const obj = JSON.parse(txt);
+      errMsg = obj?.error || obj?.message || txt.slice(0, 120);
+    } catch (_) {}
+    throw new Error(errMsg);
+  }
+
+  if (!res.data || res.data.byteLength < 500) {
+    throw new Error("API trả về dữ liệu rỗng.");
+  }
   return Buffer.from(res.data);
 }
 

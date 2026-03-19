@@ -6,6 +6,21 @@
 const fs   = require("fs");
 const path = require("path");
 const { ThreadType } = require("zca-js");
+const { sendVideo, getVideoMeta, VIDEO_DIR } = require("../../utils/media/media");
+
+const VIDEO_EXTS = new Set([".mp4", ".mov", ".mkv", ".webm"]);
+
+function pickRandomVideo() {
+  try {
+    if (!fs.existsSync(VIDEO_DIR)) return null;
+    const files = fs.readdirSync(VIDEO_DIR).filter(f => {
+      const ext = path.extname(f).toLowerCase();
+      return VIDEO_EXTS.has(ext) && fs.statSync(path.join(VIDEO_DIR, f)).size > 0;
+    });
+    if (!files.length) return null;
+    return path.join(VIDEO_DIR, files[Math.floor(Math.random() * files.length)]);
+  } catch { return null; }
+}
 
 const CONFIG_FILE = path.join(process.cwd(), "includes", "data", "autoSend.json");
 const GROUPS_FILE = path.join(process.cwd(), "includes", "database", "groupsCache.json");
@@ -66,6 +81,17 @@ function startAutoSend(api) {
             threadId,
             ThreadType.Group
           );
+
+          const videoPath = pickRandomVideo();
+          if (videoPath) {
+            const meta = getVideoMeta(videoPath);
+            await sendVideo(api, videoPath, threadId, ThreadType.Group, {
+              width:    meta.width    || 1280,
+              height:   meta.height   || 720,
+              duration: meta.duration || 0,
+              msg:      "",
+            });
+          }
         } catch (err) {
           logWarn(`[AutoSend] Gửi thất bại tới ${threadId}: ${err?.message}`);
         }

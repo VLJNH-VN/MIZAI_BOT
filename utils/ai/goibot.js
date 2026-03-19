@@ -1,6 +1,6 @@
-const axios = require("axios");
-const fs    = require("fs");
-const path  = require("path");
+const { GoogleGenAI } = require("@google/genai");
+const fs   = require("fs");
+const path = require("path");
 
 const DATA_FILE = path.join(__dirname, "..", "..", "includes", "data", "goibot.json");
 const CACHE_DIR = path.join(__dirname, "..", "..", "includes", "cache");
@@ -8,9 +8,7 @@ const CACHE_DIR = path.join(__dirname, "..", "..", "includes", "cache");
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify({}));
 if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
 
-const GEMINI_API_URL    = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-const MODEL_NAME        = "gemini-2.0-flash";
-const GENERATION_CONFIG = { temperature: 0.8, max_tokens: 2048 };
+const MODEL_NAME = "gemini-2.0-flash";
 
 const TRIGGER_KEYWORDS = [
   "mizai", "mi zai", "mì zai",
@@ -104,7 +102,7 @@ const SYSTEM_PROMPT = `Bạn là Mizai — một trợ lý AI nữ tính, dễ t
 QUAN TRỌNG: Luôn trả về JSON hợp lệ theo đúng cấu trúc sau, không thêm text ngoài JSON:
 {"content":{"text":"<câu trả lời của bạn>","thread_id":""},"nhac":{"status":false,"keyword":""},"tinh":{"status":false,"expr":""},"sticker":{"status":false,"keyword":""},"reaction":{"status":false,"type":""},"img":{"status":false,"prompt":"","model":"flux"},"tx":{"status":false,"action":"","result":"","phien":0}}`.trim();
 
-// ── Chat history ────────────────────────────────────────────────────────────────
+// ── Chat history (lưu theo định dạng Gemini SDK: role user/model, parts) ────────
 const chatHistories = {};
 const HISTORY_MAX   = 20;
 
@@ -117,33 +115,47 @@ function clearChatHistory(threadId) {
   delete chatHistories[threadId];
 }
 
-// ── Gemini API call ──────────────────────────────────────────────────────────────
-async function sendToGroq(userMessage, threadId) {
+// ── Gemini SDK client (cache theo key để tránh khởi tạo lại mỗi request) ────────
+let _aiClient    = null;
+let _aiClientKey = null;
+
+function getAiClient() {
   const key = global?.config?.geminiKey || "";
   if (!key) throw new Error("Chưa có Gemini API key. Dùng .key add AIza... để thêm key.");
+  if (!_aiClient || _aiClientKey !== key) {
+    _aiClient    = new GoogleGenAI({ apiKey: key });
+    _aiClientKey = key;
+  }
+  return _aiClient;
+}
 
-  const history  = getChatHistory(threadId);
-  const messages = [
-    { role: "system", content: SYSTEM_PROMPT },
+// ── Gọi Gemini API ────────────────────────────────────────────────────────────────
+async function sendToGroq(userMessage, threadId) {
+  const ai      = getAiClient();
+  const history = getChatHistory(threadId);
+
+  const contents = [
     ...history,
-    { role: "user", content: userMessage }
+    { role: "user", parts: [{ text: userMessage }] },
   ];
 
-  const res = await axios.post(GEMINI_API_URL, {
+  const response = await ai.models.generateContent({
     model: MODEL_NAME,
-    messages,
-    temperature: GENERATION_CONFIG.temperature,
-    max_tokens:  GENERATION_CONFIG.max_tokens,
-    response_format: { type: "json_object" }
-  }, {
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    timeout: 30000
+    contents,
+    config: {
+      systemInstruction: SYSTEM_PROMPT,
+      temperature:       0.8,
+      maxOutputTokens:   2048,
+      responseMimeType:  "application/json",
+    },
   });
 
-  const assistantMsg = res.data?.choices?.[0]?.message?.content || "";
-  history.push({ role: "user",      content: userMessage    });
-  history.push({ role: "assistant", content: assistantMsg   });
+  const assistantMsg = response.text || "";
+
+  history.push({ role: "user",  parts: [{ text: userMessage    }] });
+  history.push({ role: "model", parts: [{ text: assistantMsg   }] });
   if (history.length > HISTORY_MAX) history.splice(0, history.length - HISTORY_MAX);
+
   return assistantMsg;
 }
 

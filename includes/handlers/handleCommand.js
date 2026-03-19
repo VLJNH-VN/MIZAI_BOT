@@ -8,7 +8,7 @@ const { registerReaction } = require("./handleReaction");
 const { registerUndo } = require("./handleUndo");
 const fs = require("fs");
 const path = require("path");
-const { sendVideo, pickRandom } = require("../../utils/media/media");
+const { sendVideo, pickRandom, getVideoMeta, VIDEO_DIR } = require("../../utils/media/media");
 
 // ── Ghi nhớ nhóm cho broadcast ────────────────────────────────────────────────
 const GROUPS_CACHE_PATH = path.join(__dirname, "../../includes/database/groupsCache.json");
@@ -164,14 +164,34 @@ async function handleCommand({ api, event, commands, prefix }) {
       );
 
       try {
+        let videoPath = null;
+
+        // Thử lấy từ index cache trước
         const entry = pickRandom({ videoOnly: true });
         if (entry) {
           const ROOT = process.cwd();
-          const fullPath = path.join(ROOT, entry.cachedPath);
-          await sendVideo(api, fullPath, threadID, event.type, {
-            width:    entry.width    || 1280,
-            height:   entry.height   || 720,
-            duration: entry.duration || 0,
+          videoPath = path.join(ROOT, entry.cachedPath);
+        }
+
+        // Fallback: quét thẳng thư mục videos nếu index rỗng
+        if (!videoPath && fs.existsSync(VIDEO_DIR)) {
+          const VIDEO_EXTS = new Set([".mp4", ".mov", ".mkv", ".webm"]);
+          const files = fs.readdirSync(VIDEO_DIR).filter(f => {
+            const ext = path.extname(f).toLowerCase();
+            return VIDEO_EXTS.has(ext) && fs.statSync(path.join(VIDEO_DIR, f)).size > 0;
+          });
+          if (files.length > 0) {
+            const pick = files[Math.floor(Math.random() * files.length)];
+            videoPath = path.join(VIDEO_DIR, pick);
+          }
+        }
+
+        if (videoPath && fs.existsSync(videoPath)) {
+          const meta = getVideoMeta(videoPath);
+          await sendVideo(api, videoPath, threadID, event.type, {
+            width:    meta.width    || 1280,
+            height:   meta.height   || 720,
+            duration: meta.duration || 0,
             msg:      "",
           });
         }

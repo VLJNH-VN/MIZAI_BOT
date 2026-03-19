@@ -179,7 +179,9 @@ async function resolveQuote({ raw, api, threadId, event }) {
 
 const ROOT_DIR       = path.join(__dirname, "../../");
 const inputJsonPath  = path.join(ROOT_DIR, "includes", "data", "gai.json");
-
+const cacheDir       = path.join(ROOT_DIR, "includes", "cache", "temp");
+const thumbDir       = path.join(ROOT_DIR, "includes", "cache", "thumbs");
+const outputJsonPath = path.join(ROOT_DIR, "includes", "data", "VideoCosplay.json");
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 

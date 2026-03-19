@@ -317,15 +317,32 @@ async function searchSoundCloud(query) {
   });
   const tracks = res.data.collection || [];
   const singles = tracks.filter(t => t.duration >= 60000 && t.duration <= 480000);
-  return (singles.length ? singles : tracks).map(t => ({
+  const pool = singles.length ? singles : tracks;
+  return pool.map(t => ({
     title: `${t.title} - ${t.user?.username || ""}`.trim(),
     url: t.permalink_url,
-    duration: Math.round(t.duration / 1000)
+    duration: Math.round(t.duration / 1000),
+    transcodings: t.media?.transcodings || [],
   }));
 }
 
-async function downloadAudio(url, outPath) {
-  const res = await axios.get(url, {
+async function getSCStreamUrl(transcodings, clientId) {
+  const progressive = transcodings.find(
+    tc => tc.format?.protocol === "progressive" && !tc.snip
+  ) || transcodings.find(tc => !tc.snip) || transcodings[0];
+  if (!progressive) throw new Error("Không có transcoding hợp lệ");
+  const res = await axios.get(progressive.url, {
+    params: { client_id: clientId },
+    timeout: 15000,
+    headers: { "User-Agent": "Mozilla/5.0" },
+  });
+  const streamUrl = res.data?.url;
+  if (!streamUrl) throw new Error("Không lấy được stream URL từ SoundCloud");
+  return streamUrl;
+}
+
+async function downloadAudio(streamUrl, outPath) {
+  const res = await axios.get(streamUrl, {
     responseType: "stream",
     timeout: 120000,
     headers: { "User-Agent": "Mozilla/5.0" }
@@ -419,7 +436,9 @@ async function handleGoibot({ api, event }) {
       }
       const filePath = path.join(CACHE_DIR, `${Date.now()}.mp3`);
       try {
-        await downloadAudio(track.url, filePath);
+        const clientId = await getSCClientId();
+        const streamUrl = await getSCStreamUrl(track.transcodings, clientId);
+        await downloadAudio(streamUrl, filePath);
         if (!fs.existsSync(filePath)) return send(`❌ Không tải được nhạc: ${keyword}`);
         const uploads = await api.uploadAttachment([filePath], threadId, event.type);
         if (!uploads?.[0]?.fileUrl) return send(`❌ Upload nhạc thất bại: ${keyword}`);

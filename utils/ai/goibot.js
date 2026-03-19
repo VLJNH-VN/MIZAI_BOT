@@ -2,7 +2,6 @@ const axios = require("axios");
 const fs    = require("fs");
 const path  = require("path");
 
-const KEY_FILE  = path.join(__dirname, "..", "..", "includes", "data", "key.json");
 const DATA_FILE = path.join(__dirname, "..", "..", "includes", "data", "goibot.json");
 const CACHE_DIR = path.join(__dirname, "..", "..", "includes", "cache");
 
@@ -104,20 +103,6 @@ const SYSTEM_PROMPT = `Bạn là Mizai — một trợ lý AI nữ tính, dễ t
 
 QUAN TRỌNG: Luôn trả về JSON hợp lệ theo đúng cấu trúc sau, không thêm text ngoài JSON:
 {"content":{"text":"<câu trả lời của bạn>","thread_id":""},"nhac":{"status":false,"keyword":""},"tinh":{"status":false,"expr":""},"sticker":{"status":false,"keyword":""},"reaction":{"status":false,"type":""},"img":{"status":false,"prompt":"","model":"flux"},"tx":{"status":false,"action":"","result":"","phien":0}}`.trim();
-
-// ── Key management ──────────────────────────────────────────────────────────────
-function getActiveKey() {
-  try {
-    const data = JSON.parse(fs.readFileSync(KEY_FILE, "utf-8"));
-    const noBalance = new Set(data.no_balance || []);
-    const dead      = new Set(data.dead || []);
-    const liveWithBalance = (data.live || []).filter(k => !noBalance.has(k) && !dead.has(k));
-    if (liveWithBalance.length) return liveWithBalance[0];
-    const fallbackKeys = (data.keys || []).filter(k => !noBalance.has(k) && !dead.has(k));
-    if (fallbackKeys.length) return fallbackKeys[0];
-  } catch {}
-  return "";
-}
 
 // ── Chat history ────────────────────────────────────────────────────────────────
 const chatHistories = {};

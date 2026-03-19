@@ -690,9 +690,9 @@ async function handleGoibot({ api, event }) {
     if (msgLower.includes("429") || msgLower.includes("rate_limit") || msgLower.includes("too many"))
       await send("⏳ Mizai bận quá, thử lại sau ít phút nhé.");
     else if (msgLower.includes("401") || msgLower.includes("invalid_api_key"))
-      await send("🔑 Groq API key không hợp lệ. Thêm key mới bằng .key add gsk_...");
-    else if (msgLower.includes("402") || msgLower.includes("quota"))
-      await send("💳 Groq key hết quota. Thêm key mới bằng .key add gsk_...");
+      await send("🔑 Gemini API key không hợp lệ. Cập nhật key mới bằng .key add AIza...");
+    else if (msgLower.includes("402") || msgLower.includes("quota") || msgLower.includes("resource_exhausted"))
+      await send("💳 Gemini key hết quota. Cập nhật key mới bằng .key add AIza...");
     else
       await send("❌ Lỗi Mizai AI: " + msg.slice(0, 120));
   } finally {

@@ -19,7 +19,7 @@ async function logToConsole({ api, event }) {
     threadName = await resolveGroupName({ api, groupId: threadId, fallbackName: raw?.thread?.name });
   }
 
-  let content = extractBody(raw).slice(0, 120).replace(/\n/g, " ").trim();
+  let content = extractBody(raw).replace(/(\.(key|token)\s+\S+\s+)(\S{6})\S+(\S{4})/gi, "$1$3...$4").slice(0, 120).replace(/\n/g, " ").trim();
   if (!content && raw.content && typeof raw.content === "object") {
     const c = raw.content;
     const extra = c.url || c.normalUrl || c.href || c.fileUrl || c.title || c.action || "";

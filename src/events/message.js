@@ -196,7 +196,8 @@ async function handleMessage(params) {
   // ── Log lệnh đến (luôn hiện senderId để debug quyền admin) ────────────────
   const body = extractBody(raw);
   if (body.startsWith(prefix)) {
-    logInfo(`[CMD] senderId=${senderId} | isAdmin=${isAdmin} | cmd=${body.slice(0, 80)}`);
+    const safeCmd = body.replace(/(\.(key|token)\s+\S+\s+)(\S{6})\S+(\S{4})/gi, "$1$3...$4").slice(0, 80);
+    logInfo(`[CMD] senderId=${senderId} | isAdmin=${isAdmin} | cmd=${safeCmd}`);
   }
 
   // ── Lắng nghe onMessage của các command ───────────────────────────────────

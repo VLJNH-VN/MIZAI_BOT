@@ -74,7 +74,7 @@ function buildFolderListing(dir) {
   return { txt, array };
 }
 
-/** Nén nhiều file/folder thành buffer zip rồi upload lên catbox.moe */
+/** Nén nhiều file/folder thành stream zip */
 function zipToStream(srcPaths) {
   const archive = archiver("zip", { zlib: { level: 9 } });
 
@@ -88,16 +88,10 @@ function zipToStream(srcPaths) {
   return archive;
 }
 
+/** Upload zip stream lên 0x0.st (thay catbox.moe bị chặn) */
 async function catboxUpload(stream) {
-  const fd = new FormData();
-  fd.append("reqtype", "fileupload");
-  fd.append("fileToUpload", stream, { filename: "archive.zip" });
-  const res = await axios.post("https://catbox.moe/user/api.php", fd, {
-    headers: fd.getHeaders(),
-    responseType: "text",
-    timeout: 60000
-  });
-  return res.data.trim();
+  const { uploadFile } = require("../../utils/media/uploadImg");
+  return uploadFile(stream, "archive.zip");
 }
 
 /** Upload nội dung text lên pastebin tạm */
@@ -347,7 +341,7 @@ module.exports = {
           break;
         }
 
-        // ── Zip và upload lên catbox.moe ─────────────────────────────────────
+        // ── Zip và upload lên 0x0.st ─────────────────────────────────────────
         case "zip": {
           const indices = parts.slice(1);
           if (indices.length === 0) return send("❌ Nhập số thứ tự cần nén. Ví dụ: zip 1 3");

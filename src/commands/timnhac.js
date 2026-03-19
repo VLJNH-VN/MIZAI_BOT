@@ -78,21 +78,10 @@ async function downloadBuffer(url) {
   return Buffer.from(res.data);
 }
 
-// ── Upload buffer lên Catbox.moe ─────────────────────────────────────────────
-async function uploadToCatbox(buffer, filename = "audio.mp3") {
-  const form = new FormData();
-  form.append("reqtype", "fileupload");
-  form.append("fileToUpload", buffer, { filename });
-
-  const res = await axios.post("https://catbox.moe/user/api.php", form, {
-    headers: form.getHeaders(),
-    timeout: 60000,
-    responseType: "text",
-  });
-
-  const link = (res.data || "").trim();
-  if (!link.startsWith("http")) throw new Error("Catbox trả về không hợp lệ: " + link);
-  return link;
+// ── Upload buffer lên 0x0.st (thay catbox.moe bị chặn) ───────────────────────
+async function uploadAudioPublic(buffer, filename = "audio.mp3") {
+  const { uploadFile } = require("../../utils/media/uploadImg");
+  return uploadFile(buffer, filename);
 }
 
 // ── Nhận diện qua audd.io ────────────────────────────────────────────────────
@@ -184,11 +173,11 @@ module.exports = {
           "💡 Thử cung cấp link trực tiếp: .timnhac <url>");
       }
 
-      // ── Bước 3: Upload lên Catbox.moe ───────────────────────────────────────
+      // ── Bước 3: Upload lên host công khai (0x0.st) ───────────────────────────
       let publicUrl;
       try {
-        publicUrl = await uploadToCatbox(buffer, `audio.${ext}`);
-        logInfo?.(`[timnhac] Catbox OK: ${publicUrl}`);
+        publicUrl = await uploadAudioPublic(buffer, `audio.${ext}`);
+        logInfo?.(`[timnhac] Upload OK: ${publicUrl}`);
       } catch (err) {
         return send("❌ Upload lên server thất bại:\n" + (err?.message || err));
       }

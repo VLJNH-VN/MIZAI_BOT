@@ -1,7 +1,5 @@
-const fs       = require("fs");
-const path     = require("path");
-const FormData = require("form-data");
-const { execSync } = require("child_process");
+const fs   = require("fs");
+const path = require("path");
 
 const {
   readLinks,
@@ -46,37 +44,6 @@ async function downloadVideo(url, outPath) {
     headers: { "User-Agent": "Mozilla/5.0" },
   });
   fs.writeFileSync(outPath, Buffer.from(res.data));
-}
-
-// ── Extract thumbnail + upload Catbox (fallback) ──────────────────────────────
-async function extractAndUploadThumb(videoPath) {
-  const thumbPath = path.join(tempDir, `thumb_${Date.now()}.jpg`);
-  try {
-    execSync(
-      `ffmpeg -y -i "${videoPath}" -ss 0 -vframes 1 -q:v 5 "${thumbPath}"`,
-      { stdio: "pipe", timeout: 15000 }
-    );
-    if (!fs.existsSync(thumbPath)) return "";
-
-    const form = new FormData();
-    form.append("reqtype", "fileupload");
-    form.append("fileToUpload", fs.createReadStream(thumbPath), {
-      filename: path.basename(thumbPath),
-      contentType: "image/jpeg",
-    });
-
-    const res = await global.axios.post("https://catbox.moe/user/api.php", form, {
-      headers: form.getHeaders(),
-      timeout: 20000,
-    });
-
-    const url = typeof res.data === "string" ? res.data.trim() : "";
-    return url.startsWith("https://") ? url : "";
-  } catch {
-    return "";
-  } finally {
-    try { if (fs.existsSync(thumbPath)) fs.unlinkSync(thumbPath); } catch {}
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

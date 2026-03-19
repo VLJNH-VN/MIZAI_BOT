@@ -15,10 +15,8 @@
 
 const fs   = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
-const FormData = require("form-data");
 
-const { loadIndex, pickRandom, processAll, VIDEO_DIR } = require("../../utils/media/media");
+const { loadIndex, pickRandom, processAll, sendVideo, VIDEO_DIR } = require("../../utils/media/media");
 
 const ROOT      = process.cwd();
 const TEMP_DIR  = path.join(ROOT, "includes", "cache", "temp");
@@ -28,64 +26,7 @@ const THUMB_DIR = path.join(ROOT, "includes", "cache", "thumbs");
 let _decoding = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Upload thumbnail lên Catbox → URL công khai (cho Zalo sendVideo)
-// ─────────────────────────────────────────────────────────────────────────────
-async function uploadThumb(thumbName) {
-  if (!thumbName) return "";
-  const thumbPath = path.join(THUMB_DIR, thumbName);
-  if (!fs.existsSync(thumbPath)) return "";
-
-  try {
-    const form = new FormData();
-    form.append("reqtype", "fileupload");
-    form.append("fileToUpload", fs.createReadStream(thumbPath), {
-      filename: "thumb.jpg",
-      contentType: "image/jpeg",
-    });
-    const res = await global.axios.post("https://catbox.moe/user/api.php", form, {
-      headers: form.getHeaders(),
-      timeout: 20000,
-    });
-    const url = typeof res.data === "string" ? res.data.trim() : "";
-    return url.startsWith("https://") ? url : "";
-  } catch (_) {
-    return "";
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Extract thumbnail trực tiếp từ video (fallback khi không có .bin)
-// ─────────────────────────────────────────────────────────────────────────────
-async function extractThumbFromVideo(videoPath) {
-  const tmpPath = path.join(TEMP_DIR, `thumb_datat_${Date.now()}.jpg`);
-  try {
-    execSync(
-      `ffmpeg -y -i "${videoPath}" -ss 0 -vframes 1 -q:v 5 "${tmpPath}"`,
-      { stdio: "pipe", timeout: 15000 }
-    );
-    if (!fs.existsSync(tmpPath)) return "";
-
-    const form = new FormData();
-    form.append("reqtype", "fileupload");
-    form.append("fileToUpload", fs.createReadStream(tmpPath), {
-      filename: "thumb.jpg",
-      contentType: "image/jpeg",
-    });
-    const res = await global.axios.post("https://catbox.moe/user/api.php", form, {
-      headers: form.getHeaders(),
-      timeout: 20000,
-    });
-    const url = typeof res.data === "string" ? res.data.trim() : "";
-    return url.startsWith("https://") ? url : "";
-  } catch (_) {
-    return "";
-  } finally {
-    try { fs.unlinkSync(tmpPath); } catch (_) {}
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Gửi video từ cached file lên Zalo
+// Gửi video từ cached file lên Zalo (thumbnail tự upload qua Zalo CDN)
 // ─────────────────────────────────────────────────────────────────────────────
 async function sendCachedVideo(api, entry, threadID, type) {
   const fullPath = path.join(ROOT, entry.cachedPath);
@@ -94,37 +35,12 @@ async function sendCachedVideo(api, entry, threadID, type) {
     throw new Error(`File cache không tồn tại hoặc rỗng: ${entry.cachedPath}`);
   }
 
-  // Upload lên Zalo CDN
-  const uploads = await global.upload(fullPath, threadID, type);
-  if (!uploads || !uploads[0]?.fileUrl) {
-    throw new Error("Upload không trả về fileUrl");
-  }
-
-  const { fileUrl, fileName, totalSize } = uploads[0];
-  const videoUrl = fileName ? `${fileUrl}/${fileName}` : fileUrl;
-
-  // Lấy thumbnail
-  let thumbUrl = "";
-  if (entry.thumbnail) {
-    thumbUrl = await uploadThumb(entry.thumbnail);
-  }
-  if (!thumbUrl) {
-    thumbUrl = await extractThumbFromVideo(fullPath);
-  }
-
-  await api.sendVideo(
-    {
-      videoUrl,
-      thumbnailUrl: thumbUrl,
-      duration:     (entry.duration || 0) * 1000,
-      width:        entry.width    || 1280,
-      height:       entry.height   || 720,
-      msg:          "",
-      fileSize:     totalSize || 0,
-    },
-    threadID,
-    type
-  );
+  await sendVideo(api, fullPath, threadID, type, {
+    width:    entry.width    || 1280,
+    height:   entry.height   || 720,
+    duration: entry.duration || 0,
+    msg:      "",
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

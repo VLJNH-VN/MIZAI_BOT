@@ -130,22 +130,27 @@ module.exports = {
 
       // Tải avatar + cover
       const avatarUrl = `https://graph.facebook.com/${uid}/picture?width=1500&height=1500&access_token=1174099472704185|0722a7d5b5a4ac06b11450f7114eb2e9`;
+      const os  = require("os");
+      const fsp = require("fs").promises;
 
-      let attachments = [];
+      const tmpFiles = [];
       for (const u of [avatarUrl, cover]) {
+        if (!u || u === "No Cover") continue;
         try {
-          const s = (await global.axios.get(u, { responseType: "stream", timeout: 15000 })).data;
-          s.path  = "tmp.jpg";
-          attachments.push(s);
-        } catch { attachments.push(null); }
+          const res = await global.axios.get(u, { responseType: "arraybuffer", timeout: 15000 });
+          const tmp = require("path").join(os.tmpdir(), `info_${Date.now()}_${tmpFiles.length}.jpg`);
+          await fsp.writeFile(tmp, Buffer.from(res.data));
+          tmpFiles.push(tmp);
+        } catch { /* bỏ qua ảnh lỗi */ }
       }
-      attachments = attachments.filter(Boolean);
 
       const sent  = await api.sendMessage(
-        { msg, attachments: attachments.length ? attachments : undefined },
+        { msg, attachments: tmpFiles.length ? tmpFiles : undefined },
         threadID,
         event.type
       );
+
+      for (const f of tmpFiles) { try { require("fs").unlinkSync(f); } catch {} }
       const msgId = sent?.message?.msgId ?? sent?.msgId;
       if (msgId) {
         registerReaction({

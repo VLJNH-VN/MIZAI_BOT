@@ -2,8 +2,9 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 
-const KEY_FILE = path.join(__dirname, "..", "..", "includes", "data", "key.json");
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const KEY_FILE    = path.join(__dirname, "..", "..", "includes", "data", "key.json");
+const CONFIG_FILE = path.join(__dirname, "..", "..", "config.json");
+const GROQ_URL    = "https://api.groq.com/openai/v1/chat/completions";
 
 async function checkOneKey(key) {
   if (global.checkGroqKey) return global.checkGroqKey(key);
@@ -54,7 +55,7 @@ module.exports = {
     version: "2.0.0",
     hasPermssion: 2,
     credits: "Bot",
-    description: "Quản lý Groq API key: thêm, xoá, danh sách, kiểm tra",
+    description: "Quản lý API key: Groq (gsk_...) và DeepSeek (sk-...)",
     commandCategory: "Admin",
     usages: [
       ".key add <key>       — Thêm key",
@@ -77,8 +78,23 @@ module.exports = {
     // ── Thêm key ──────────────────────────────────────────────────────────────
     if (sub === "add") {
       const newKey = args[1]?.trim();
-      if (!newKey) return send("⚠️ Vui lòng nhập Groq API key.\nVD: .key add gsk_...");
-      if (!newKey.startsWith("gsk_")) return send("⚠️ Groq key phải bắt đầu bằng gsk_...");
+      if (!newKey) return send("⚠️ Vui lòng nhập API key.\nVD: .key add gsk_... (Groq)\n    .key add sk-... (DeepSeek)");
+
+      // DeepSeek key (sk-...)
+      if (newKey.startsWith("sk-")) {
+        try {
+          const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+          cfg.deepseekKey = newKey;
+          fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf-8");
+          if (global.config) global.config.deepseekKey = newKey;
+          const short = `${newKey.slice(0, 6)}...${newKey.slice(-4)}`;
+          return send(`✅ Đã cập nhật DeepSeek key: ${short}`);
+        } catch (e) {
+          return send(`❌ Lỗi lưu key: ${e.message}`);
+        }
+      }
+
+      if (!newKey.startsWith("gsk_")) return send("⚠️ Key không hợp lệ.\nGroq key bắt đầu bằng gsk_...\nDeepSeek key bắt đầu bằng sk-...");
 
       const data = loadData();
       if (data.keys.includes(newKey)) return send("⚠️ Key này đã tồn tại.");
@@ -90,7 +106,7 @@ module.exports = {
       saveData(data);
 
       const short = `${newKey.slice(0, 8)}...${newKey.slice(-4)}`;
-      return send(`✅ Đã thêm key: ${short}\n📦 Tổng: ${data.keys.length} key`);
+      return send(`✅ Đã thêm Groq key: ${short}\n📦 Tổng: ${data.keys.length} key`);
     }
 
     // ── Xoá key ───────────────────────────────────────────────────────────────
@@ -196,17 +212,22 @@ module.exports = {
     // ── Hướng dẫn ─────────────────────────────────────────────────────────────
     const data = loadData();
     const liveCount = (data.live || []).length;
+    let dsKey = "";
+    try { dsKey = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8")).deepseekKey || ""; } catch {}
+    const dsShort = dsKey ? `${dsKey.slice(0, 6)}...${dsKey.slice(-4)}` : "(chưa có)";
     return send(
-      `🔑 Quản lý Groq API Key\n` +
+      `🔑 Quản lý API Key\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `.key add <key>    — Thêm key (gsk_...)\n` +
-      `.key del <key|số> — Xoá key\n` +
-      `.key list         — Danh sách key\n` +
-      `.key check        — Check tất cả key\n` +
-      `.key check <key>  — Check 1 key\n` +
+      `.key add <key>    — Thêm key\n` +
+      `  gsk_... → Groq | sk-... → DeepSeek\n` +
+      `.key del <key|số> — Xoá Groq key\n` +
+      `.key list         — Danh sách Groq key\n` +
+      `.key check        — Check tất cả Groq key\n` +
+      `.key check <key>  — Check 1 Groq key\n` +
       `.key autocheck    — Bật/tắt auto check\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `📦 Tổng: ${data.keys.length} | ✅ Live: ${liveCount}\n` +
+      `🤖 DeepSeek: ${dsShort}\n` +
+      `📦 Groq tổng: ${data.keys.length} | ✅ Live: ${liveCount}\n` +
       `🔄 Auto check: ${data.autoCheck ? "✅ Bật" : "❌ Tắt"}`
     );
   }

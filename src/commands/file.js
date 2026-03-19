@@ -87,12 +87,6 @@ function zipToStream(srcPaths) {
   return archive;
 }
 
-/** Upload zip stream lên GitHub */
-async function catboxUpload(stream) {
-  const { uploadToGithub } = require("../../utils/media/githubMedia");
-  return uploadToGithub(stream, "archive.zip", { folder: "media/files" });
-}
-
 /** Upload nội dung text lên dpaste.com */
 async function pastebinUpload(text) {
   try {
@@ -126,7 +120,6 @@ module.exports = {
     convertBytes,
     sizeFolder,
     zipToStream,
-    catboxUpload,
     pastebinUpload,
     extractBody,
     TMP_DIR,
@@ -337,29 +330,6 @@ module.exports = {
           break;
         }
 
-        // ── Zip và upload lên 0x0.st ─────────────────────────────────────────
-        case "zip": {
-          const indices = parts.slice(1);
-          if (indices.length === 0) return send("❌ Nhập số thứ tự cần nén. Ví dụ: zip 1 3");
-
-          const srcPaths = indices
-            .map(i => getItem(i)?.dest)
-            .filter(Boolean);
-
-          if (srcPaths.length === 0) return send("❌ Không tìm thấy mục nào hợp lệ.");
-
-          send(`⏳ Đang nén ${srcPaths.length} mục và upload...`);
-
-          try {
-            const zipStream = zipToStream(srcPaths);
-            const link = await catboxUpload(zipStream);
-            send(`✅ Upload xong!\n🔗 Link: ${link}`);
-          } catch (err) {
-            send(`❌ Lỗi khi zip/upload:\n${err.message}`);
-          }
-          break;
-        }
-
         // ── Lệnh không hợp lệ ────────────────────────────────────────────────
         default:
           send(
@@ -371,8 +341,7 @@ module.exports = {
             "  send <stt>            — Upload file lên pastebin\n" +
             "  create <tên> [text]   — Tạo file/folder\n" +
             "  copy <stt>            — Sao chép file\n" +
-            "  rename <stt> <tên>    — Đổi tên\n" +
-            "  zip <stt> [stt...]    — Nén và upload"
+            "  rename <stt> <tên>    — Đổi tên"
           );
       }
     } catch (err) {

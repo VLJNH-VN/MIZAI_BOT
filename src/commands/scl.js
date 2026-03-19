@@ -148,7 +148,7 @@ module.exports = {
     version:         "3.0.0",
     hasPermssion:    0,
     credits:         "MiZai",
-    description:     "Tìm & tải nhạc SoundCloud → GitHub → sendVoice",
+    description:     "Tìm & tải nhạc SoundCloud → gửi file đính kèm",
     commandCategory: "Giải Trí",
     usages:          "<từ khóa>",
     cooldowns:       5,
@@ -234,34 +234,26 @@ module.exports = {
 
     global.logInfo?.(`[scl] downloaded ${(audioBuf.length / 1024).toFixed(0)} KB`);
 
-    // 3. Upload lên GitHub → rawUrl công khai
-    let rawUrl;
-    try {
-      const fileName = `scl_${t.id}_${Date.now()}.mp3`;
-      rawUrl = await global.uploadImage(audioBuf, fileName);
-    } catch (err) {
-      global.logError?.(`[scl] github upload: ${err?.message || err}`);
-      return send("❌ Lỗi upload GitHub: " + err.message);
-    }
+    // 3. Lưu buffer ra file tạm rồi gửi đính kèm
+    const tmpDir  = path.join(process.cwd(), "includes", "cache");
+    const tmpFile = path.join(tmpDir, `scl_${t.id}_${Date.now()}.mp3`);
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    fs.writeFileSync(tmpFile, audioBuf);
 
-    global.logInfo?.(`[scl] github rawUrl: ${rawUrl}`);
-
-    // 4. Gửi voice bằng rawUrl GitHub
     try {
-      await api.sendVoice(
-        { voiceUrl: rawUrl, ttl: 0 },
+      await api.sendMessage(
+        {
+          msg: `✅ Download SoundCloud\n📝 ${t.title}\n👤 ${t.fullName}\n⏳ ${fmtDuration(t.duration)} · ▶️ ${fmtNum(t.plays)} · ❤️ ${fmtNum(t.likes)}`,
+          attachments: [tmpFile],
+        },
         event.threadId,
         event.type
       );
-      await send(
-        `✅ Download SoundCloud\n` +
-        `📝 ${t.title}\n` +
-        `👤 ${t.fullName}\n` +
-        `⏳ ${fmtDuration(t.duration)} · ▶️ ${fmtNum(t.plays)} · ❤️ ${fmtNum(t.likes)}`
-      );
     } catch (err) {
-      global.logError?.(`[scl] sendVoice: ${err?.message || err}`);
+      global.logError?.(`[scl] sendMessage: ${err?.message || err}`);
       return send("❌ Lỗi gửi audio: " + err.message);
+    } finally {
+      try { fs.unlinkSync(tmpFile); } catch (_) {}
     }
   },
 };

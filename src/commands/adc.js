@@ -8,7 +8,7 @@ module.exports = {
     version: "3.1.0",
     hasPermssion: 2,
     credits: "Ljzi",
-    description: "Share / tải / tạo command mọi lệnh qua GitHub Gist, reload ngay",
+    description: "Tải / tạo command từ link hoặc reply code, reload ngay",
     commandCategory: "Admin",
     usages: ".adc <tenlenh> [link] hoặc reply code",
     cooldowns: 0
@@ -61,39 +61,7 @@ module.exports = {
       }
     }
 
-    // 3. Share command qua GitHub Gist
+    // 3. Kiểm tra lệnh tồn tại
     if (!fs.existsSync(filePath)) return send("❎ Lệnh không tồn tại. Hãy reply code hoặc nhập link để cài.");
-
-    try {
-      const code = fs.readFileSync(filePath, "utf8");
-      const token = global.config.githubToken;
-      if (!token) return send("❌ Chưa cấu hình githubToken trong config.json");
-
-      const res = await axios.post(
-        "https://api.github.com/gists",
-        {
-          description: `Command ${name}`,
-          public: true,
-          files: {
-            [`${name}.js`]: { content: code }
-          }
-        },
-        {
-          headers: {
-            Authorization: `token ${token}`,
-            "User-Agent": global.userAgent,
-            Accept: "application/vnd.github+json"
-          }
-        }
-      );
-
-      const raw = res.data.files[`${name}.js`].raw_url;
-
-      return send(
-        `📤 Share command thành công\n\n📄 ${name}.js\n🔗 Raw URL: ${raw}`
-      );
-    } catch (err) {
-      return send(`⚠️ Lỗi tạo Gist:\n${err.response?.data?.message || err.message}`);
-    }
   }
 };

@@ -181,32 +181,6 @@ module.exports = {
     cooldowns: 5,
   },
 
-  // ── onLoad ───────────────────────────────────────────────────────────────
-  onLoad: async ({ api, commands }) => {
-    try {
-      const ownerId = global.config?.ownerId;
-      if (!ownerId) return;
-
-      const total   = new Set([...commands.values()]).size;
-      const names   = [...new Set([...commands.values()])]
-        .map(c => c.config?.name)
-        .filter(Boolean)
-        .sort()
-        .join(", ");
-
-      const msg =
-        `✅ Bot đã load xong tất cả lệnh!\n` +
-        `━━━━━━━━━━━━━━━━\n` +
-        `📦 Tổng lệnh: ${total}\n` +
-        `📋 Danh sách: ${names}\n` +
-        `━━━━━━━━━━━━━━━━\n` +
-        `🕒 ${new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`;
-
-      await api.sendMessage({ msg }, ownerId, ThreadType.User);
-    } catch (err) {
-      global.logError?.(`[api onLoad] ${err?.message || err}`);
-    }
-  },
 
   // ── run ───────────────────────────────────────────────────────────────────
   run: async ({ api, event, args, send, threadID, registerReply, registerReaction }) => {
@@ -250,7 +224,7 @@ module.exports = {
           ? ctx.attach
           : [{ url: ctx.mediaUrl, ext: ctx.ext }];
 
-        await send(`⏳ Đang mã hóa và upload ${attachments.length} file lên GitHub...`);
+        //await send(`⏳ Đang mã hóa và upload ${attachments.length} file lên GitHub...`);
 
         const kho  = readKho(khoName);
         let added  = 0;
@@ -311,7 +285,7 @@ module.exports = {
           );
         }
 
-        await send(`📋 Tìm thấy ${mediaUrls.length} URL media. Đang tải & mã hóa từng file...`);
+        await send(`📋 Tìm thấy ${mediaUrls.length} URL media. Đang tải.`);
 
         const kho = readKho(khoName);
         let added = 0, failed = 0;

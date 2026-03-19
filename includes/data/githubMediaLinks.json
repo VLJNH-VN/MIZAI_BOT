@@ -378,5 +378,25 @@
     "branch": "main",
     "uploadedAt": "2026-03-18T23:56:15.478Z",
     "ext": ".jpeg"
+  },
+  "nhac_1773879889365": {
+    "rawUrl": "https://raw.githubusercontent.com/VLJNH-VN/UPLOAD_MIZAI/main/media/nhac/api_1773879888565.aac",
+    "apiUrl": "https://api.github.com/repos/VLJNH-VN/UPLOAD_MIZAI/contents/media/nhac/api_1773879888565.aac?ref=main",
+    "ghPath": "media/nhac/api_1773879888565.aac",
+    "owner": "VLJNH-VN",
+    "repo": "UPLOAD_MIZAI",
+    "branch": "main",
+    "uploadedAt": "2026-03-19T00:24:51.158Z",
+    "ext": ".aac"
+  },
+  "gai_1773880094256": {
+    "rawUrl": "https://raw.githubusercontent.com/VLJNH-VN/UPLOAD_MIZAI/main/media/gai/api_1773880093077.jpg",
+    "apiUrl": "https://api.github.com/repos/VLJNH-VN/UPLOAD_MIZAI/contents/media/gai/api_1773880093077.jpg?ref=main",
+    "ghPath": "media/gai/api_1773880093077.jpg",
+    "owner": "VLJNH-VN",
+    "repo": "UPLOAD_MIZAI",
+    "branch": "main",
+    "uploadedAt": "2026-03-19T00:28:16.695Z",
+    "ext": ".jpg"
   }
 }

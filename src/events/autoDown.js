@@ -25,17 +25,97 @@ const SETTINGS_FILE = path.join(process.cwd(), "includes", "data", "auto.json");
 
 const API_BASE = "https://yt-dlp-hwys.onrender.com";
 
+// Chỉ match URL pattern mà yt-dlp thực sự hỗ trợ (tránh 500 từ domain chung)
 const SUPPORTED_LINKS = [
-    /tiktok\.com/, /douyin\.com/, /capcut\.com/, /threads\.com/, /threads\.net/,
-    /instagram\.com/, /facebook\.com/, /espn\.com/, /pinterest\.com/, /imdb\.com/,
-    /imgur\.com/, /ifunny\.co/, /izlesene\.com/, /reddit\.com/, /youtube\.com/,
-    /youtu\.be/, /twitter\.com/, /x\.com/, /vimeo\.com/, /snapchat\.com/,
-    /bilibili\.com/, /dailymotion\.com/, /sharechat\.com/, /likee\.video/,
-    /linkedin\.com/, /tumblr\.com/, /hipi\.co\.in/, /telegram\.org/,
-    /getstickerpack\.com/, /bitchute\.com/, /febspot\.com/, /9gag\.com/,
-    /ok\.ru/, /rumble\.com/, /streamable\.com/, /ted\.com/, /sohu\.com/,
-    /xiaohongshu\.com/, /ixigua\.com/, /weibo\.com/, /vk\.com/, /vk\.ru/,
-    /soundcloud\.com/, /mixcloud\.com/, /spotify\.com/, /zingmp3\.vn/, /bandcamp\.com/
+    // TikTok — tất cả dạng link (rút gọn, vm., vt., www.)
+    /(?:vm\.|vt\.|www\.)?tiktok\.com/,
+    /douyin\.com/,
+    /capcut\.com/,
+
+    // YouTube
+    /youtube\.com\/(?:watch|shorts|live|embed)\b/,
+    /youtu\.be\//,
+
+    // Facebook — chỉ video/watch/reel, KHÔNG share/r/
+    /facebook\.com\/(?:watch|reel|video)\b/,
+    /facebook\.com\/[\w.]+\/(?:videos|reels)\//,
+    /facebook\.com\/share\/v\//,      // share video (khác share/r/)
+    /fb\.watch\//,
+
+    // Instagram — chỉ reel/post/tv
+    /instagram\.com\/(?:reel|p|tv)\//,
+
+    // Twitter / X — chỉ tweet có status
+    /(?:twitter|x)\.com\/\w+\/status\//,
+
+    // Threads
+    /threads\.(?:com|net)\/\w/,
+
+    // Reddit — video post
+    /reddit\.com\/r\/\w+\/comments\//,
+    /v\.redd\.it\//,
+
+    // Vimeo
+    /vimeo\.com\/\d+/,
+
+    // Snapchat — spotlight/story
+    /snapchat\.com\/(?:spotlight|add|p)\//,
+
+    // Bilibili
+    /bilibili\.com\/video\//,
+    /b23\.tv\//,
+
+    // Dailymotion
+    /dailymotion\.com\/video\//,
+
+    // Likee
+    /likee\.video\//,
+
+    // LinkedIn — posts
+    /linkedin\.com\/(?:posts|feed\/update)\//,
+
+    // VK — video
+    /vk\.(?:com|ru)\/video/,
+
+    // OK.ru — video
+    /ok\.ru\/video/,
+
+    // Rumble
+    /rumble\.com\/[a-z0-9]/,
+
+    // Streamable
+    /streamable\.com\/[a-z0-9]/,
+
+    // 9GAG
+    /9gag\.com\/gag\//,
+
+    // TED Talks
+    /ted\.com\/talks\//,
+
+    // Tumblr — post
+    /tumblr\.com\/\w/,
+
+    // SoundCloud
+    /soundcloud\.com\/[\w-]+\/[\w-]+/,
+
+    // Spotify
+    /open\.spotify\.com\/(?:track|episode|show|album|playlist)\//,
+
+    // ZingMP3
+    /zingmp3\.vn\//,
+
+    // Mixcloud
+    /mixcloud\.com\/[\w-]+\/[\w-]+/,
+
+    // Bandcamp
+    /bandcamp\.com\/track\//,
+
+    // Ixigua (ByteDance)
+    /ixigua\.com\/\d/,
+
+    // Weibo
+    /weibo\.com\/\d/,
+    /weibo\.cn\/\d/,
 ];
 
 const AUDIO_ONLY_SOURCES = new Set([

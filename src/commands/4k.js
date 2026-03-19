@@ -34,19 +34,18 @@ async function sharpSharpen(inputBuf, level = "normal") {
 }
 
 async function hfUpscale(inputBuf) {
-  const url    = `${HF_API}/${SR_MODEL}`;
-  const b64    = inputBuf.toString("base64");
+  const url = `${HF_API}/${SR_MODEL}`;
 
   const res = await global.axios.post(
     url,
-    { inputs: b64 },
+    inputBuf,
     {
       headers: {
         Authorization : `Bearer ${HF_TOKEN()}`,
-        "Content-Type": "application/json"
+        "Content-Type": "image/jpeg"
       },
-      responseType: "arraybuffer",
-      timeout     : 120_000,
+      responseType  : "arraybuffer",
+      timeout       : 120_000,
       validateStatus: (s) => s < 500
     }
   );

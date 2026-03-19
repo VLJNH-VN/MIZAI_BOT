@@ -91,7 +91,7 @@ async function checkPermission({ permLevel, senderId, event, threadID, send, api
 
 // ── Cooldown check ─────────────────────────────────────────────────────────────
 // canonicalName: tên gốc của command (cfg.name), không phải alias
-// Đảm bảo .code và .macode (alias) chia sẻ cùng cooldown
+// Đảm bảo alias chia sẻ cùng cooldown với lệnh gốc
 async function checkCooldown({ canonicalName, senderId, cooldownSec, send }) {
   if (!Number.isFinite(cooldownSec) || cooldownSec <= 0) return true;
 

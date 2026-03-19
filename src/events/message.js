@@ -20,7 +20,6 @@ async function handleListen({ api, event, commands, prefix }) {
   }
 }
 const { warmupFromEvent } = require("../../includes/database/infoCache");
-const { isActivated } = require("../../includes/database/accessCode");
 const { isBotAdmin, isGroupAdmin } = require("../../utils/bot/botManager");
 const { getGroupAnti, recordMessage, clearSpam } = require("../../utils/bot/botManager");
 const { extractBody } = require("../../utils/bot/messageUtils");
@@ -117,21 +116,6 @@ async function handleMessage(params) {
 
   // ── Warm cache chạy nền, không block pipeline ──────────────────────────────
   warmupFromEvent({ api, event }).catch(() => {});
-
-  // ── Kiểm tra kích hoạt ─────────────────────────────────────────────────────
-  const threadAllowed = isActivated(threadID);
-  const isAdmin = senderId && isBotAdmin(senderId);
-
-  if (!threadAllowed && !isAdmin) {
-    const body = extractBody(raw);
-
-    const isActivationCmd =
-      body.startsWith(prefix + "code") ||
-      body.startsWith(prefix + "macode") ||
-      body.startsWith(prefix + "kichhoat");
-
-    if (!isActivationCmd) return;
-  }
 
   // ── Anti features (chỉ áp dụng trong nhóm) ────────────────────────────────
   if (event.type === ThreadType.Group && senderId && !isBotAdmin(senderId)) {

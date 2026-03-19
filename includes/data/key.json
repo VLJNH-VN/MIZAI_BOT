@@ -1,4 +1,13 @@
 {
+  "geminiKeys": [
+    "AIzaSyB7MbkRL5SyMEsmgK8DJWaPa38l9h2L_k4",
+    "AIzaSyBGjjBKxTfplz1mDhoW_dLDIVXOjqyGJLM"
+  ],
+  "geminiLive": [
+    "AIzaSyB7MbkRL5SyMEsmgK8DJWaPa38l9h2L_k4",
+    "AIzaSyBGjjBKxTfplz1mDhoW_dLDIVXOjqyGJLM"
+  ],
+  "geminiDead": [],
   "keys": [
     "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"
   ],

@@ -115,48 +115,90 @@ function clearChatHistory(threadId) {
   delete chatHistories[threadId];
 }
 
-// ── Gemini SDK client (cache theo key để tránh khởi tạo lại mỗi request) ────────
-let _aiClient    = null;
-let _aiClientKey = null;
+// ── Quản lý key rotation ─────────────────────────────────────────────────────────
+const KEY_FILE_PATH = path.join(__dirname, "..", "..", "includes", "data", "key.json");
 
-function getAiClient() {
-  const key = global?.config?.geminiKey || "";
-  if (!key) throw new Error("Chưa có Gemini API key. Dùng .key add AIza... để thêm key.");
-  if (!_aiClient || _aiClientKey !== key) {
-    _aiClient    = new GoogleGenAI({ apiKey: key });
-    _aiClientKey = key;
-  }
-  return _aiClient;
+function loadKeyData() {
+  try { return JSON.parse(fs.readFileSync(KEY_FILE_PATH, "utf-8")); }
+  catch { return {}; }
 }
 
-// ── Gọi Gemini API ────────────────────────────────────────────────────────────────
-async function sendToGroq(userMessage, threadId) {
-  const ai      = getAiClient();
-  const history = getChatHistory(threadId);
+function saveKeyData(data) {
+  try { fs.writeFileSync(KEY_FILE_PATH, JSON.stringify(data, null, 2), "utf-8"); } catch {}
+}
 
+function getActiveGeminiKey() {
+  const data      = loadKeyData();
+  const allKeys   = Array.isArray(data.geminiKeys) ? data.geminiKeys : [];
+  const deadKeys  = new Set(Array.isArray(data.geminiDead) ? data.geminiDead : []);
+  const liveKeys  = allKeys.filter(k => !deadKeys.has(k));
+  if (liveKeys.length) return liveKeys[0];
+  const fallback = global?.config?.geminiKey || "";
+  if (fallback) return fallback;
+  throw new Error("Chưa có Gemini API key. Dùng .key add AIza... để thêm key.");
+}
+
+function markGeminiKeyDead(key) {
+  const data = loadKeyData();
+  if (!Array.isArray(data.geminiDead)) data.geminiDead = [];
+  if (!data.geminiDead.includes(key)) {
+    data.geminiDead.push(key);
+    data.geminiLive = (data.geminiLive || []).filter(k => k !== key);
+    saveKeyData(data);
+    global.logWarn?.(`[goibot] Đã đánh dấu Gemini key dead: ${key.slice(0, 8)}...`);
+  }
+}
+
+// ── Gọi Gemini API với rotation key ──────────────────────────────────────────────
+async function sendToGroq(userMessage, threadId) {
+  const history  = getChatHistory(threadId);
   const contents = [
     ...history,
     { role: "user", parts: [{ text: userMessage }] },
   ];
 
-  const response = await ai.models.generateContent({
-    model: MODEL_NAME,
-    contents,
-    config: {
-      systemInstruction: SYSTEM_PROMPT,
-      temperature:       0.8,
-      maxOutputTokens:   2048,
-      responseMimeType:  "application/json",
-    },
-  });
+  const data    = loadKeyData();
+  const allKeys = Array.isArray(data.geminiKeys) ? data.geminiKeys : [];
+  const deadSet = new Set(Array.isArray(data.geminiDead) ? data.geminiDead : []);
+  const liveKeys = allKeys.filter(k => !deadSet.has(k));
 
-  const assistantMsg = response.text || "";
+  const fallback = global?.config?.geminiKey || "";
+  const tryKeys  = liveKeys.length ? liveKeys : (fallback ? [fallback] : []);
+  if (!tryKeys.length) throw new Error("Chưa có Gemini API key. Dùng .key add AIza... để thêm key.");
 
-  history.push({ role: "user",  parts: [{ text: userMessage    }] });
-  history.push({ role: "model", parts: [{ text: assistantMsg   }] });
-  if (history.length > HISTORY_MAX) history.splice(0, history.length - HISTORY_MAX);
+  let lastErr = null;
+  for (const key of tryKeys) {
+    try {
+      const ai       = new GoogleGenAI({ apiKey: key });
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents,
+        config: {
+          systemInstruction: SYSTEM_PROMPT,
+          temperature:       0.8,
+          maxOutputTokens:   2048,
+          responseMimeType:  "application/json",
+        },
+      });
 
-  return assistantMsg;
+      const assistantMsg = response.text || "";
+      history.push({ role: "user",  parts: [{ text: userMessage  }] });
+      history.push({ role: "model", parts: [{ text: assistantMsg }] });
+      if (history.length > HISTORY_MAX) history.splice(0, history.length - HISTORY_MAX);
+      return assistantMsg;
+    } catch (err) {
+      const msg = err?.message || "";
+      if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota") || err?.status === 429) {
+        markGeminiKeyDead(key);
+        global.logWarn?.(`[goibot] Key ${key.slice(0, 8)}... hết quota, thử key tiếp theo.`);
+        lastErr = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastErr || new Error("Tất cả Gemini key đều hết quota.");
 }
 
 // ── Data helpers ────────────────────────────────────────────────────────────────

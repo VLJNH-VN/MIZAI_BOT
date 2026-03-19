@@ -184,13 +184,13 @@ async function downloadAudio(streamUrl, outPath) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-//  ẢNH AI — HuggingFace
+//  ẢNH AI — HuggingFace (free inference API)
 // ════════════════════════════════════════════════════════════════════════════════
-const HF_ROUTER = "https://router.huggingface.co/hf-inference/models";
+const HF_API_BASE = "https://api-inference.huggingface.co/models";
 const HF_MODELS = {
-  schnell: { id: "black-forest-labs/FLUX.1-schnell",                label: "FLUX.1 Schnell" },
-  sdxl:    { id: "stabilityai/stable-diffusion-xl-base-1.0",        label: "Stable Diffusion XL" },
-  sd3:     { id: "stabilityai/stable-diffusion-3-medium-diffusers", label: "Stable Diffusion 3" },
+  schnell: { id: "stabilityai/stable-diffusion-2-1",         label: "Stable Diffusion 2.1" },
+  sdxl:    { id: "stabilityai/stable-diffusion-xl-base-1.0", label: "Stable Diffusion XL"  },
+  sd3:     { id: "stablediffusionapi/realistic-vision-v6.0b1",label: "Realistic Vision"      },
 };
 
 function getHfToken() {
@@ -198,22 +198,27 @@ function getHfToken() {
 }
 
 async function generateHfImage({ modelId, prompt, width, height }) {
-  const body = { inputs: prompt, parameters: {} };
-  if (width)  body.parameters.width  = width;
-  if (height) body.parameters.height = height;
+  const body = { inputs: prompt };
+  if (width || height) body.parameters = { width: width || 512, height: height || 512 };
 
-  const res = await axios.post(`${HF_ROUTER}/${modelId}`, body, {
-    headers:      { Authorization: `Bearer ${getHfToken()}`, "Content-Type": "application/json", Accept: "image/jpeg" },
+  const headers = { "Content-Type": "application/json", Accept: "image/jpeg" };
+  const token   = getHfToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await axios.post(`${HF_API_BASE}/${modelId}`, body, {
+    headers,
     responseType: "arraybuffer",
     timeout:      120000,
   });
+
+  if (res.status !== 200) {
+    const text = Buffer.from(res.data).toString().slice(0, 200);
+    throw new Error(`HF API lỗi ${res.status}: ${text}`);
+  }
   return Buffer.from(res.data);
 }
 
 async function handleImgAction(api, imgAction, raw, threadId, type, send) {
-  if (!getHfToken()) {
-    return send("⛔ Chưa cấu hình HF Token để tạo ảnh AI.");
-  }
   const prompt   = (imgAction.prompt || "").trim();
   const modelKey = imgAction.model || "schnell";
   if (!prompt) return send("❌ Không có mô tả ảnh để tạo.");
@@ -227,12 +232,20 @@ async function handleImgAction(api, imgAction, raw, threadId, type, send) {
     fs.writeFileSync(tmpFile, imgBuf);
     await api.sendMessage({ msg: `🖼️ ${prompt}`, attachments: [tmpFile] }, threadId, type);
   } catch (err) {
-    const msg = err?.message || "";
-    if (msg.includes("503") || msg.includes("loading")) {
-      return send("⏳ Model đang khởi động, thử lại sau vài phút nhé~");
+    const status = err?.response?.status || 0;
+    const msg    = err?.message || "";
+
+    if (status === 503 || msg.includes("loading") || msg.includes("currently loading")) {
+      return send("⏳ Model đang khởi động, thử lại sau 20-30 giây nhé~");
+    }
+    if (status === 429 || msg.includes("rate limit")) {
+      return send("⏳ API đang bận, thử lại sau ít phút nhé~");
+    }
+    if (status === 401 || msg.includes("401")) {
+      return send("🔑 HF Token không hợp lệ hoặc hết hạn. Thêm token mới vào config nhé.");
     }
     logError(`[goibot/img] ${msg.slice(0, 200)}`);
-    return send(`❌ Tạo ảnh thất bại: ${msg.slice(0, 100)}`);
+    return send(`❌ Tạo ảnh thất bại: ${msg.slice(0, 120)}`);
   } finally {
     setTimeout(() => { try { fs.unlinkSync(tmpFile); } catch {} }, 60000);
   }

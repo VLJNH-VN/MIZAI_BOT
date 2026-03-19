@@ -194,6 +194,16 @@ async function initSchema(db) {
   if (!cols.includes("exp"))        await run(db, "ALTER TABLE users_money ADD COLUMN exp INTEGER DEFAULT 0").catch(() => {});
   if (!cols.includes("daily_last")) await run(db, "ALTER TABLE users_money ADD COLUMN daily_last INTEGER DEFAULT 0").catch(() => {});
   if (!cols.includes("name"))       await run(db, "ALTER TABLE users_money ADD COLUMN name TEXT DEFAULT ''").catch(() => {});
+
+  await run(db, `CREATE TABLE IF NOT EXISTS rent (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    thread_id TEXT UNIQUE NOT NULL,
+    owner_id  TEXT NOT NULL,
+    time_start TEXT NOT NULL,
+    time_end   TEXT NOT NULL,
+    created_at INTEGER,
+    updated_at INTEGER
+  )`);
 }
 
 // ════════════════════════════════════════

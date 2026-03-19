@@ -34,10 +34,7 @@ async function hfImage(prompt) {
   const url = `${HF_API}/${IMAGE_MODEL}`;
   const res  = await global.axios.post(
     url,
-    {
-      inputs    : prompt,
-      parameters: { num_inference_steps: 20, guidance_scale: 7.5 }
-    },
+    { inputs: prompt },
     {
       headers: {
         Authorization : `Bearer ${getToken()}`,
@@ -92,17 +89,20 @@ module.exports = {
 
       await send("🎨 Đang tạo ảnh, vui lòng chờ...");
 
+      let tmpPath = null;
       try {
-        const imgBuf  = await hfImage(prompt);
-        const tmpPath = path.join("/tmp", `hf_img_${Date.now()}.png`);
+        const imgBuf = await hfImage(prompt);
+        tmpPath = path.join("/tmp", `hf_img_${Date.now()}.png`);
         fs.writeFileSync(tmpPath, imgBuf);
 
-        await send({
-          msg        : `🖼️ Ảnh tạo từ: "${prompt}"`,
-          attachments: [fs.createReadStream(tmpPath)]
-        });
-
-        fs.unlink(tmpPath, () => {});
+        try {
+          await send({
+            msg        : `🖼️ Ảnh tạo từ: "${prompt}"`,
+            attachments: [tmpPath]
+          });
+        } finally {
+          try { fs.unlinkSync(tmpPath); } catch {}
+        }
       } catch (err) {
         logError(`[hf] image error: ${err.message}`);
         const status = err?.response?.status;

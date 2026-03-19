@@ -153,11 +153,14 @@ module.exports = {
       }
     } catch (err) {
       logError(`[lamet] xử lý ảnh: ${err.message}`);
-      if (err?.response?.status === 503) {
+      if (err?.response?.status === 503 || err.message?.includes("503")) {
         return send("⏳ Model AI đang khởi động, thử lại sau 30 giây!");
       }
-      if (err?.response?.status === 413) {
+      if (err?.response?.status === 413 || err.message?.includes("413")) {
         return send("❌ Ảnh quá lớn cho AI upscale! Dùng chế độ normal/manh thay thế.");
+      }
+      if (err.message?.includes("404") || err.message?.includes("HTTP 404")) {
+        return send("❌ Model AI upscale hiện không khả dụng. Dùng chế độ nhe/normal/manh thay thế.");
       }
       return send(`❌ Lỗi xử lý ảnh: ${err.message}`);
     }
@@ -174,13 +177,13 @@ module.exports = {
 
       await send({
         msg        : `✅ ${modeLabel} hoàn tất!\n📏 ${sizeBefore} KB → ${sizeAfter} KB`,
-        attachments: [fs.createReadStream(tmpOut)]
+        attachments: [tmpOut]
       });
     } catch (err) {
       logError(`[lamet] gửi ảnh: ${err.message}`);
       return send("❌ Xử lý xong nhưng gửi ảnh thất bại.");
     } finally {
-      fs.unlink(tmpOut, () => {});
+      try { fs.unlinkSync(tmpOut); } catch {}
     }
   }
 };

@@ -20,6 +20,7 @@ const { startAutoSend }    = require("./src/events/autoSend");
 const { startTuongTac }    = require("./src/events/tuongTac");
 const { startAutoDown }    = require("./src/events/autoDown");
 const { startGoibot }      = require("./src/events/goibot");
+const { startTxLoop }      = require("./src/events/txLoop");
 
 // ── Config validation ─────────────────────────────────────────────────────────
 function validateConfig() {
@@ -59,6 +60,7 @@ async function main(isFirstRun = true) {
       const ttInfo = startTuongTac(api);
       startAutoDown(api);
       startGoibot(api);
+      startTxLoop(api);
       logInfo(
         "[BOT] Dịch vụ đã khởi động:\n" +
         "      ├─ AutoSend\n" +

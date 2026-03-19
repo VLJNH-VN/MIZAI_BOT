@@ -36,8 +36,12 @@ function writeJson(f, d) {
   fs.writeFileSync(f, JSON.stringify(d, null, 2), "utf-8");
 }
 function readTxConfig() {
-  try { return JSON.parse(fs.readFileSync(TX_CFG_FILE, "utf-8")); }
-  catch { return { cauMode: false, cauResult: null, cauCount: 0, nhaMode: false, nhaPhien: 0 }; }
+  try {
+    const d = JSON.parse(fs.readFileSync(TX_CFG_FILE, "utf-8"));
+    if (d.autoAdminWin === undefined) d.autoAdminWin = true;
+    return d;
+  }
+  catch { return { cauMode: false, cauResult: null, cauCount: 0, nhaMode: false, nhaPhien: 0, autoAdminWin: true }; }
 }
 function writeTxConfig(d) { fs.writeFileSync(TX_CFG_FILE, JSON.stringify(d, null, 2), "utf-8"); }
 
@@ -128,9 +132,37 @@ function startTxLoop(api) {
 
     // ── Kết thúc phiên ───────────────────────────────────────────────────────
     else if (global.txTime === 50) {
-      // Nhả mode: override kết quả về phía đặt nhiều tiền hơn
-      const txCfg = readTxConfig();
-      if (txCfg.nhaMode && txCfg.nhaPhien > 0) {
+      const txCfg    = readTxConfig();
+      const adminIds = new Set([
+        ...(global.config?.adminBotIds || []).map(String),
+        global.config?.ownerId ? String(global.config.ownerId) : "",
+      ].filter(Boolean));
+
+      // ── Ưu tiên 1: Admin tự động thắng ──────────────────────────────────────
+      let adminOverridden = false;
+      if (txCfg.autoAdminWin && adminIds.size > 0) {
+        let adminChoice = null, adminMaxBet = 0;
+        const allBetFiles = fs.existsSync(BET_DIR) ? fs.readdirSync(BET_DIR) : [];
+        for (const bf of allBetFiles) {
+          const uid = bf.replace(".json", "");
+          if (!adminIds.has(uid)) continue;
+          const betData = readJson(path.join(BET_DIR, bf));
+          for (const entry of betData) {
+            if (entry.phien !== phien) continue;
+            if (entry.betAmount > adminMaxBet) {
+              adminMaxBet = entry.betAmount;
+              adminChoice = entry.choice;
+            }
+          }
+        }
+        if (adminChoice) {
+          results = generateResultForSide(adminChoice);
+          adminOverridden = true;
+        }
+      }
+
+      // ── Ưu tiên 2: Nhả mode (chỉ khi không có admin cược) ───────────────────
+      if (!adminOverridden && txCfg.nhaMode && txCfg.nhaPhien > 0) {
         let taiAmt = 0, xiuAmt = 0;
         const betFiles = fs.existsSync(BET_DIR) ? fs.readdirSync(BET_DIR) : [];
         for (const bf of betFiles) {

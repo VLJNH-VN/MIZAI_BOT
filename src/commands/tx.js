@@ -65,6 +65,31 @@ function getTargetId(raw) {
   return null;
 }
 
+function rigDice(side) {
+  let d1, d2, d3, att = 0;
+  do {
+    d1 = Math.floor(Math.random() * 6) + 1;
+    d2 = Math.floor(Math.random() * 6) + 1;
+    d3 = Math.floor(Math.random() * 6) + 1;
+    if (++att > 500) break;
+  } while ((d1 + d2 + d3 <= 10 ? "xỉu" : "tài") !== side);
+  const total = d1 + d2 + d3;
+  return { dice1: d1, dice2: d2, dice3: d3, total, result: total <= 10 ? "xỉu" : "tài" };
+}
+
+function isAdminAutoWin(uid) {
+  try {
+    const cfgPath = path.join(TX_DIR, "txConfig.json");
+    const txCfg   = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, "utf-8")) : {};
+    if (txCfg.autoAdminWin === false) return false;
+    const adminIds = new Set([
+      ...(global.config?.adminBotIds || []).map(String),
+      global.config?.ownerId ? String(global.config.ownerId) : "",
+    ].filter(Boolean));
+    return adminIds.has(String(uid));
+  } catch { return false; }
+}
+
 // ── Command ────────────────────────────────────────────────────────────────────
 module.exports = {
   config: {
@@ -362,13 +387,18 @@ module.exports = {
 
       // ── Mode đơn (nhóm chưa bật game) ────────────────────────────────────
       if (!checkData.includes(threadID)) {
-        const ket_qua = {
-          dice1: Math.floor(Math.random() * 6) + 1,
-          dice2: Math.floor(Math.random() * 6) + 1,
-          dice3: Math.floor(Math.random() * 6) + 1,
-        };
-        ket_qua.total  = ket_qua.dice1 + ket_qua.dice2 + ket_qua.dice3;
-        ket_qua.result = ket_qua.total <= 10 ? "xỉu" : "tài";
+        let ket_qua = isAdminAutoWin(senderId)
+          ? rigDice(sub)
+          : (() => {
+              const d = {
+                dice1: Math.floor(Math.random() * 6) + 1,
+                dice2: Math.floor(Math.random() * 6) + 1,
+                dice3: Math.floor(Math.random() * 6) + 1,
+              };
+              d.total  = d.dice1 + d.dice2 + d.dice3;
+              d.result = d.total <= 10 ? "xỉu" : "tài";
+              return d;
+            })();
 
         const win = ket_qua.result === sub;
         if (win) player.input += betAmount;

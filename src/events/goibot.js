@@ -53,6 +53,87 @@ const lastAiCall         = {};
 const USER_AI_COOLDOWN_MS = 8000;
 
 // ════════════════════════════════════════════════════════════════════════════════
+//  TX — CONTEXT & ACTION
+// ════════════════════════════════════════════════════════════════════════════════
+const TX_DIR      = path.join(process.cwd(), "includes", "data", "taixiu");
+const TX_CFG_FILE = path.join(TX_DIR, "txConfig.json");
+const TX_MON_FILE = path.join(TX_DIR, "money.json");
+const TX_PHI_FILE = path.join(TX_DIR, "phien.json");
+
+function readTxCfg() {
+  try { return JSON.parse(fs.readFileSync(TX_CFG_FILE, "utf-8")); }
+  catch { return { cauMode: false, cauResult: null, cauCount: 0, nhaMode: false, nhaPhien: 0 }; }
+}
+function writeTxCfg(d) {
+  try { fs.writeFileSync(TX_CFG_FILE, JSON.stringify(d, null, 2), "utf-8"); } catch {}
+}
+
+function getTxContext(isAdmin) {
+  try {
+    const cfg      = readTxCfg();
+    const phiData  = JSON.parse(fs.readFileSync(TX_PHI_FILE, "utf-8") || "[]");
+    const monData  = JSON.parse(fs.readFileSync(TX_MON_FILE, "utf-8") || "[]");
+
+    const phienHienTai = phiData.length ? phiData[phiData.length - 1].phien : 1;
+    const lichSu5 = phiData.slice(-5).map(p => p.result).join(",");
+    const soNguoiChoi = monData.length;
+    const top3 = [...monData]
+      .sort((a, b) => b.input - a.input)
+      .slice(0, 3)
+      .map(p => `uid:${p.senderID}(${p.input})`)
+      .join("|");
+
+    const cauStr = cfg.cauMode
+      ? `BẬT(${(cfg.cauResult || "").toUpperCase()} còn ${cfg.cauCount} phiên)`
+      : "TẮT";
+    const nhaStr = cfg.nhaMode
+      ? `BẬT(còn ${cfg.nhaPhien} phiên)`
+      : "TẮT";
+
+    return `[TX_DATA] phiên=${phienHienTai} | lịch sử 5 phiên: ${lichSu5 || "chưa có"} | người chơi: ${soNguoiChoi} | top3: ${top3 || "chưa có"} | cầu: ${cauStr} | nhả: ${nhaStr} | isAdmin=${isAdmin}`;
+  } catch {
+    return `[TX_DATA] isAdmin=${isAdmin}`;
+  }
+}
+
+async function handleTxAction(txAction, senderId, send) {
+  const { isBotAdmin } = require("../../utils/bot/botManager");
+  if (!isBotAdmin(senderId)) return send("⛔ Chỉ Admin bot mới được điều khiển TX!");
+
+  const cfg    = readTxCfg();
+  const action = (txAction.action || "").toLowerCase();
+
+  if (action === "cau") {
+    const side  = (txAction.result || "").toLowerCase();
+    if (side !== "tài" && side !== "xỉu") return send("❌ Cầu phải là 'tài' hoặc 'xỉu'!");
+    cfg.cauMode   = true;
+    cfg.cauResult = side;
+    cfg.cauCount  = Math.max(1, parseInt(txAction.phien) || 1);
+    writeTxCfg(cfg);
+    return send(`🎲 Đã bật cầu ${side.toUpperCase()} — ${cfg.cauCount} phiên tiếp theo!`);
+  }
+
+  if (action === "nha") {
+    cfg.nhaMode  = true;
+    cfg.nhaPhien = Math.max(1, parseInt(txAction.phien) || 3);
+    writeTxCfg(cfg);
+    return send(`💰 Đã bật nhả — người chơi sẽ thắng nhiều hơn trong ${cfg.nhaPhien} phiên!`);
+  }
+
+  if (action === "reset_cau") {
+    cfg.cauMode = false; cfg.cauResult = null; cfg.cauCount = 0;
+    writeTxCfg(cfg);
+    return send("✅ Đã tắt chế độ cầu, TX trở về kết quả ngẫu nhiên!");
+  }
+
+  if (action === "reset_nha") {
+    cfg.nhaMode = false; cfg.nhaPhien = 0;
+    writeTxCfg(cfg);
+    return send("✅ Đã tắt chế độ nhả!");
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
 //  TÍNH TOÁN
 // ════════════════════════════════════════════════════════════════════════════════
 function safeCalc(expr) {
@@ -520,11 +601,14 @@ async function handleGoibot({ api, event }) {
 
     const hasQuote = !!raw.quote;
 
+    const { isBotAdmin } = require("../../utils/bot/botManager");
+    const isAdmin = isBotAdmin(senderId);
+
     const userMessage = JSON.stringify({
       time: timenow, senderName: nameUser, content: body,
       threadID: threadId, senderID: senderId,
       id_cua_bot: botId, hasQuote
-    });
+    }) + (isAdmin ? `\n${getTxContext(true)}` : "");
 
     const responseText = await sendToGroq(userMessage, threadId);
 
@@ -592,6 +676,11 @@ async function handleGoibot({ api, event }) {
     // ── Ảnh AI ────────────────────────────────────────────────────────────────
     if (botMsg?.img?.status) {
       await handleImgAction(api, botMsg.img, raw, threadId, event.type, send);
+    }
+
+    // ── TX admin action ────────────────────────────────────────────────────────
+    if (botMsg?.tx?.status && isAdmin) {
+      await handleTxAction(botMsg.tx, senderId, send);
     }
 
   } catch (err) {

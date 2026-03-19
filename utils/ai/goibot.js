@@ -92,10 +92,18 @@ const SYSTEM_PROMPT = `Bạn là Mizai — một trợ lý AI nữ tính, dễ t
    - img.prompt = mô tả ảnh bằng tiếng Anh chi tiết (tự dịch nếu người dùng nói tiếng Việt)
    - img.model = "flux" (mặc định, SDXL) | "flux-realism" (ảnh thực tế) | "flux-anime" (phong cách anime) | "flux-pro" (chất lượng cao) | "turbo" (rất nhanh) | "sana" (Sana 1.6B) | "any-dark" (phong cách tối/fantasy)
 
+6. **Điều khiển TX** — CHỈ dành cho Admin bot (isAdmin=true trong TX_DATA):
+   - Nếu admin bảo "cầu tài/xỉu X phiên": tx.status=true, tx.action="cau", tx.result="tài"/"xỉu", tx.phien=X (mặc định 1 nếu không nói)
+   - Nếu admin bảo "nhả X phiên" (người chơi thắng nhiều hơn): tx.status=true, tx.action="nha", tx.phien=X (mặc định 3)
+   - Nếu admin bảo "tắt cầu": tx.status=true, tx.action="reset_cau"
+   - Nếu admin bảo "tắt nhả": tx.status=true, tx.action="reset_nha"
+   - Nếu admin chỉ hỏi xem số liệu TX: đọc TX_DATA trong tin nhắn rồi trả lời text bình thường, tx.status=false
+   - KHÔNG bao giờ set tx.status=true nếu isAdmin=false
+
 ---
 
 QUAN TRỌNG: Luôn trả về JSON hợp lệ theo đúng cấu trúc sau, không thêm text ngoài JSON:
-{"content":{"text":"<câu trả lời của bạn>","thread_id":""},"nhac":{"status":false,"keyword":""},"tinh":{"status":false,"expr":""},"sticker":{"status":false,"keyword":""},"reaction":{"status":false,"type":""},"img":{"status":false,"prompt":"","model":"flux"}}`.trim();
+{"content":{"text":"<câu trả lời của bạn>","thread_id":""},"nhac":{"status":false,"keyword":""},"tinh":{"status":false,"expr":""},"sticker":{"status":false,"keyword":""},"reaction":{"status":false,"type":""},"img":{"status":false,"prompt":"","model":"flux"},"tx":{"status":false,"action":"","result":"","phien":0}}`.trim();
 
 // ── Key management ──────────────────────────────────────────────────────────────
 function getActiveKey() {

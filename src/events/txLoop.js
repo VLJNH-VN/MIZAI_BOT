@@ -14,6 +14,7 @@ const BET_DIR       = path.join(TX_DIR, "betHistory");
 const PHIEN_FILE    = path.join(TX_DIR, "phien.json");
 const MONEY_FILE    = path.join(TX_DIR, "money.json");
 const CHECK_FILE    = path.join(TX_DIR, "fileCheck.json");
+const TX_CFG_FILE   = path.join(TX_DIR, "txConfig.json");
 
 for (const d of [TX_DIR, BET_DIR]) {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
@@ -21,12 +22,33 @@ for (const d of [TX_DIR, BET_DIR]) {
 for (const f of [PHIEN_FILE, MONEY_FILE, CHECK_FILE]) {
   if (!fs.existsSync(f)) fs.writeFileSync(f, "[]", "utf-8");
 }
+if (!fs.existsSync(TX_CFG_FILE)) {
+  fs.writeFileSync(TX_CFG_FILE, JSON.stringify({
+    cauMode: false, cauResult: null, cauCount: 0,
+    nhaMode: false, nhaPhien: 0
+  }, null, 2), "utf-8");
+}
 
 function readJson(f) {
   try { return JSON.parse(fs.readFileSync(f, "utf-8")); } catch { return []; }
 }
 function writeJson(f, d) {
   fs.writeFileSync(f, JSON.stringify(d, null, 2), "utf-8");
+}
+function readTxConfig() {
+  try { return JSON.parse(fs.readFileSync(TX_CFG_FILE, "utf-8")); }
+  catch { return { cauMode: false, cauResult: null, cauCount: 0, nhaMode: false, nhaPhien: 0 }; }
+}
+function writeTxConfig(d) { fs.writeFileSync(TX_CFG_FILE, JSON.stringify(d, null, 2), "utf-8"); }
+
+function generateResultForSide(side) {
+  let dice1, dice2, dice3, attempts = 0;
+  do {
+    dice1 = gets(); dice2 = gets(); dice3 = gets();
+    if (++attempts > 500) break;
+  } while ((dice1 + dice2 + dice3 <= 10 ? "xỉu" : "tài") !== side);
+  const total = dice1 + dice2 + dice3;
+  return { total, result: total <= 10 ? "xỉu" : "tài", dice1, dice2, dice3, jackpot: false };
 }
 
 function gets() {
@@ -40,6 +62,16 @@ function gets() {
 }
 
 function playGame() {
+  const txCfg = readTxConfig();
+
+  if (txCfg.cauMode && txCfg.cauResult && txCfg.cauCount > 0) {
+    const forced = generateResultForSide(txCfg.cauResult);
+    txCfg.cauCount--;
+    if (txCfg.cauCount <= 0) txCfg.cauMode = false;
+    writeTxConfig(txCfg);
+    return forced;
+  }
+
   const jackpotChance = Math.random();
   let dice1, dice2, dice3;
   if (jackpotChance < 0.03) {
@@ -96,6 +128,28 @@ function startTxLoop(api) {
 
     // ── Kết thúc phiên ───────────────────────────────────────────────────────
     else if (global.txTime === 50) {
+      // Nhả mode: override kết quả về phía đặt nhiều tiền hơn
+      const txCfg = readTxConfig();
+      if (txCfg.nhaMode && txCfg.nhaPhien > 0) {
+        let taiAmt = 0, xiuAmt = 0;
+        const betFiles = fs.existsSync(BET_DIR) ? fs.readdirSync(BET_DIR) : [];
+        for (const bf of betFiles) {
+          const betData = readJson(path.join(BET_DIR, bf));
+          for (const entry of betData) {
+            if (entry.phien !== phien) continue;
+            if (entry.choice === "tài") taiAmt += entry.betAmount;
+            else                        xiuAmt += entry.betAmount;
+          }
+        }
+        if (taiAmt > 0 || xiuAmt > 0) {
+          const winSide = taiAmt >= xiuAmt ? "tài" : "xỉu";
+          results = generateResultForSide(winSide);
+        }
+        txCfg.nhaPhien--;
+        if (txCfg.nhaPhien <= 0) txCfg.nhaMode = false;
+        writeTxConfig(txCfg);
+      }
+
       const checkmn  = readJson(MONEY_FILE);
       const winList  = [], loseList = [];
 

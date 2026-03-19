@@ -78,6 +78,7 @@ module.exports = {
       "admin kick <uid/@mention> — Kick thành viên khỏi nhóm hiện tại",
       "admin setname <tên>       — Đổi tên bot trong nhóm hiện tại",
       "admin info                — Xem thông tin hệ thống",
+      "admin tang <@mention>     — Lấy ID của người được tag",
     ].join("\n"),
     cooldowns: 3,
   },
@@ -104,7 +105,8 @@ module.exports = {
         `  ${prefix}admin bc <nội dung>\n` +
         `  ${prefix}admin kick <uid/@mention>\n` +
         `  ${prefix}admin setname <tên bot>\n` +
-        `  ${prefix}admin info`
+        `  ${prefix}admin info\n` +
+        `  ${prefix}admin tang <@mention>`
       );
     }
 
@@ -299,6 +301,24 @@ module.exports = {
         `💾 RAM: ${memMb} MB\n` +
         `🔧 Node.js: ${process.version}`
       );
+    }
+
+    // ── admin tang ────────────────────────────────────────────────────────
+    if (sub === "tang") {
+      const mentions = event?.data?.mentions;
+      if (mentions && Object.keys(mentions).length > 0) {
+        const lines = Object.entries(mentions)
+          .map(([uid, name]) => `👤 ${name || uid}: ${uid}`)
+          .join("\n");
+        return send(`🆔 ID của người được tag:\n${lines}`);
+      }
+
+      const uid = args[1] ? String(args[1]).trim() : null;
+      if (uid) {
+        return send(`🆔 UID: ${uid}`);
+      }
+
+      return send(`❌ Thiếu người dùng.\nDùng: ${prefix}admin tang @mention hoặc ${prefix}admin tang <uid>`);
     }
 
     // ── Sub-command không hợp lệ ──────────────────────────────────────────

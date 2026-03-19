@@ -6,10 +6,11 @@
   "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36",
   "ownerId": "6024931307373526012",
   "adminBotIds": [
-    "6024931307373526012"
+    "6024931307373526012",
+    "0"
   ],
   "qrPath": "./qr.png",
-  "geminiKey": "",
+  "geminiKey": "AIzaSyBGjjBKxTfplz1mDhoW_dLDIVXOjqyGJLM",
   "hfToken": "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",
   "githubToken": "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",
   "repo": "VLJNH-VN/NOTE_MIZAI",

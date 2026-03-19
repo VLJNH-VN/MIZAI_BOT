@@ -12,5 +12,12 @@
     "dice1": 2,
     "dice2": 6,
     "dice3": 5
+  },
+  {
+    "phien": 4,
+    "result": "tài",
+    "dice1": 5,
+    "dice2": 6,
+    "dice3": 5
   }
 ]

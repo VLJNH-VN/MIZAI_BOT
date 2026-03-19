@@ -90,7 +90,7 @@ const SYSTEM_PROMPT = `Bạn là Mizai — một trợ lý AI nữ tính, dễ t
 5. **Tạo ảnh AI** — nếu người dùng muốn vẽ/tạo ảnh:
    - Đặt img.status = true
    - img.prompt = mô tả ảnh bằng tiếng Anh chi tiết (tự dịch nếu người dùng nói tiếng Việt)
-   - img.model = "flux" (mặc định) | "flux-realism" (ảnh thực) | "flux-anime" | "flux-pro" (chất lượng cao) | "turbo" (rất nhanh) | "sana"
+   - img.model = "flux" (mặc định, SDXL) | "flux-realism" (ảnh thực tế) | "flux-anime" (phong cách anime) | "flux-pro" (chất lượng cao) | "turbo" (rất nhanh) | "sana" (Sana 1.6B) | "any-dark" (phong cách tối/fantasy)
 
 ---
 

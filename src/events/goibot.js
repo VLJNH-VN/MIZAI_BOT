@@ -184,60 +184,56 @@ async function downloadAudio(streamUrl, outPath) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-//  ẢNH AI — Pollinations.ai (miễn phí, không cần token)
+//  ẢNH AI — HuggingFace Inference API
 // ════════════════════════════════════════════════════════════════════════════════
-const POLL_BASE = "https://image.pollinations.ai/prompt";
-const POLL_MODELS = {
-  sana:           "Sana",
-  flux:           "FLUX",
-  "flux-realism": "FLUX Realism",
-  "flux-anime":   "FLUX Anime",
-  "flux-3d":      "FLUX 3D",
-  "flux-pro":     "FLUX Pro",
-  turbo:          "Turbo",
-  "any-dark":     "Any Dark",
+const HF_API_BASE = "https://api-inference.huggingface.co/models";
+
+const HF_MODELS = {
+  flux:           { id: "stabilityai/stable-diffusion-xl-base-1.0",                  label: "SDXL",             w: 1024, h: 1024, steps: 40, cfg: 7.5 },
+  "flux-realism": { id: "SG161222/Realistic_Vision_V5.1_noVAE",                      label: "Realistic Vision", w: 512,  h: 768,  steps: 30, cfg: 7   },
+  "flux-anime":   { id: "Ojimi/anime-kawai-diffusion",                               label: "Anime Kawai",      w: 512,  h: 768,  steps: 30, cfg: 7   },
+  "flux-3d":      { id: "stabilityai/stable-diffusion-xl-base-1.0",                  label: "SDXL 3D",          w: 1024, h: 1024, steps: 40, cfg: 7.5 },
+  "flux-pro":     { id: "stabilityai/stable-diffusion-xl-base-1.0",                  label: "SDXL Pro",         w: 1024, h: 1024, steps: 50, cfg: 8   },
+  turbo:          { id: "stabilityai/sdxl-turbo",                                    label: "SDXL Turbo",       w: 512,  h: 512,  steps: 1,  cfg: 0   },
+  sana:           { id: "Efficient-Large-Model/Sana_1600M_1024px_BF16_diffusers",    label: "Sana",             w: 1024, h: 1024, steps: 20, cfg: 5   },
+  "any-dark":     { id: "Lykon/dreamshaper-8",                                       label: "DreamShaper Dark", w: 512,  h: 768,  steps: 30, cfg: 7   },
 };
 
-const FALLBACK_MODELS = ["flux", "turbo", "flux-realism"];
+const HF_FALLBACK_MODELS = ["flux", "turbo", "flux-realism"];
+const HF_TIMEOUT = 90000;
 
-const POLL_TIMEOUT = {
-  sana:    60000,
-  default: 40000,
-};
+async function generateHFImage({ prompt, modelKey = "flux", width, height, seed }) {
+  const hfToken = global.config?.hfToken;
+  if (!hfToken) throw new Error("Chưa cấu hình hfToken trong config.json");
 
-const POLL_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+  const m = HF_MODELS[modelKey];
+  if (!m) throw new Error(`Model '${modelKey}' không hợp lệ`);
 
-async function generatePollinationsImage({ prompt, modelKey = "flux", width, height, seed }) {
-  const params = new URLSearchParams({
-    model:  modelKey,
-    nologo: "true",
-    nofeed: "true",
-  });
-
-  if (modelKey !== "sana") {
-    params.set("width",  String(width  || 1024));
-    params.set("height", String(height || 1024));
-  }
-
-  if (seed != null) params.set("seed", String(seed));
-
-  const url     = `${POLL_BASE}/${encodeURIComponent(prompt)}?${params.toString()}`;
-  const timeout = POLL_TIMEOUT[modelKey] || POLL_TIMEOUT.default;
-
-  const res = await axios.get(url, {
-    responseType: "arraybuffer",
-    timeout,
-    headers: {
-      "User-Agent": POLL_UA,
-      "Accept":     "image/*, */*;q=0.8",
+  const body = {
+    inputs: prompt,
+    parameters: {
+      width:               width  || m.w,
+      height:              height || m.h,
+      num_inference_steps: m.steps,
+      guidance_scale:      m.cfg,
     },
-    maxRedirects: 5,
+  };
+  if (seed != null) body.parameters.seed = seed;
+
+  const res = await axios.post(`${HF_API_BASE}/${m.id}`, body, {
+    responseType: "arraybuffer",
+    timeout: HF_TIMEOUT,
+    headers: {
+      "Authorization": `Bearer ${hfToken}`,
+      "Content-Type":  "application/json",
+      "Accept":        "image/png, image/jpeg, */*",
+    },
   });
 
   const contentType = res.headers?.["content-type"] || "";
   if (!contentType.startsWith("image/")) {
-    const bodyText = Buffer.from(res.data).toString("utf8").slice(0, 200);
-    throw new Error(`API trả về không phải ảnh (${contentType}): ${bodyText}`);
+    const text = Buffer.from(res.data).toString("utf8").slice(0, 300);
+    throw new Error(`HF API trả về không phải ảnh (${contentType}): ${text}`);
   }
 
   return Buffer.from(res.data);
@@ -246,19 +242,19 @@ async function generatePollinationsImage({ prompt, modelKey = "flux", width, hei
 async function handleImgAction(api, imgAction, raw, threadId, type, send) {
   const prompt   = (imgAction.prompt || "").trim();
   let   modelKey = imgAction.model || "flux";
-  if (!POLL_MODELS[modelKey]) modelKey = "flux";
+  if (!HF_MODELS[modelKey]) modelKey = "flux";
   if (!prompt) return send("❌ Không có mô tả ảnh để tạo.");
 
-  const label = POLL_MODELS[modelKey] || modelKey;
+  const label = HF_MODELS[modelKey]?.label || modelKey;
   await send(`🎨 Đang tạo ảnh: "${prompt}"\n🤖 Model: ${label}`);
 
-  const tmpFile = path.join(os.tmpdir(), `mizai_img_${Date.now()}.jpg`);
-  const tryModels = [modelKey, ...FALLBACK_MODELS.filter(m => m !== modelKey)];
+  const tmpFile  = path.join(os.tmpdir(), `mizai_img_${Date.now()}.png`);
+  const tryModels = [modelKey, ...HF_FALLBACK_MODELS.filter(m => m !== modelKey)];
 
   let lastErr = null;
   for (const m of tryModels) {
     try {
-      const imgBuf = await generatePollinationsImage({ prompt, modelKey: m });
+      const imgBuf = await generateHFImage({ prompt, modelKey: m });
       fs.writeFileSync(tmpFile, imgBuf);
       await api.sendMessage({ msg: `🖼️ ${prompt}`, attachments: [tmpFile] }, threadId, type);
       setTimeout(() => { try { fs.unlinkSync(tmpFile); } catch {} }, 60000);
@@ -266,7 +262,15 @@ async function handleImgAction(api, imgAction, raw, threadId, type, send) {
     } catch (err) {
       const status = err?.response?.status || 0;
       if (status === 429) {
-        return send("⏳ API đang bận, thử lại sau ít phút nhé~");
+        return send("⏳ HuggingFace API đang bận, thử lại sau ít phút nhé~");
+      }
+      if (status === 503) {
+        let eta = "";
+        try {
+          const json = JSON.parse(Buffer.from(err.response.data).toString("utf8"));
+          if (json.estimated_time) eta = ` (~${Math.ceil(json.estimated_time)}s)`;
+        } catch {}
+        global.logWarn?.(`[goibot/img] model=${m} đang tải${eta}, thử model tiếp theo`);
       }
       lastErr = err;
       global.logError?.(`[goibot/img] model=${m} lỗi ${status}: ${err?.message?.slice(0, 100)}`);

@@ -1,11 +1,12 @@
 /**
  * src/commands/auto.js
- * Quản lý AutoSend
+ * Quản lý AutoSend + Bật/tắt Mizai AI (auto bot)
  */
 
 const fs   = require("fs");
 const path = require("path");
 const { ThreadType } = require("zca-js");
+const { setEnabled, isEnabled } = require("../../utils/ai/goibot");
 
 const AUTOSEND_FILE = path.join(process.cwd(), "includes", "data", "autoSend.json");
 
@@ -36,9 +37,10 @@ module.exports = {
         version: "1.0.0",
         hasPermssion: 1,
         credits: "MiZai",
-        description: "Quản lý AutoSend — gửi tin nhắn tự động theo lịch",
+        description: "Quản lý AutoSend + Bật/tắt Mizai AI",
         commandCategory: "Quản Trị",
         usages: [
+            "auto bot on/off                   — Bật/tắt Mizai AI cho nhóm",
             "auto list                         — Xem danh sách lịch gửi tự động",
             "auto add <HH:MM> <nội dung>        — Thêm lịch gửi mới (nhóm hiện tại)",
             "auto on <số thứ tự>               — Bật lịch gửi theo số thứ tự",
@@ -54,15 +56,37 @@ module.exports = {
         // ── Không có sub-command → hướng dẫn ────────────────────────────────
         if (!sub) {
             return send(
-                `╔══ LỆNH AUTO SEND ══╗\n` +
-                `  ${prefix}auto\n` +
+                `╔══ LỆNH AUTO ══╗\n` +
                 `╚════════════════════╝\n` +
-                `📤 Các lệnh:\n` +
+                `🤖 Mizai AI:\n` +
+                `  ${prefix}auto bot on       — Bật Mizai AI\n` +
+                `  ${prefix}auto bot off      — Tắt Mizai AI\n` +
+                `\n` +
+                `📤 AutoSend:\n` +
                 `  ${prefix}auto list\n` +
                 `  ${prefix}auto add <HH:MM> <nội dung>\n` +
                 `  ${prefix}auto on <STT>\n` +
                 `  ${prefix}auto off <STT>\n` +
                 `  ${prefix}auto remove <STT>`
+            );
+        }
+
+        // ── auto bot on/off ───────────────────────────────────────────────────
+        if (sub === "bot") {
+            const action = (args[1] || "").toLowerCase();
+            if (action === "on") {
+                setEnabled(threadID, true);
+                return send("✅ Mizai AI đã được bật cho nhóm này.");
+            }
+            if (action === "off") {
+                setEnabled(threadID, false);
+                return send("☑️ Mizai AI đã được tắt cho nhóm này.");
+            }
+            const status = isEnabled(threadID) ? "✅ Đang BẬT" : "❌ Đang TẮT";
+            return send(
+                `🤖 Mizai AI — ${status}\n` +
+                `  ${prefix}auto bot on   — Bật\n` +
+                `  ${prefix}auto bot off  — Tắt`
             );
         }
 

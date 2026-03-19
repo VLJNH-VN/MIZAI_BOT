@@ -75,11 +75,18 @@ module.exports = {
         const loaded = loadCommandFromFile(filePath);
         if (loaded && commands) commands.set(loaded.name, loaded.command);
 
+        // Backup lên GitHub
+        let ghUrl = "";
+        try {
+          ghUrl = await global.githubUpload(filePath, `commands/${fileName}`);
+        } catch (e) { /* không báo lỗi github */ }
+
         return send(
           `[ 📝 CODE IMPORT ]\n─────────────────\n` +
           `📁 File: src/commands/${fileName}\n` +
           `─────────────────\n` +
-          `✅ Đã tải, ghi đè & reload!`
+          `✅ Đã tải, ghi đè & reload!` +
+          (ghUrl ? `\n☁️ GitHub: ${ghUrl}` : "")
         );
       } catch (err) {
         return send(`❌ Lỗi import:\n${err?.response?.data || err.message}`);

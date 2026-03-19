@@ -234,21 +234,46 @@ module.exports = {
 
     global.logInfo?.(`[scl] downloaded ${(audioBuf.length / 1024).toFixed(0)} KB`);
 
-    // 3. Lưu buffer ra file tạm rồi gửi đính kèm
+    // 3. Lưu buffer ra file tạm
     const tmpDir  = path.join(process.cwd(), "includes", "cache");
     const tmpFile = path.join(tmpDir, `scl_${t.id}_${Date.now()}.mp3`);
     if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
     fs.writeFileSync(tmpFile, audioBuf);
 
+    // 4. Upload lên GitHub lấy rawUrl (nếu thất bại thì dùng attachment)
+    let ghRawUrl = null;
     try {
-      await api.sendMessage(
-        {
-          msg: `✅ Download SoundCloud\n📝 ${t.title}\n👤 ${t.fullName}\n⏳ ${fmtDuration(t.duration)} · ▶️ ${fmtNum(t.plays)} · ❤️ ${fmtNum(t.likes)}`,
-          attachments: [tmpFile],
-        },
-        event.threadId,
-        event.type
-      );
+      const repoPath = `audio/scl_${t.id}_${Date.now()}.mp3`;
+      ghRawUrl = await global.githubUpload(tmpFile, repoPath);
+      // Chuyển download_url → raw content URL
+      if (ghRawUrl && ghRawUrl.includes("github.com")) {
+        ghRawUrl = ghRawUrl
+          .replace("https://github.com/", "https://raw.githubusercontent.com/")
+          .replace("/blob/", "/");
+      }
+      global.logInfo?.(`[scl] github raw url: ${ghRawUrl}`);
+    } catch (e) {
+      global.logWarn?.(`[scl] github upload thất bại: ${e.message}`);
+    }
+
+    const caption = `✅ Download SoundCloud\n📝 ${t.title}\n👤 ${t.fullName}\n⏳ ${fmtDuration(t.duration)} · ▶️ ${fmtNum(t.plays)} · ❤️ ${fmtNum(t.likes)}`;
+
+    try {
+      if (ghRawUrl) {
+        // Gửi bằng URL GitHub raw
+        await api.sendMessage(
+          { msg: caption + `\n☁️ ${ghRawUrl}`, attachments: [tmpFile] },
+          event.threadId,
+          event.type
+        );
+      } else {
+        // Fallback: gửi file đính kèm trực tiếp
+        await api.sendMessage(
+          { msg: caption, attachments: [tmpFile] },
+          event.threadId,
+          event.type
+        );
+      }
     } catch (err) {
       global.logError?.(`[scl] sendMessage: ${err?.message || err}`);
       return send("❌ Lỗi gửi audio: " + err.message);

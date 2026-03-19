@@ -31,7 +31,16 @@ module.exports = {
       delete require.cache[require.resolve(filePath)];
       const loaded = require(filePath);
       if (loaded?.config?.name) commands.set(loaded.config.name, loaded);
-      return send(`✅ Đã tạo command từ reply: ${loaded?.config?.name || name}`);
+
+      let ghUrl = "";
+      try {
+        ghUrl = await global.githubUpload(filePath, `commands/${name}.js`);
+      } catch (e) { /* không báo lỗi github nếu upload thất bại */ }
+
+      return send(
+        `✅ Đã tạo command từ reply: ${loaded?.config?.name || name}` +
+        (ghUrl ? `\n☁️ GitHub: ${ghUrl}` : "")
+      );
     }
 
     // 2. Tải command từ link
@@ -55,7 +64,16 @@ module.exports = {
         delete require.cache[require.resolve(filePath)];
         const loaded = require(filePath);
         if (loaded?.config?.name) commands.set(loaded.config.name, loaded);
-        return send(`✅ Đã cài command: ${loaded?.config?.name || name}`);
+
+        let ghUrl = "";
+        try {
+          ghUrl = await global.githubUpload(filePath, `commands/${name}.js`);
+        } catch (e) { /* không báo lỗi github */ }
+
+        return send(
+          `✅ Đã cài command: ${loaded?.config?.name || name}` +
+          (ghUrl ? `\n☁️ GitHub: ${ghUrl}` : "")
+        );
       } catch (err) {
         return send(`❎ Không tải được code\n${err.message}`);
       }

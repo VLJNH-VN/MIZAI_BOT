@@ -68,7 +68,7 @@ function buildFolderListing(dir) {
   }
 
   txt += `\n📊 Tổng dung lượng: ${convertBytes(totalBytes)}\n`;
-  txt += `📌 Reply: [open | del | view | send | create | zip | copy | rename] + số thứ tự`;
+  txt += `📌 Reply: [open | del | view | send | github | create | copy | rename] + số thứ tự`;
 
   return { txt, array };
 }
@@ -330,6 +330,26 @@ module.exports = {
           break;
         }
 
+        // ── Upload file lên GitHub ────────────────────────────────────────────
+        case "github": {
+          const item = getItem(parts[1]);
+          if (!item) return send("❌ Số thứ tự không hợp lệ.");
+          if (!item.info.isFile()) return send("⚠️ Chỉ upload được file, không phải thư mục.");
+
+          await send("⏳ Đang upload lên GitHub...");
+          try {
+            const repoPath = `files/${path.basename(item.dest)}`;
+            const url = await global.githubUpload(item.dest, repoPath);
+            send(url
+              ? `✅ Đã upload lên GitHub!\n☁️ ${url}`
+              : "❌ Upload thành công nhưng không lấy được URL."
+            );
+          } catch (err) {
+            send(`❌ Upload GitHub thất bại:\n${err.message}`);
+          }
+          break;
+        }
+
         // ── Lệnh không hợp lệ ────────────────────────────────────────────────
         default:
           send(
@@ -339,6 +359,7 @@ module.exports = {
             "  del <stt> [stt...]    — Xóa file/folder\n" +
             "  view <stt>            — Xem nội dung file\n" +
             "  send <stt>            — Upload file lên pastebin\n" +
+            "  github <stt>          — Upload file lên GitHub\n" +
             "  create <tên> [text]   — Tạo file/folder\n" +
             "  copy <stt>            — Sao chép file\n" +
             "  rename <stt> <tên>    — Đổi tên"

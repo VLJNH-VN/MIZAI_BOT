@@ -3,30 +3,21 @@
 /**
  * src/commands/hf.js
  * Tích hợp Hugging Face Inference API — tạo ảnh AI
- *
- * Cách dùng:
- *   .hf img <mô tả>                     — Tạo ảnh (model mặc định)
- *   .hf img <mô tả> | <negative>        — Tạo ảnh với negative prompt
- *   .hf img <mô tả> --model <key>       — Chọn model
- *   .hf img <mô tả> --size <WxH>        — Kích thước (vd: 1024x768)
- *   .hf img <mô tả> --steps <số>        — Số bước (vd: 20)
- *   .hf img <mô tả> --seed <số>         — Seed cố định
- *   .hf models                          — Danh sách model
  */
 
-const fs   = require("fs");
-const path = require("path");
-const os   = require("os");
+const fs    = require("fs");
+const path  = require("path");
+const os    = require("os");
+const axios = require("axios");
 
-// ── Endpoint ──────────────────────────────────────────────────────────────────
-// api-inference.huggingface.co đã ngừng hỗ trợ — chỉ dùng router mới
-const HF_ROUTER  = "https://router.huggingface.co/hf-inference/models";
+// ── Endpoint (free inference API) ─────────────────────────────────────────────
+const HF_ROUTER = "https://api-inference.huggingface.co/models";
 
-// ── Danh sách model (chỉ models được hf-inference hỗ trợ) ────────────────────
+// ── Danh sách model (free tier) ───────────────────────────────────────────────
 const MODELS = {
-  schnell: { id: "black-forest-labs/FLUX.1-schnell",                label: "FLUX.1 Schnell (nhanh, mặc định)" },
-  sdxl:    { id: "stabilityai/stable-diffusion-xl-base-1.0",        label: "Stable Diffusion XL"              },
-  sd3:     { id: "stabilityai/stable-diffusion-3-medium-diffusers", label: "Stable Diffusion 3 Medium"        },
+  schnell: { id: "runwayml/stable-diffusion-v1-5",           label: "Stable Diffusion 1.5 (mặc định)" },
+  sdxl:    { id: "stabilityai/stable-diffusion-xl-base-1.0", label: "Stable Diffusion XL"              },
+  sd3:     { id: "Lykon/dreamshaper-8",                       label: "Dreamshaper 8"                    },
 };
 
 const DEFAULT_MODEL = "schnell";
@@ -81,7 +72,7 @@ async function generateImage({ modelId, prompt, negativePrompt, width, height, s
 
   const url = `${HF_ROUTER}/${modelId}`;
   try {
-    const res = await global.axios.post(url, body, {
+    const res = await axios.post(url, body, {
       headers     : hfHeaders(),
       responseType: "arraybuffer",
       timeout     : 120000,

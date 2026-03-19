@@ -188,9 +188,9 @@ async function downloadAudio(streamUrl, outPath) {
 // ════════════════════════════════════════════════════════════════════════════════
 const HF_API_BASE = "https://api-inference.huggingface.co/models";
 const HF_MODELS = {
-  schnell: { id: "stabilityai/stable-diffusion-2-1",         label: "Stable Diffusion 2.1" },
-  sdxl:    { id: "stabilityai/stable-diffusion-xl-base-1.0", label: "Stable Diffusion XL"  },
-  sd3:     { id: "stablediffusionapi/realistic-vision-v6.0b1",label: "Realistic Vision"      },
+  schnell: { id: "runwayml/stable-diffusion-v1-5",            label: "Stable Diffusion 1.5" },
+  sdxl:    { id: "stabilityai/stable-diffusion-xl-base-1.0",  label: "Stable Diffusion XL"  },
+  sd3:     { id: "Lykon/dreamshaper-8",                        label: "Dreamshaper 8"         },
 };
 
 function getHfToken() {

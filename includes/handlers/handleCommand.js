@@ -165,48 +165,8 @@ async function handleCommand({ api, event, commands, prefix }) {
       return;
     }
 
-      /*try {
-        let videoPath = null;
-
-        // Thử lấy từ index cache trước
-        const entry = pickRandom({ videoOnly: true });
-        if (entry) {
-          const ROOT = process.cwd();
-          videoPath = path.join(ROOT, entry.cachedPath);
-        }
-
-        // Fallback: quét thẳng thư mục videos nếu index rỗng
-        if (!videoPath && fs.existsSync(VIDEO_DIR)) {
-          const VIDEO_EXTS = new Set([".mp4", ".mov", ".mkv", ".webm"]);
-          const files = fs.readdirSync(VIDEO_DIR).filter(f => {
-            const ext = path.extname(f).toLowerCase();
-            return VIDEO_EXTS.has(ext) && fs.statSync(path.join(VIDEO_DIR, f)).size > 0;
-          });
-          if (files.length > 0) {
-            const pick = files[Math.floor(Math.random() * files.length)];
-            videoPath = path.join(VIDEO_DIR, pick);
-          }
-        }
-
-        if (videoPath && fs.existsSync(videoPath)) {
-          const meta = getVideoMeta(videoPath);
-          await sendVideo(api, videoPath, threadID, event.type, {
-            width:    meta.width    || 1280,
-            height:   meta.height   || 720,
-            duration: meta.duration || 0,
-            msg:      "",
-          });
-        }
-      } catch (e) {
-        logWarn(`[handleCommand] Gửi video random thất bại: ${e?.message}`);
-      }
-
-      return;
-    }
-
-    const cfg = command.config || {};
-    // Tên gốc của command (dùng cho cooldown, log) — ưu tiên cfg.name
-    const canonicalName = cfg.name ? String(cfg.name).toLowerCase() : commandName;*/
+    const cfg          = command.config || {};
+    const canonicalName = cfg.name ? String(cfg.name).toLowerCase() : commandName;
 
     // ── Permission ─────────────────────────────────────────────────────────────
     const allowed = await checkPermission({

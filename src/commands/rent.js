@@ -9,12 +9,18 @@ const {
   activateKey,
   generateKey,
   isExpired,
+  clearRentCache,
 } = require("../../includes/database/rent");
 
 const CONFIG_PATH = path.join(__dirname, "../../config.json");
+
 function readConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8")); }
   catch { return {}; }
+}
+
+function saveConfig(cfg) {
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf-8");
 }
 
 const PAGE_SIZE = 10;
@@ -30,20 +36,21 @@ function getBody(event) {
 module.exports = {
   config: {
     name: "rent",
-    version: "1.3.0",
+    version: "1.4.0",
     hasPermssion: 2,
     credits: "MiZai (port từ Niio-team)",
     description: "Quản lý thuê bot theo nhóm",
     commandCategory: "Quản Trị",
     usages: [
-      "rent add [ngày]        — Thêm / gia hạn thuê nhóm hiện tại (mặc định 30 ngày)",
-      "rent del [threadID]    — Xóa thông tin thuê (mặc định nhóm hiện tại)",
-      "rent list [trang]      — Xem danh sách nhóm đã thuê (có thể reply để thao tác)",
-      "rent reg [ngày]        — Tạo key thuê bot",
-      "rent info [threadID]   — Thông tin thuê nhóm (mặc định nhóm hiện tại)",
-      "rent key <key>         — Kích hoạt key thuê cho nhóm hiện tại",
-      "rent giahan [id] [ngày]— Gia hạn thêm số ngày cho nhóm",
-      "rent check [threadID]  — Kiểm tra trạng thái thuê của nhóm",
+      "rent on/off         — Bật/tắt chế độ kiểm tra thuê toàn bot",
+      "rent add [ngày]     — Thêm / gia hạn thuê nhóm hiện tại (mặc định 30 ngày)",
+      "rent del [threadID] — Xóa thông tin thuê (mặc định nhóm hiện tại)",
+      "rent list [trang]   — Xem danh sách nhóm đã thuê",
+      "rent reg [ngày]     — Tạo key thuê bot",
+      "rent info [id]      — Thông tin thuê nhóm",
+      "rent key <key>      — Kích hoạt key thuê cho nhóm hiện tại",
+      "rent giahan [id] [ngày] — Gia hạn thêm số ngày cho nhóm",
+      "rent check [id]     — Kiểm tra trạng thái thuê của nhóm",
     ].join("\n"),
     cooldowns: 3,
   },
@@ -51,27 +58,48 @@ module.exports = {
   run: async ({ api, event, args, send, threadID, senderId, registerReply }) => {
     const sub = (args[0] || "").toLowerCase().trim();
 
+    // ── Help ──────────────────────────────────────────────────────────────────
     if (!sub) {
+      const cfg = readConfig();
+      const modeStatus = cfg.rentMode ? "🟢 BẬT" : "🔴 TẮT";
       return send(
         `╔══ LỆNH RENT BOT ══╗\n` +
+        `║ Chế độ thuê: ${modeStatus}    ║\n` +
         `╚════════════════════╝\n` +
         `📋 Các lệnh con:\n` +
-        `  rent add [ngày]       — Thêm / gia hạn thuê nhóm hiện tại\n` +
-        `  rent del [threadID]   — Xóa thông tin thuê nhóm\n` +
-        `  rent list [trang]     — Xem danh sách nhóm đã thuê\n` +
-        `  rent reg [ngày]       — Tạo key thuê bot\n` +
-        `  rent info [threadID]  — Thông tin thuê nhóm\n` +
-        `  rent key <key>        — Kích hoạt key thuê\n` +
+        `  rent on/off          — Bật/tắt chế độ kiểm tra thuê\n` +
+        `  rent add [ngày]      — Thêm / gia hạn thuê nhóm hiện tại\n` +
+        `  rent del [threadID]  — Xóa thông tin thuê nhóm\n` +
+        `  rent list [trang]    — Xem danh sách nhóm đã thuê\n` +
+        `  rent reg [ngày]      — Tạo key thuê bot\n` +
+        `  rent info [threadID] — Thông tin thuê nhóm\n` +
+        `  rent key <key>       — Kích hoạt key thuê\n` +
         `  rent giahan [id] [ngày] — Gia hạn thêm cho nhóm\n` +
-        `  rent check [threadID] — Kiểm tra trạng thái thuê`
+        `  rent check [id]      — Kiểm tra trạng thái thuê`
       );
     }
 
-    // ── ADD ─────────────────────────────────────────────────────────────────
+    // ── ON / OFF ──────────────────────────────────────────────────────────────
+    if (sub === "on" || sub === "off") {
+      const enable = sub === "on";
+      const cfg = readConfig();
+      cfg.rentMode = enable;
+      saveConfig(cfg);
+      global.config.rentMode = enable;
+      clearRentCache();
+      return send(
+        enable
+          ? `✅ Đã BẬT chế độ kiểm tra thuê.\n⚠️ Các nhóm chưa thuê sẽ bị chặn lệnh.`
+          : `✅ Đã TẮT chế độ kiểm tra thuê.\n💡 Tất cả nhóm đều dùng được bot.`
+      );
+    }
+
+    // ── ADD ───────────────────────────────────────────────────────────────────
     if (sub === "add") {
       const days = parseInt(args[1], 10) || 30;
       try {
         const result = await addRent(threadID, senderId, days);
+        clearRentCache(threadID);
         if (result.isNew) {
           return send(
             `✅ Đã thêm thuê bot cho nhóm.\n` +
@@ -92,11 +120,12 @@ module.exports = {
       }
     }
 
-    // ── DEL ─────────────────────────────────────────────────────────────────
+    // ── DEL ───────────────────────────────────────────────────────────────────
     if (sub === "del") {
       const tid = args[1] ? String(args[1]).trim() : threadID;
       try {
         const ok = await deleteRent(tid);
+        clearRentCache(tid);
         if (ok) {
           return send(`✅ Đã xóa thông tin thuê bot cho nhóm ${tid}.`);
         } else {
@@ -107,7 +136,7 @@ module.exports = {
       }
     }
 
-    // ── LIST ─────────────────────────────────────────────────────────────────
+    // ── LIST ──────────────────────────────────────────────────────────────────
     if (sub === "list") {
       try {
         const page = parseInt(args[1], 10) || 1;
@@ -134,7 +163,7 @@ module.exports = {
           lines.join("\n\n") +
           `\n━━━━━━━━━━━━━━━━\n` +
           `Tổng: ${all.length} nhóm | Trang ${safePage}/${totalPages}\n` +
-          `💡 Reply: <số thứ tự> xem chi tiết | del <stt> xóa | giahan <stt> [ngày] gia hạn | page <n> chuyển trang`;
+          `💡 Reply: <stt> xem chi tiết | del <stt> xóa | giahan <stt> [ngày] | page <n>`;
 
         const sent = await send(txt);
         const msgId =
@@ -155,7 +184,7 @@ module.exports = {
       }
     }
 
-    // ── REG ──────────────────────────────────────────────────────────────────
+    // ── REG ───────────────────────────────────────────────────────────────────
     if (sub === "reg") {
       try {
         const days = parseInt(args[1], 10) || 30;
@@ -172,7 +201,7 @@ module.exports = {
       }
     }
 
-    // ── INFO ─────────────────────────────────────────────────────────────────
+    // ── INFO ──────────────────────────────────────────────────────────────────
     if (sub === "info") {
       const tid = args[1] ? String(args[1]).trim() : threadID;
       try {
@@ -198,7 +227,7 @@ module.exports = {
       }
     }
 
-    // ── CHECK ────────────────────────────────────────────────────────────────
+    // ── CHECK ─────────────────────────────────────────────────────────────────
     if (sub === "check") {
       const tid = args[1] ? String(args[1]).trim() : threadID;
       try {
@@ -222,7 +251,7 @@ module.exports = {
       }
     }
 
-    // ── KEY ──────────────────────────────────────────────────────────────────
+    // ── KEY ───────────────────────────────────────────────────────────────────
     if (sub === "key") {
       const key = args[1] ? String(args[1]).trim() : "";
       if (!key) {
@@ -235,6 +264,7 @@ module.exports = {
           if (result.reason === "invalid") return send(`❎ Key "${key}" không tồn tại!`);
           return send(`❎ Key không hợp lệ.`);
         }
+        clearRentCache(threadID);
         if (result.isNew) {
           return send(
             `✅ Kích hoạt thuê bot thành công!\n` +
@@ -252,7 +282,7 @@ module.exports = {
       }
     }
 
-    // ── GIAHAN ───────────────────────────────────────────────────────────────
+    // ── GIAHAN ────────────────────────────────────────────────────────────────
     if (sub === "extend" || sub === "giahan") {
       const arg1 = args[1] ? String(args[1]).trim() : "";
       const arg2 = args[2] ? parseInt(args[2], 10) : NaN;
@@ -270,6 +300,7 @@ module.exports = {
       try {
         const result = await extendRent(tid, days);
         if (!result) return send(`⚠️ Không tìm thấy thông tin thuê bot cho nhóm ${tid}.`);
+        clearRentCache(tid);
         return send(
           `✅ Đã gia hạn thêm ${days} ngày cho nhóm ${tid}.\n` +
           `📅 Đến mới: ${result.time_end}`
@@ -285,21 +316,20 @@ module.exports = {
     );
   },
 
-  // ── onReply: xử lý reply vào danh sách ─────────────────────────────────────
+  // ── onReply: xử lý reply vào danh sách ────────────────────────────────────
   onReply: async ({ api, event, data: replyData, send, registerReply }) => {
     const body = getBody(event);
     if (!body) return;
 
     const { case: $case, all = [], page = 1, totalPages = 1 } = replyData || {};
-
     if ($case !== "list") return;
 
     const parts  = body.split(/\s+/);
     const action = parts[0].toLowerCase();
 
-    // ── page <n> — chuyển trang ──────────────────────────────────────────────
+    // ── page <n> ──────────────────────────────────────────────────────────────
     if (action === "page") {
-      const n = parseInt(parts[1], 10) || 1;
+      const n          = parseInt(parts[1], 10) || 1;
       const safePage   = Math.max(1, Math.min(n, totalPages));
       const start      = (safePage - 1) * PAGE_SIZE;
       const slice      = all.slice(start, Math.min(start + PAGE_SIZE, all.length));
@@ -319,12 +349,13 @@ module.exports = {
         lines.join("\n\n") +
         `\n━━━━━━━━━━━━━━━━\n` +
         `Tổng: ${all.length} nhóm | Trang ${safePage}/${totalPages}\n` +
-        `💡 Reply: <số thứ tự> xem chi tiết | del <stt> xóa | giahan <stt> [ngày] gia hạn | page <n> chuyển trang`;
+        `💡 Reply: <stt> xem chi tiết | del <stt> xóa | giahan <stt> [ngày] | page <n>`;
 
       const sent = await send(txt);
       const msgId =
         sent?.message?.msgId ??
         (Array.isArray(sent?.attachment) ? sent.attachment[0]?.msgId : null);
+
       if (msgId && registerReply) {
         registerReply({
           messageId:   msgId,
@@ -336,7 +367,7 @@ module.exports = {
       return;
     }
 
-    // ── del <stt> — xóa theo số thứ tự ──────────────────────────────────────
+    // ── del <stt> ─────────────────────────────────────────────────────────────
     if (action === "del") {
       const stt = parseInt(parts[1], 10);
       if (isNaN(stt) || stt < 1 || stt > all.length) {
@@ -345,13 +376,14 @@ module.exports = {
       const target = all[stt - 1];
       try {
         await deleteRent(target.thread_id);
+        clearRentCache(target.thread_id);
         return send(`✅ Đã xóa thuê bot nhóm #${stt}:\n${target.thread_id}`);
       } catch (err) {
         return send(`❌ Lỗi: ${err.message}`);
       }
     }
 
-    // ── giahan <stt> [ngày] — gia hạn theo số thứ tự ────────────────────────
+    // ── giahan <stt> [ngày] ───────────────────────────────────────────────────
     if (action === "giahan" || action === "extend") {
       const stt  = parseInt(parts[1], 10);
       const days = parseInt(parts[2], 10) || 30;
@@ -362,6 +394,7 @@ module.exports = {
       try {
         const result = await extendRent(target.thread_id, days);
         if (!result) return send(`⚠️ Không tìm thấy nhóm ${target.thread_id} trong DB.`);
+        clearRentCache(target.thread_id);
         return send(
           `✅ Đã gia hạn thêm ${days} ngày cho nhóm #${stt}.\n` +
           `🏘️ Thread: ${target.thread_id}\n` +
@@ -372,7 +405,7 @@ module.exports = {
       }
     }
 
-    // ── <số thứ tự> — xem chi tiết ──────────────────────────────────────────
+    // ── <số thứ tự> — xem chi tiết ───────────────────────────────────────────
     const num = parseInt(action, 10);
     if (!isNaN(num)) {
       if (num < 1 || num > all.length) {
@@ -393,7 +426,7 @@ module.exports = {
 
     return send(
       `❓ Không hiểu lệnh.\n` +
-      `💡 Reply: <số thứ tự> | del <stt> | giahan <stt> [ngày] | page <n>`
+      `💡 Reply: <stt> | del <stt> | giahan <stt> [ngày] | page <n>`
     );
   },
 };

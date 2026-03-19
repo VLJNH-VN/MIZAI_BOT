@@ -154,6 +154,33 @@ async function activateKey(key, threadId, ownerId) {
   return { ok: true, isNew: !existing, time_start: existing ? existing.time_start : today, time_end: endDate };
 }
 
+// ── Rent status cache (dùng cho gate ở message.js) ───────────────────────────
+const _rentStatusCache = new Map();
+const RENT_CACHE_TTL = 2 * 60 * 1000; // 2 phút
+
+async function isGroupRented(threadId) {
+  const key = String(threadId);
+  const now = Date.now();
+  const cached = _rentStatusCache.get(key);
+  if (cached && cached.ts + RENT_CACHE_TTL > now) return cached.ok;
+  try {
+    const info = await getRent(key);
+    const ok = !!info && !isExpired(info.time_end);
+    _rentStatusCache.set(key, { ok, ts: now });
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+function clearRentCache(threadId) {
+  if (threadId) {
+    _rentStatusCache.delete(String(threadId));
+  } else {
+    _rentStatusCache.clear();
+  }
+}
+
 function generateKey(prefix, days) {
   const j = readRentKeys();
   const suffix = Math.random().toString(36).substring(2, 9);
@@ -182,4 +209,6 @@ module.exports = {
   formatDate,
   parseDate,
   readRentKeys,
+  isGroupRented,
+  clearRentCache,
 };

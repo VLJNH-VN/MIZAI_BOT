@@ -17,5 +17,6 @@
   "branch": "main",
   "autoUndoOnAngry": true,
   "🔄 undoEnabled": true,
-  "keyRent": "MiZai"
+  "keyRent": "MiZai",
+  "rentMode": false
 }

@@ -10,14 +10,14 @@ const path  = require("path");
 const os    = require("os");
 const axios = require("axios");
 
-// ── Endpoint (free inference API) ─────────────────────────────────────────────
-const HF_ROUTER = "https://api-inference.huggingface.co/models";
+// ── Endpoint ──────────────────────────────────────────────────────────────────
+const HF_ROUTER = "https://router.huggingface.co/hf-inference/models";
 
-// ── Danh sách model (free tier) ───────────────────────────────────────────────
+// ── Danh sách model (hf-inference router) ────────────────────────────────────
 const MODELS = {
-  schnell: { id: "runwayml/stable-diffusion-v1-5",           label: "Stable Diffusion 1.5 (mặc định)" },
-  sdxl:    { id: "stabilityai/stable-diffusion-xl-base-1.0", label: "Stable Diffusion XL"              },
-  sd3:     { id: "Lykon/dreamshaper-8",                       label: "Dreamshaper 8"                    },
+  schnell: { id: "black-forest-labs/FLUX.1-schnell",          label: "FLUX.1 Schnell (nhanh, mặc định)" },
+  sdxl:    { id: "stabilityai/stable-diffusion-xl-base-1.0",  label: "Stable Diffusion XL"              },
+  flux:    { id: "black-forest-labs/FLUX.1-dev",              label: "FLUX.1 Dev (chất lượng cao)"      },
 };
 
 const DEFAULT_MODEL = "schnell";

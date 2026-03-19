@@ -184,13 +184,13 @@ async function downloadAudio(streamUrl, outPath) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-//  ẢNH AI — HuggingFace (free inference API)
+//  ẢNH AI — HuggingFace Router (hf-inference)
 // ════════════════════════════════════════════════════════════════════════════════
-const HF_API_BASE = "https://api-inference.huggingface.co/models";
+const HF_API_BASE = "https://router.huggingface.co/hf-inference/models";
 const HF_MODELS = {
-  schnell: { id: "runwayml/stable-diffusion-v1-5",            label: "Stable Diffusion 1.5" },
-  sdxl:    { id: "stabilityai/stable-diffusion-xl-base-1.0",  label: "Stable Diffusion XL"  },
-  sd3:     { id: "Lykon/dreamshaper-8",                        label: "Dreamshaper 8"         },
+  schnell: { id: "black-forest-labs/FLUX.1-schnell",          label: "FLUX.1 Schnell" },
+  sdxl:    { id: "stabilityai/stable-diffusion-xl-base-1.0",  label: "Stable Diffusion XL" },
+  flux:    { id: "black-forest-labs/FLUX.1-dev",              label: "FLUX.1 Dev"     },
 };
 
 function getHfToken() {

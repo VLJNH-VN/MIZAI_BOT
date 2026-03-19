@@ -280,11 +280,57 @@ async function sendImages(api, imageUrls, caption, threadId, threadType) {
     }
 }
 
+// ─── Handler: TikTok qua tikwm.com (nhanh, không watermark) ───────────────────
+async function handleTikTokTikwm(api, url, threadId, threadType) {
+    const body = new URLSearchParams({ url }).toString();
+    const res = await axios.post(
+        "https://www.tikwm.com/api/",
+        body,
+        { timeout: 30000, headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+    );
+    if (res.data?.code !== 0) throw new Error(`tikwm lỗi code ${res.data?.code}`);
+
+    const d       = res.data.data;
+    const title   = d.title?.trim()          || "TikTok";
+    const author  = d.author?.nickname        || "Unknown";
+    const uid     = d.author?.unique_id       || "";
+    const likes   = Number(d.digg_count || 0).toLocaleString("vi-VN");
+    const caption =
+        `/-li 𝐀𝐮𝐭𝐨𝐃𝐨𝐰𝐧: TIKTOK\n` +
+        `📄 ${title}\n` +
+        `👤 ${author}${uid ? ` (@${uid})` : ""}\n` +
+        `❤️ ${likes} lượt thích`;
+
+    // Slideshow ảnh
+    if (Array.isArray(d.images) && d.images.length) {
+        await sendImages(api, d.images, caption, threadId, threadType);
+        return;
+    }
+
+    // Video (không watermark)
+    const videoUrl = d.play || d.wmplay;
+    if (videoUrl) {
+        await sendVideo(api, videoUrl, { thumbnail: d.cover || "", duration: d.duration || 0 }, caption, threadId, threadType);
+        return;
+    }
+
+    throw new Error("tikwm: Không có video/ảnh");
+}
+
 // ─── Handler: TikTok / Douyin / CapCut ─────────────────────────────────────────
 async function handleTikTok(api, url, threadId, threadType) {
     logInfo(`[AutoDown] TikTok: ${url}`);
-    const res = await Downloader(url, { version: "v3" });
 
+    // Thử tikwm.com trước (nhanh hơn, có likes count, không watermark)
+    try {
+        await handleTikTokTikwm(api, url, threadId, threadType);
+        return;
+    } catch (e) {
+        logWarn(`[AutoDown] tikwm thất bại, dùng fallback: ${e.message}`);
+    }
+
+    // Fallback: @tobyg74/tiktok-api-dl
+    const res = await Downloader(url, { version: "v3" });
     if (res.status !== "success" || !res.result)
         throw new Error(`TikTok Downloader thất bại: ${res.message || "unknown"}`);
 

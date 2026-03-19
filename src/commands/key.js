@@ -109,6 +109,7 @@ module.exports = {
     usages: [
       ".key add <key>         — Thêm key (Gemini hoặc Groq)",
       ".key del <key|số>      — Xoá key Gemini (g1, g2...) hoặc Groq (1, 2...)",
+      ".key alive [g1|g2...]  — Khôi phục key bị đánh dấu dead nhầm",
       ".key list              — Danh sách tất cả key",
       ".key check             — Check tất cả key",
       ".key check <key>       — Check 1 key cụ thể",
@@ -317,6 +318,46 @@ module.exports = {
       );
     }
 
+    // ── Khôi phục key bị mark dead nhầm ────────────────────────────────────────
+    if (sub === "alive" || sub === "revive" || sub === "reset") {
+      const target = args[1]?.trim();
+      const data   = loadData();
+
+      if (!target) {
+        data.geminiDead = [];
+        data.geminiLive = [...data.geminiKeys];
+        saveData(data);
+        syncActiveGeminiKey(data);
+        return send(`✅ Đã bỏ dead cho TẤT CẢ ${data.geminiKeys.length} Gemini key.\nDùng .key check để kiểm tra lại.`);
+      }
+
+      const geminiMatch = /^g(\d+)$/i.exec(target);
+      if (geminiMatch) {
+        const idx = parseInt(geminiMatch[1]) - 1;
+        if (idx < 0 || idx >= data.geminiKeys.length)
+          return send(`❌ Số thứ tự không hợp lệ. Hiện có ${data.geminiKeys.length} Gemini key.`);
+        const key = data.geminiKeys[idx];
+        data.geminiDead = data.geminiDead.filter(k => k !== key);
+        if (!data.geminiLive.includes(key)) data.geminiLive.push(key);
+        saveData(data);
+        syncActiveGeminiKey(data);
+        const short = `${key.slice(0, 8)}...${key.slice(-4)}`;
+        return send(`✅ Đã khôi phục Gemini key g${idx + 1}: ${short}`);
+      }
+
+      if (target.startsWith("AIza")) {
+        if (!data.geminiKeys.includes(target)) return send("❌ Không tìm thấy key này.");
+        data.geminiDead = data.geminiDead.filter(k => k !== target);
+        if (!data.geminiLive.includes(target)) data.geminiLive.push(target);
+        saveData(data);
+        syncActiveGeminiKey(data);
+        const short = `${target.slice(0, 8)}...${target.slice(-4)}`;
+        return send(`✅ Đã khôi phục Gemini key: ${short}`);
+      }
+
+      return send("⚠️ Dùng: .key alive g1 | .key alive g2 | .key alive (tất cả)");
+    }
+
     // ── Bật/tắt auto check ──────────────────────────────────────────────────────
     if (sub === "autocheck" || sub === "auto") {
       const data    = loadData();
@@ -337,6 +378,8 @@ module.exports = {
       `.key add <key>      — Thêm Gemini/Groq key\n` +
       `.key del g<số>      — Xoá Gemini key (g1, g2...)\n` +
       `.key del <số>       — Xoá Groq key (1, 2...)\n` +
+      `.key alive          — Khôi phục tất cả key bị dead nhầm\n` +
+      `.key alive g1       — Khôi phục 1 key cụ thể\n` +
       `.key list           — Danh sách tất cả key\n` +
       `.key check          — Check tất cả key\n` +
       `.key check <key>    — Check 1 key cụ thể\n` +

@@ -151,6 +151,23 @@ function getLiveKeys() {
   throw new Error("Chưa có Gemini API key. Dùng .key add AIza... để thêm key.");
 }
 
+// ── Cooldown tạm thời (rate-limit) vs dead thật (hết quota ngày) ─────────────────
+const _keyCooldown = new Map(); // key → timestamp hết cooldown
+const RATE_LIMIT_COOLDOWN_MS = 60 * 1000; // 60 giây nghỉ
+
+function isKeyCoolingDown(key) {
+  const until = _keyCooldown.get(key);
+  if (!until) return false;
+  if (Date.now() < until) return true;
+  _keyCooldown.delete(key);
+  return false;
+}
+
+function putKeyCooldown(key) {
+  _keyCooldown.set(key, Date.now() + RATE_LIMIT_COOLDOWN_MS);
+  global.logWarn?.(`[goibot] Key ${key.slice(0, 8)}... bị rate-limit, nghỉ 60s.`);
+}
+
 function markGeminiKeyDead(key) {
   const data = loadKeyData();
   if (!Array.isArray(data.geminiDead)) data.geminiDead = [];
@@ -158,8 +175,18 @@ function markGeminiKeyDead(key) {
     data.geminiDead.push(key);
     data.geminiLive = (data.geminiLive || []).filter(k => k !== key);
     saveKeyData(data);
-    global.logWarn?.(`[goibot] Key ${key.slice(0, 8)}... hết quota, đã đánh dấu dead.`);
+    global.logWarn?.(`[goibot] Key ${key.slice(0, 8)}... hết quota ngày, đã đánh dấu dead.`);
   }
+}
+
+// Phân tích lỗi: rate-limit tạm thời hay hết quota thật?
+function isQuotaExhausted(errMsg) {
+  const m = errMsg.toLowerCase();
+  return (
+    m.includes("daily") || m.includes("monthly") ||
+    m.includes("billing") || m.includes("exceeded your quota") ||
+    m.includes("quota exceeded") || m.includes("limit exceeded")
+  );
 }
 
 // ── Download ảnh → base64 ────────────────────────────────────────────────────────
@@ -234,6 +261,8 @@ async function sendToGroq(userMessage, threadId, opts = {}) {
   let lastErr   = null;
 
   for (const key of tryKeys) {
+    if (isKeyCoolingDown(key)) continue;
+
     try {
       const ai = new GoogleGenAI({ apiKey: key });
 
@@ -281,8 +310,14 @@ async function sendToGroq(userMessage, threadId, opts = {}) {
       return assistantMsg;
     } catch (err) {
       const msg = err?.message || "";
-      if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota") || err?.status === 429) {
-        markGeminiKeyDead(key);
+      const is429 = err?.status === 429 || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429");
+
+      if (is429) {
+        if (isQuotaExhausted(msg)) {
+          markGeminiKeyDead(key);
+        } else {
+          putKeyCooldown(key);
+        }
         lastErr = err;
         continue;
       }
@@ -290,6 +325,10 @@ async function sendToGroq(userMessage, threadId, opts = {}) {
     }
   }
 
+  const available = tryKeys.filter(k => !isKeyCoolingDown(k));
+  if (available.length === 0) {
+    throw new Error("Tất cả Gemini key đang bị rate-limit, thử lại sau ít giây nhé!");
+  }
   throw lastErr || new Error("Tất cả Gemini key đều hết quota.");
 }
 

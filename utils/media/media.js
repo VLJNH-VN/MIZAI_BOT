@@ -5,13 +5,6 @@ const path       = require("path");
 const axios      = require("axios");
 const FormData   = require("form-data");
 const { execSync } = require("child_process");
-function githubApiHeaders(token) {
-  return {
-    Authorization: `Bearer ${token}`,
-    Accept: "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-  };
-}
 
 // ── Đường dẫn ─────────────────────────────────────────────────────────────────
 
@@ -29,15 +22,6 @@ if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 function ensureDirs() {
   fs.mkdirSync(VIDEO_DIR, { recursive: true });
   fs.mkdirSync(THUMB_DIR, { recursive: true });
-}
-
-function getConfig() {
-  if (global.config) return global.config;
-  try {
-    return JSON.parse(fs.readFileSync(path.join(ROOT, "config.json"), "utf8"));
-  } catch (e) {
-    throw new Error(`[media] Không đọc được config.json: ${e.message}`);
-  }
 }
 
 function readLinks() {
@@ -58,38 +42,20 @@ function saveIndex(arr) {
   fs.writeFileSync(INDEX_FILE, JSON.stringify(arr, null, 2), "utf8");
 }
 
-// ── Media Cache: decode từ GitHub ────────────────────────────────────────────
+// ── Tải file thẳng từ rawUrl (raw.githubusercontent.com) ─────────────────────
 
-async function decodeFromApiUrl(apiUrl, outputPath, token) {
-  const res = await axios.get(apiUrl, {
-    headers: githubApiHeaders(token),
-    timeout: 90000,
+async function downloadRaw(rawUrl, outputPath) {
+  const res = await axios.get(rawUrl, {
+    responseType: "arraybuffer",
+    timeout: 120000,
+    maxContentLength: 200 * 1024 * 1024,
   });
-
-  const b64         = res.data?.content;
-  const downloadUrl = res.data?.download_url;
-
-  // File nhỏ (<1MB): GitHub trả về base64 content
-  if (b64 && b64.trim().length > 0) {
-    const buffer = Buffer.from(b64.replace(/\n/g, ""), "base64");
-    fs.writeFileSync(outputPath, buffer);
-    return buffer.length;
-  }
-
-  // File lớn (>1MB): GitHub không trả content — tải thẳng từ download_url
-  if (downloadUrl) {
-    const dl = await axios.get(downloadUrl, {
-      responseType: "arraybuffer",
-      timeout: 120000,
-      maxContentLength: 200 * 1024 * 1024,
-    });
-    const buffer = Buffer.from(dl.data);
-    fs.writeFileSync(outputPath, buffer);
-    return buffer.length;
-  }
-
-  throw new Error("GitHub không trả về content base64 và không có download_url");
+  const buffer = Buffer.from(res.data);
+  fs.writeFileSync(outputPath, buffer);
+  return buffer.length;
 }
+
+// ── Video metadata & thumbnail ────────────────────────────────────────────────
 
 function getVideoMeta(filePath) {
   try {
@@ -125,12 +91,10 @@ function createThumb(videoPath, baseName) {
   return null;
 }
 
+// ── Cache: decode 1 entry ─────────────────────────────────────────────────────
+
 async function decodeOne(key, opts = {}) {
   const { force = false, onLog = () => {} } = opts;
-
-  const cfg   = getConfig();
-  const token = cfg.githubToken;
-  if (!token) throw new Error("[media] Thiếu config.githubToken");
 
   const links = readLinks();
   const entry = links[key];
@@ -147,27 +111,28 @@ async function decodeOne(key, opts = {}) {
     return cachedPath;
   }
 
-  onLog(`[decode] ${key} — đang giải mã từ GitHub...`);
+  const rawUrl = entry.rawUrl;
+  if (!rawUrl) throw new Error(`[media] Entry "${key}" không có rawUrl`);
+
+  onLog(`[download] ${key} — đang tải từ GitHub raw...`);
 
   try {
-    const bytes = await decodeFromApiUrl(entry.apiUrl, cachedPath, token);
-    onLog(`[decode] ${key} — ${(bytes / 1024).toFixed(1)} KB`);
+    const bytes = await downloadRaw(rawUrl, cachedPath);
+    onLog(`[download] ${key} — ${(bytes / 1024).toFixed(1)} KB`);
     return cachedPath;
   } catch (e) {
-    onLog(`[decode] ${key} — ${e.message}`);
+    onLog(`[download] ${key} — ${e.message}`);
     try { fs.unlinkSync(cachedPath); } catch (_) {}
     return null;
   }
 }
 
+// ── Cache: xử lý tất cả entry mới ───────────────────────────────────────────
+
 async function processAll(opts = {}) {
   const { onLog = console.log, onProgress, force = false } = opts;
 
   ensureDirs();
-
-  const cfg   = getConfig();
-  const token = cfg.githubToken;
-  if (!token) throw new Error("[media] Thiếu config.githubToken trong config.json");
 
   const links = readLinks();
   const keys  = Object.keys(links);
@@ -186,7 +151,7 @@ async function processAll(opts = {}) {
     return { success: 0, fail: 0, total: 0, saved: index.length };
   }
 
-  onLog(`Cần giải mã: ${pending.length} entry mới (tổng: ${keys.length})`);
+  onLog(`Cần tải: ${pending.length} entry mới (tổng: ${keys.length})`);
 
   let successCount = 0;
   let failCount    = 0;
@@ -201,10 +166,18 @@ async function processAll(opts = {}) {
     const fileName   = `${key}${ext}`;
     const cachedPath = path.join(VIDEO_DIR, fileName);
 
-    onLog(`${label} Giải mã: ${key}${ext}`);
+    const rawUrl = entry.rawUrl;
+    if (!rawUrl) {
+      onLog(`${label} Bỏ qua ${key}: không có rawUrl`);
+      failCount++;
+      onProgress?.({ done: i + 1, total: pending.length, success: successCount, fail: failCount });
+      continue;
+    }
+
+    onLog(`${label} Tải: ${key}${ext}`);
 
     try {
-      const bytes = await decodeFromApiUrl(entry.apiUrl, cachedPath, token);
+      const bytes = await downloadRaw(rawUrl, cachedPath);
       onLog(`${label} Đã lưu — ${(bytes / 1024).toFixed(1)} KB`);
 
       let meta      = { width: 0, height: 0, duration: 0 };
@@ -220,7 +193,6 @@ async function processAll(opts = {}) {
       const record = {
         key,
         rawUrl:     entry.rawUrl,
-        apiUrl:     entry.apiUrl,
         cachedPath: path.relative(ROOT, cachedPath),
         ext,
         isVideo,
@@ -249,6 +221,8 @@ async function processAll(opts = {}) {
   return { success: successCount, fail: failCount, total: pending.length, saved: index.length };
 }
 
+// ── Random pick ───────────────────────────────────────────────────────────────
+
 function pickRandom(opts = {}) {
   const index = loadIndex();
   if (index.length === 0) return null;
@@ -265,16 +239,14 @@ function pickRandom(opts = {}) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-// ── Upload: gửi video/voice/ảnh lên Zalo ─────────────────────────────────────
+// ── Tiện ích dọn file tạm ─────────────────────────────────────────────────────
 
 function logMessageToFile(message, type = "general") {
   try {
     const logDir = path.join(ROOT, "logs");
     if (!fs.existsSync(logDir)) fs.mkdirSync(logDir);
-
     const fileName = `${type}_${new Date().toISOString().split("T")[0]}.log`;
     const filePath = path.join(logDir, fileName);
-
     const timestamp = new Date().toLocaleString();
     fs.appendFileSync(filePath, `[${timestamp}] ${message}\n`);
   } catch (e) {}
@@ -325,6 +297,8 @@ function cleanupOldFiles() {
   });
 }
 
+// ── Gửi video lên Zalo (thumbnail qua Zalo CDN) ───────────────────────────────
+
 async function extractThumb(videoPath) {
   const thumbPath = path.join(tempDir, `thumb_${Date.now()}.jpg`);
   try {
@@ -343,7 +317,6 @@ async function extractThumb(videoPath) {
 async function sendVideo(api, tmpPath, threadId, threadType, meta = {}) {
   if (!fs.existsSync(tmpPath)) throw new Error(`File không tồn tại: ${tmpPath}`);
 
-  // Upload video
   let uploads;
   try {
     uploads = await api.uploadAttachment([tmpPath], threadId, threadType);
@@ -362,7 +335,6 @@ async function sendVideo(api, tmpPath, threadId, threadType, meta = {}) {
   const duration = meta.duration || 0;
   const msg      = meta.msg      || "";
 
-  // Upload thumbnail qua Zalo (đảm bảo URL hợp lệ với Zalo API)
   let thumbnailUrl = meta.thumbnailUrl || "";
   if (!thumbnailUrl) {
     const thumbPath = await extractThumb(tmpPath);
@@ -402,7 +374,6 @@ async function sendVoice(api, tmpPath, threadId, threadType) {
   }
 
   const voiceData = uploaded?.[0];
-
   if (!voiceData?.fileUrl) {
     throw new Error(`uploadAttachment không trả về fileUrl (${path.basename(tmpPath)})`);
   }

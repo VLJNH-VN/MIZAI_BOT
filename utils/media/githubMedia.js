@@ -1,21 +1,18 @@
 /**
  * utils/media/githubMedia.js
  * ─────────────────────────────────────────────────────────────────────────────
- * Mã hóa media (video/ảnh/audio) bằng base64 rồi tải lên GitHub,
- * lưu link raw vào JSON, và giải mã về file/buffer khi cần.
+ * Upload media lên GitHub qua Contents API, lưu rawUrl vào JSON,
+ * và tải về thẳng từ raw.githubusercontent.com khi cần.
  *
  * Đọc cấu hình từ global.config (config.json):
  *   config.githubToken  - Personal Access Token (scope: repo)
- *   config.uploadRepo   - "owner/repo" dùng để upload media (vd: "VLJNH-VN/UPLOAD_MIZAI")
+ *   config.uploadRepo   - "owner/repo" dùng để upload (vd: "VLJNH-VN/UPLOAD_MIZAI")
  *   config.branch       - Nhánh mặc định (mặc định "main")
  *
- * ┌──────────────────────────────────────────────────────────────────────────┐
- * │  EXPORTS                                                                 │
- * ├──────────────────────────────┬───────────────────────────────────────────┤
- * │  encodeAndUploadToGithub     │ Mã hóa file → upload GitHub → lưu link   │
- * │  decodeFromGithub            │ Tải content base64 từ GitHub → giải mã    │
- * │  getMediaLinks               │ Đọc toàn bộ link đã lưu trong JSON        │
- * └──────────────────────────────┴───────────────────────────────────────────┘
+ * EXPORTS
+ *   encodeAndUploadToGithub  — Đọc file → upload GitHub → lưu rawUrl vào JSON
+ *   decodeFromGithub         — Tải thẳng rawUrl về Buffer / file
+ *   getMediaLinks            — Đọc toàn bộ link đã lưu
  */
 
 "use strict";
@@ -23,6 +20,7 @@
 const fs    = require("fs");
 const path  = require("path");
 const axios = require("axios");
+
 function githubApiHeaders(token) {
   return {
     Authorization: `Bearer ${token}`,
@@ -36,9 +34,9 @@ const LINKS_FILE = path.join(process.cwd(), "includes", "data", "githubMediaLink
 
 // ── Loại file hợp lệ ─────────────────────────────────────────────────────────
 const SUPPORTED_EXTS = new Set([
-  ".mp4", ".mkv", ".avi", ".mov", ".webm",      // video
-  ".jpg", ".jpeg", ".png", ".gif", ".webp",      // ảnh
-  ".mp3", ".aac", ".m4a", ".ogg", ".wav",        // audio
+  ".mp4", ".mkv", ".avi", ".mov", ".webm",
+  ".jpg", ".jpeg", ".png", ".gif", ".webp",
+  ".mp3", ".aac", ".m4a", ".ogg", ".wav",
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,9 +45,7 @@ const SUPPORTED_EXTS = new Set([
 
 function readLinks() {
   try {
-    if (fs.existsSync(LINKS_FILE)) {
-      return JSON.parse(fs.readFileSync(LINKS_FILE, "utf8"));
-    }
+    if (fs.existsSync(LINKS_FILE)) return JSON.parse(fs.readFileSync(LINKS_FILE, "utf8"));
   } catch (_) {}
   return {};
 }
@@ -64,47 +60,28 @@ function writeLinks(data) {
   }
 }
 
-/**
- * Đọc config GitHub từ global.config (config.json).
- * uploadRepo: "owner/repo" — ví dụ "VLJNH-VN/UPLOAD_MIZAI"
- */
 function getGithubConfig() {
   const cfg = global.config || {};
-
   const token      = cfg.githubToken;
   const uploadRepo = cfg.uploadRepo;
   const branch     = cfg.branch || "main";
 
   if (!token)      throw new Error("[githubMedia] Thiếu config.githubToken trong config.json");
-  if (!uploadRepo) throw new Error("[githubMedia] Thiếu config.uploadRepo trong config.json (vd: \"VLJNH-VN/UPLOAD_MIZAI\")");
+  if (!uploadRepo) throw new Error("[githubMedia] Thiếu config.uploadRepo trong config.json");
 
   const parts = uploadRepo.split("/");
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
     throw new Error(`[githubMedia] config.uploadRepo không đúng định dạng "owner/repo": "${uploadRepo}"`);
   }
 
-  return {
-    token,
-    owner:  parts[0],
-    repo:   parts[1],
-    branch,
-    fullRepo: uploadRepo,
-  };
+  return { token, owner: parts[0], repo: parts[1], branch, fullRepo: uploadRepo };
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Lấy SHA của file (cần khi update file đã tồn tại trên GitHub)
-// ─────────────────────────────────────────────────────────────────────────────
 async function getFileSha(owner, repo, ghPath, branch, token) {
   try {
     const res = await axios.get(
       `https://api.github.com/repos/${owner}/${repo}/contents/${ghPath}`,
-      {
-        headers: githubApiHeaders(token),
-        params: { ref: branch },
-        timeout: 15000,
-      }
+      { headers: githubApiHeaders(token), params: { ref: branch }, timeout: 15000 }
     );
     return res.data?.sha || null;
   } catch (_) {
@@ -113,18 +90,19 @@ async function getFileSha(owner, repo, ghPath, branch, token) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC: Mã hóa và tải lên GitHub
+// PUBLIC: Upload lên GitHub (GitHub API yêu cầu base64 khi PUT)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Đọc file media, mã hóa base64, tải lên GitHub (uploadRepo), lưu link raw vào JSON.
+ * Đọc file, upload lên GitHub, lưu rawUrl vào JSON.
+ * (GitHub Contents API bắt buộc truyền content dưới dạng base64 khi PUT)
  *
- * @param {string} filePath       - Đường dẫn file local (video/ảnh/audio)
+ * @param {string} filePath
  * @param {object} [options]
- * @param {string} [options.folder]     - Thư mục con trên GitHub (vd: "media/videos")
- * @param {string} [options.key]        - Khóa lưu trong JSON (mặc định: tên file)
- * @param {boolean} [options.overwrite] - Ghi đè nếu file đã tồn tại (default: true)
- * @returns {Promise<{ key: string, rawUrl: string, apiUrl: string }>}
+ * @param {string}  [options.folder]     - Thư mục con trên GitHub (mặc định: "media")
+ * @param {string}  [options.key]        - Khóa lưu trong JSON (mặc định: tên file)
+ * @param {boolean} [options.overwrite]  - Ghi đè nếu đã tồn tại (mặc định: true)
+ * @returns {Promise<{ key, rawUrl, apiUrl }>}
  */
 async function encodeAndUploadToGithub(filePath, options = {}) {
   if (!fs.existsSync(filePath)) {
@@ -143,18 +121,14 @@ async function encodeAndUploadToGithub(filePath, options = {}) {
   const ghPath    = `${folder}/${fileName}`;
   const overwrite = options.overwrite !== false;
 
-  // ── Mã hóa base64 ────────────────────────────────────────────────────────
-  const buffer     = fs.readFileSync(filePath);
-  const b64Content = buffer.toString("base64");
+  const b64Content = fs.readFileSync(filePath).toString("base64");
 
-  // ── Lấy SHA nếu file đã tồn tại (để update) ──────────────────────────────
   const existingSha = overwrite
     ? await getFileSha(owner, repo, ghPath, branch, token)
     : null;
 
-  // ── Tải lên GitHub qua API ────────────────────────────────────────────────
   const body = {
-    message: `upload media: ${fileName}`,
+    message: `upload: ${fileName}`,
     content: b64Content,
     branch,
     ...(existingSha ? { sha: existingSha } : {}),
@@ -175,11 +149,8 @@ async function encodeAndUploadToGithub(filePath, options = {}) {
   const rawUrl = uploadRes.data?.content?.download_url;
   const apiUrl = uploadRes.data?.content?.url;
 
-  if (!rawUrl) {
-    throw new Error("[githubMedia] GitHub không trả về download_url");
-  }
+  if (!rawUrl) throw new Error("[githubMedia] GitHub không trả về download_url");
 
-  // ── Lưu link vào JSON ─────────────────────────────────────────────────────
   const links = readLinks();
   links[key] = {
     rawUrl,
@@ -197,70 +168,40 @@ async function encodeAndUploadToGithub(filePath, options = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC: Giải mã từ GitHub
+// PUBLIC: Tải về thẳng từ rawUrl (bỏ bước decode base64)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Tải nội dung base64 từ GitHub và giải mã về Buffer hoặc lưu vào file.
+ * Tải file thẳng từ raw.githubusercontent.com về Buffer hoặc lưu vào file.
  *
- * @param {string} keyOrUrl       - Key trong JSON hoặc GitHub API URL trực tiếp
- * @param {string} [outputPath]   - Nếu có, lưu file vào đường dẫn này
- * @returns {Promise<Buffer>}     - Buffer chứa dữ liệu đã giải mã
+ * @param {string} keyOrUrl     - Key trong JSON hoặc rawUrl trực tiếp
+ * @param {string} [outputPath] - Nếu có, lưu file vào đường dẫn này
+ * @returns {Promise<Buffer>}
  */
 async function decodeFromGithub(keyOrUrl, outputPath = null) {
-  const { token } = getGithubConfig();
+  let rawUrl = keyOrUrl;
 
-  let apiUrl = keyOrUrl;
-
-  // Nếu là key thì tra trong JSON lấy apiUrl
   if (!keyOrUrl.startsWith("http")) {
     const links = readLinks();
     const entry = links[keyOrUrl];
-    if (!entry) {
-      throw new Error(`[githubMedia] Không tìm thấy key "${keyOrUrl}" trong githubMediaLinks.json`);
-    }
-    apiUrl = entry.apiUrl;
+    if (!entry) throw new Error(`[githubMedia] Không tìm thấy key "${keyOrUrl}"`);
+    rawUrl = entry.rawUrl;
   }
 
-  // ── Gọi GitHub API lấy content base64 ────────────────────────────────────
-  let res;
-  try {
-    res = await axios.get(apiUrl, {
-      headers: githubApiHeaders(token),
-      timeout: 60000,
-    });
-  } catch (e) {
-    const msg = e.response?.data?.message || e.message;
-    throw new Error(`[githubMedia] Tải file thất bại: ${msg}`);
-  }
-
-  const b64         = res.data?.content;
-  const downloadUrl = res.data?.download_url;
+  if (!rawUrl) throw new Error("[githubMedia] Không có rawUrl để tải");
 
   let buffer;
-
-  // File nhỏ (<1MB): GitHub trả về base64 content
-  if (b64 && b64.trim().length > 0) {
-    buffer = Buffer.from(b64.replace(/\n/g, ""), "base64");
-  }
-  // File lớn (>1MB): tải thẳng từ download_url
-  else if (downloadUrl) {
-    try {
-      const dl = await axios.get(downloadUrl, {
-        responseType: "arraybuffer",
-        timeout: 120000,
-        maxContentLength: 200 * 1024 * 1024,
-      });
-      buffer = Buffer.from(dl.data);
-    } catch (e) {
-      throw new Error(`[githubMedia] Tải file lớn thất bại: ${e.message}`);
-    }
-  }
-  else {
-    throw new Error("[githubMedia] GitHub API không trả về content base64 và không có download_url");
+  try {
+    const res = await axios.get(rawUrl, {
+      responseType: "arraybuffer",
+      timeout: 120000,
+      maxContentLength: 200 * 1024 * 1024,
+    });
+    buffer = Buffer.from(res.data);
+  } catch (e) {
+    throw new Error(`[githubMedia] Tải file thất bại: ${e.message}`);
   }
 
-  // ── Lưu file nếu có outputPath ────────────────────────────────────────────
   if (outputPath) {
     const dir = path.dirname(outputPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -274,10 +215,6 @@ async function decodeFromGithub(keyOrUrl, outputPath = null) {
 // PUBLIC: Đọc toàn bộ link đã lưu
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Trả về toàn bộ nội dung githubMediaLinks.json.
- * @returns {object}
- */
 function getMediaLinks() {
   return readLinks();
 }

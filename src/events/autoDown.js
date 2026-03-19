@@ -57,7 +57,7 @@ function isAutoDownEnabled(threadId) {
 async function downloadFile(url, filePath) {
     const res = await axios.get(url, {
         responseType: "arraybuffer",
-        timeout: 120000,
+        timeout: 300000,
         maxContentLength: 500 * 1024 * 1024,
         headers: { "User-Agent": global.userAgent || "Mozilla/5.0" }
     });
@@ -69,7 +69,7 @@ function probeStreams(filePath) {
     try {
         const out = execSync(
             `ffprobe -v error -show_format -show_streams -of json "${filePath}"`,
-            { timeout: 15000, stdio: "pipe" }
+            { timeout: 30000, stdio: "pipe" }
         ).toString();
         const data = JSON.parse(out);
         const hasVideo = data.streams?.some(s => s.codec_type === "video") || false;
@@ -101,13 +101,13 @@ function convertToH264(inputPath, outputPath) {
         `-vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" ` +
         `-movflags +faststart ` +
         `"${outputPath}"`,
-        { timeout: 180000, stdio: "pipe" }
+        { timeout: 300000, stdio: "pipe" }
     );
 }
 
 function convertToAac(inputPath, outputPath) {
     execSync(`ffmpeg -y -i "${inputPath}" -vn -c:a aac -b:a 128k "${outputPath}"`,
-        { timeout: 60000, stdio: "pipe" });
+        { timeout: 120000, stdio: "pipe" });
 }
 
 function cleanup(...files) {
@@ -119,13 +119,13 @@ function cleanup(...files) {
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────
-async function fetchMediaInfo(url, retries = 2) {
+async function fetchMediaInfo(url, retries = 3) {
     let lastErr;
     for (let i = 1; i <= retries; i++) {
         try {
             const res = await axios.get(
                 `${API_BASE}/api/media?url=${encodeURIComponent(url)}`,
-                { timeout: 90000 }
+                { timeout: 180000 }
             );
             const d = res.data;
             if (!d || typeof d !== "object") throw new Error("Dữ liệu API không hợp lệ");
@@ -136,7 +136,7 @@ async function fetchMediaInfo(url, retries = 2) {
             if (status && status < 500) break;
             if (i < retries) {
                 logWarn(`[AutoDown] Thử lại lần ${i} (${err.message})...`);
-                await new Promise(r => setTimeout(r, 4000 * i));
+                await new Promise(r => setTimeout(r, 6000 * i));
             }
         }
     }

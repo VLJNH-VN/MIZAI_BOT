@@ -88,10 +88,10 @@ function zipToStream(srcPaths) {
   return archive;
 }
 
-/** Upload zip stream lên 0x0.st (thay catbox.moe bị chặn) */
+/** Upload zip stream lên GitHub */
 async function catboxUpload(stream) {
-  const { uploadFile } = require("../../utils/media/uploadImg");
-  return uploadFile(stream, "archive.zip");
+  const { uploadToGithub } = require("../../utils/media/githubMedia");
+  return uploadToGithub(stream, "archive.zip", { folder: "media/files" });
 }
 
 /** Upload nội dung text lên pastebin tạm */

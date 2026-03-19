@@ -78,10 +78,10 @@ async function downloadBuffer(url) {
   return Buffer.from(res.data);
 }
 
-// ── Upload buffer lên 0x0.st (thay catbox.moe bị chặn) ───────────────────────
+// ── Upload buffer audio lên GitHub ───────────────────────────────────────────
 async function uploadAudioPublic(buffer, filename = "audio.mp3") {
-  const { uploadFile } = require("../../utils/media/uploadImg");
-  return uploadFile(buffer, filename);
+  const { uploadToGithub } = require("../../utils/media/githubMedia");
+  return uploadToGithub(buffer, filename, { folder: "media/audio" });
 }
 
 // ── Nhận diện qua audd.io ────────────────────────────────────────────────────

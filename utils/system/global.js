@@ -28,14 +28,8 @@
  * │  global.isBotAdmin(userId)       → boolean                             │
  * │  global.isGroupAdmin({ api, groupId, userId }) → Promise<boolean>      │
  * ├──────────────────────┬──────────────────────────────────────────────────┤
- * │  global.imgur        │ Upload ảnh lên Catbox.moe (free, no key)        │
- * │    .uploadFromUrl(url)           → Promise<string> url ảnh             │
- * │    .uploadFromBuffer(buf, name?) → Promise<string> url ảnh             │
- * │    .uploadFromFile(filePath)     → Promise<string> url ảnh             │
- * ├──────────────────────┬──────────────────────────────────────────────────┤
- * │  global.uploadImage(input, name?)                                      │
- * │    input: string (URL / đường dẫn file) | Buffer                      │
- * │    → Promise<string>  Link Catbox công khai                            │
+ * │  global.uploadImage  │ Upload ảnh/file lên GitHub → rawUrl             │
+ * │    global.uploadImage(input, name?) → Promise<string> rawUrl GitHub    │
  * ├──────────────────────┬──────────────────────────────────────────────────┤
  * │  global.sendMessage(message, threadId, threadType) → Promise           │
  * │    message: string | object { msg, attachments, ... }                  │
@@ -109,6 +103,7 @@ const { checkGroqKey, setAutoCheck }          = require("./maintenance");
 const { processGaiData, resolveQuote }        = require("../bot/messageUtils");
 const {
   encodeAndUploadToGithub,
+  uploadToGithub,
   decodeFromGithub,
   getMediaLinks,
 }                                             = require("../media/githubMedia");
@@ -139,22 +134,14 @@ global.isBotAdmin        = isBotAdmin;
 global.isGroupAdmin      = isGroupAdmin;
 
 /**
- * Upload ảnh lên Imgur — tự nhận URL, Buffer hoặc đường dẫn file.
- * @param {string|Buffer} input - URL công khai, đường dẫn file local, hoặc Buffer
- * @param {string} [name] - Tên file (chỉ dùng khi input là Buffer)
- * @returns {Promise<string>} Link Imgur công khai
+ * Upload ảnh / file lên GitHub rồi trả về rawUrl công khai.
+ * Chấp nhận: URL, đường dẫn file local, hoặc Buffer.
+ * @param {string|Buffer} input
+ * @param {string} [name] - Tên file (dùng khi input là Buffer)
+ * @returns {Promise<string>} rawUrl công khai (raw.githubusercontent.com)
  */
-global.uploadImage = async function uploadImage(input, name) {
-  if (Buffer.isBuffer(input)) {
-    return imgur.uploadFromBuffer(input, undefined, name);
-  }
-  if (typeof input === "string") {
-    if (/^https?:\/\//i.test(input)) {
-      return imgur.uploadFromUrl(input);
-    }
-    return imgur.uploadFromFile(input);
-  }
-  throw new Error("uploadImage: input phải là URL, đường dẫn file hoặc Buffer");
+global.uploadImage = async function uploadImage(input, name = "image.jpg") {
+  return uploadToGithub(input, name, { folder: "media/images" });
 };
 
 // ── Key manager ───────────────────────────────────────────────────────────────

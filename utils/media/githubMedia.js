@@ -17,9 +17,11 @@
 
 "use strict";
 
-const fs    = require("fs");
-const path  = require("path");
-const axios = require("axios");
+const fs      = require("fs");
+const path    = require("path");
+const axios   = require("axios");
+const os      = require("os");
+const { Readable } = require("stream");
 
 function githubApiHeaders(token) {
   return {
@@ -37,6 +39,7 @@ const SUPPORTED_EXTS = new Set([
   ".mp4", ".mkv", ".avi", ".mov", ".webm",
   ".jpg", ".jpeg", ".png", ".gif", ".webp",
   ".mp3", ".aac", ".m4a", ".ogg", ".wav",
+  ".zip", ".txt", ".pdf",
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -168,6 +171,66 @@ async function encodeAndUploadToGithub(filePath, options = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PUBLIC: Upload nhanh từ Buffer / stream / URL / đường dẫn file
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Upload bất kỳ input nào lên GitHub rồi trả về rawUrl công khai.
+ * Chấp nhận: Buffer, Readable stream, đường dẫn file local, hoặc URL công khai.
+ *
+ * @param {Buffer|Readable|string} input
+ * @param {string} filename   - Tên file (vd: "audio.mp3", "archive.zip")
+ * @param {object} [options]  - Truyền thẳng vào encodeAndUploadToGithub
+ * @returns {Promise<string>} rawUrl
+ */
+async function uploadToGithub(input, filename = "file", options = {}) {
+  const tmpPath = path.join(os.tmpdir(), `gh_upload_${Date.now()}_${filename}`);
+
+  try {
+    // ── Buffer ─────────────────────────────────────────────────────────────
+    if (Buffer.isBuffer(input)) {
+      fs.writeFileSync(tmpPath, input);
+    }
+    // ── Readable stream ────────────────────────────────────────────────────
+    else if (input instanceof Readable || (input && typeof input.pipe === "function")) {
+      await new Promise((resolve, reject) => {
+        const ws = fs.createWriteStream(tmpPath);
+        input.pipe(ws);
+        ws.on("finish", resolve);
+        ws.on("error", reject);
+        input.on("error", reject);
+      });
+    }
+    // ── URL công khai ──────────────────────────────────────────────────────
+    else if (typeof input === "string" && /^https?:\/\//i.test(input)) {
+      const res = await axios.get(input, {
+        responseType: "arraybuffer",
+        timeout: 60000,
+        maxContentLength: 200 * 1024 * 1024,
+      });
+      fs.writeFileSync(tmpPath, Buffer.from(res.data));
+    }
+    // ── Đường dẫn file local ──────────────────────────────────────────────
+    else if (typeof input === "string") {
+      if (!fs.existsSync(input)) throw new Error(`uploadToGithub: File không tồn tại: ${input}`);
+      const { rawUrl } = await encodeAndUploadToGithub(input, options);
+      return rawUrl;
+    }
+    else {
+      throw new Error("uploadToGithub: input không hợp lệ (cần Buffer, stream, URL hoặc đường dẫn file)");
+    }
+
+    const { rawUrl } = await encodeAndUploadToGithub(tmpPath, {
+      ...options,
+      key: options.key || path.basename(filename, path.extname(filename)) + `_${Date.now()}`,
+    });
+    return rawUrl;
+  } finally {
+    try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PUBLIC: Tải về thẳng từ rawUrl (bỏ bước decode base64)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -222,6 +285,7 @@ function getMediaLinks() {
 // ─────────────────────────────────────────────────────────────────────────────
 module.exports = {
   encodeAndUploadToGithub,
+  uploadToGithub,
   decodeFromGithub,
   getMediaLinks,
   LINKS_FILE,

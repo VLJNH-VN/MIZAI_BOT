@@ -88,7 +88,7 @@ async function sendStickerByKeyword(api, keyword, threadId, type) {
     );
     return true;
   } catch (err) {
-    logWarn(`[goibot] Lỗi gửi sticker: ${err?.message}`);
+    global.logWarn?.(`[goibot] Lỗi gửi sticker: ${err?.message}`);
     return false;
   }
 }
@@ -111,7 +111,7 @@ async function addReactionToQuote(api, reactionType, raw, threadId, type) {
     });
     return true;
   } catch (err) {
-    logWarn(`[goibot] Lỗi thả reaction: ${err?.message}`);
+    global.logWarn?.(`[goibot] Lỗi thả reaction: ${err?.message}`);
     return false;
   }
 }
@@ -267,7 +267,7 @@ async function handleImgAction(api, imgAction, raw, threadId, type, send) {
         return send("⏳ API đang bận, thử lại sau ít phút nhé~");
       }
       lastErr = err;
-      logError(`[goibot/img] model=${m} lỗi ${status}: ${err?.message?.slice(0, 100)}`);
+      global.logError?.(`[goibot/img] model=${m} lỗi ${status}: ${err?.message?.slice(0, 100)}`);
     }
   }
 
@@ -453,7 +453,7 @@ async function handleFileReply({ api, event, data, send, threadID, registerReply
         send("❌ Lệnh không hợp lệ.\n📌 Hỗ trợ: open | del | view | read | edit | send | zip | info | search | refresh");
     }
   } catch (err) {
-    logError?.(`[goibot/file] ${err.message}`);
+    global.logError?.(`[goibot/file] ${err.message}`);
     send(`❌ Lỗi xử lý:\n${err.message}`);
   }
 }
@@ -551,7 +551,7 @@ async function handleGoibot({ api, event }) {
         await api.sendVoice({ voiceUrl: uploads[0].fileUrl }, threadId, event.type);
       } catch (dlErr) {
         const dlMsg = dlErr?.stderr || dlErr?.message || String(dlErr);
-        logError(`[goibot] Tải nhạc lỗi: ${dlMsg}`);
+        global.logError?.(`[goibot] Tải nhạc lỗi: ${dlMsg}`);
         if (dlMsg.includes("client_id") || dlMsg.includes("401")) _scClientId = null;
         return send(`❌ Không tải được nhạc "${keyword}". Thử bài khác nhé!`);
       } finally {
@@ -591,7 +591,7 @@ async function handleGoibot({ api, event }) {
   } catch (err) {
     const msg      = err?.response?.data?.error?.message || err?.stderr || err?.message || String(err);
     const msgLower = msg.toLowerCase();
-    logError(`[goibot] Lỗi: ${msg}`);
+    global.logError?.(`[goibot] Lỗi: ${msg}`);
     if (msgLower.includes("429") || msgLower.includes("rate_limit") || msgLower.includes("too many"))
       await send("⏳ Mizai bận quá, thử lại sau ít phút nhé.");
     else if (msgLower.includes("401") || msgLower.includes("invalid_api_key"))
@@ -613,7 +613,7 @@ function startGoibot(api) {
     try {
       await handleGoibot({ api, event });
     } catch (err) {
-      logWarn(`[Goibot] Lỗi xử lý: ${err?.message}`);
+      global.logWarn?.(`[Goibot] Lỗi xử lý: ${err?.message}`);
     }
   });
 }

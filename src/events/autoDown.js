@@ -164,9 +164,32 @@ async function handleAudio(api, audioUrl, thumbnail, caption, threadId, threadTy
 }
 
 // ─── Convert video sang H.264 MP4 (tương thích Zalo) ─────────────────────────
+// - map video trước audio (tránh lỗi stream order ngược)
+// - pix_fmt yuv420p: tương thích rộng nhất
+// - profile baseline / level 3.1: đảm bảo Zalo decode được
+// - movflags +faststart: moov atom ở đầu (cần thiết cho streaming)
+// - scale: đảm bảo width/height chia hết cho 2 (libx264 yêu cầu)
 function convertToH264(inputPath, outputPath) {
+    // Kiểm tra xem file có audio stream không
+    let hasAudio = false;
+    try {
+        const probe = execSync(
+            `ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "${inputPath}"`,
+            { timeout: 10000, stdio: "pipe" }
+        ).toString().trim();
+        hasAudio = probe.length > 0;
+    } catch {}
+
+    const audioMap  = hasAudio ? `-map 0:a:0 -c:a aac -b:a 128k -ar 44100 ` : `-an `;
     execSync(
-        `ffmpeg -y -i "${inputPath}" -c:v libx264 -preset fast -crf 23 -c:a aac -movflags +faststart "${outputPath}"`,
+        `ffmpeg -y -i "${inputPath}" ` +
+        `-map 0:v:0 ${audioMap}` +
+        `-c:v libx264 -preset fast -crf 23 ` +
+        `-profile:v baseline -level 3.1 ` +
+        `-pix_fmt yuv420p ` +
+        `-vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" ` +
+        `-movflags +faststart ` +
+        `"${outputPath}"`,
         { timeout: 120000, stdio: "pipe" }
     );
 }

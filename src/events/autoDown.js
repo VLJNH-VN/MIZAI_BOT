@@ -13,6 +13,7 @@ const path           = require("path");
 const fs             = require("fs");
 const { execSync }   = require("child_process");
 const { Downloader } = require("@tobyg74/tiktok-api-dl");
+const { extractBody } = require("../../utils/bot/messageUtils");
 
 const tempDir       = path.join(process.cwd(), "includes", "cache");
 const SETTINGS_FILE = path.join(process.cwd(), "includes", "data", "auto.json");
@@ -88,6 +89,11 @@ function isAutoDownEnabled(threadId) {
     } catch { return true; }
 }
 
+// ─── Tạo ID duy nhất cho mỗi lượt download ─────────────────────────────────────
+function uniqueId() {
+    return `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
 // ─── File helpers ──────────────────────────────────────────────────────────────
 async function downloadFile(url, filePath) {
     const res = await axios.get(url, {
@@ -152,8 +158,9 @@ function cleanup(...files) {
 
 // ─── Gửi VIDEO ─────────────────────────────────────────────────────────────────
 async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
-    const rawPath  = path.join(tempDir, `ad_raw_${Date.now()}.mp4`);
-    const h264Path = path.join(tempDir, `ad_h264_${Date.now()}.mp4`);
+    const uid      = uniqueId();
+    const rawPath  = path.join(tempDir, `ad_raw_${uid}.mp4`);
+    const h264Path = path.join(tempDir, `ad_h264_${uid}.mp4`);
     try {
         await downloadFile(videoUrl, rawPath);
 
@@ -218,7 +225,8 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
 
 // ─── Gửi AUDIO ─────────────────────────────────────────────────────────────────
 async function sendAudio(api, audioUrl, info, caption, threadId, threadType) {
-    const rawPath = path.join(tempDir, `ad_aud_${Date.now()}`);
+    const uid     = uniqueId();
+    const rawPath = path.join(tempDir, `ad_aud_${uid}`);
     const aacPath = `${rawPath}.aac`;
     const thumbs  = [];
     try {
@@ -227,7 +235,7 @@ async function sendAudio(api, audioUrl, info, caption, threadId, threadType) {
 
         if (info.thumbnail) {
             try {
-                const tp = path.join(tempDir, `ad_thumb_${Date.now()}.jpg`);
+                const tp = path.join(tempDir, `ad_thumb_${uid}.jpg`);
                 await downloadFile(info.thumbnail, tp);
                 thumbs.push(tp);
             } catch {}
@@ -253,10 +261,14 @@ async function sendImages(api, imageUrls, caption, threadId, threadType) {
         for (const url of imageUrls.slice(0, 10)) {
             const p = path.join(
                 tempDir,
-                `ad_img_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`
+                `ad_img_${uniqueId()}.jpg`
             );
-            await downloadFile(url, p);
-            paths.push(p);
+            try {
+                await downloadFile(url, p);
+                paths.push(p);
+            } catch (e) {
+                logWarn(`[AutoDown] Bỏ qua ảnh lỗi: ${e.message}`);
+            }
         }
         if (!paths.length) return;
         await api.sendMessage(
@@ -288,7 +300,8 @@ async function handleTikTok(api, url, threadId, threadType) {
     }
 
     // Video — ưu tiên SD (H.264+AAC), tránh HD (HEVC không tương thích Zalo)
-    const videoUrl = r.videoSD || r.videoNoWatermark || r.videoHD;
+    const videoUrl = r.videoSD || r.videoNoWatermark || r.videoHD
+        || r.video?.noWatermark || r.video?.watermark;
     if (videoUrl) {
         await sendVideo(api, videoUrl, { thumbnail: "", duration: 0 }, caption, threadId, threadType);
         return;
@@ -343,7 +356,9 @@ async function handleOther(api, url, threadId, threadType) {
     const hasVideoFmt = formats.some(
         f => f.quality === "video+audio" || (f.vcodec && f.vcodec !== "none" && f.vcodec !== null)
     );
-    const hasAudioFmt = formats.some(f => f.quality === "audio" || f.format_id === "audio");
+    const hasAudioFmt = formats.some(
+        f => f.quality === "audio" || f.format_id === "audio" || (f.acodec && f.acodec !== "none" && !f.vcodec)
+    );
     const hasImageFmt = formats.some(f => f.quality === "image" || f.ext === "jpg" || f.ext === "png");
 
     // Audio-only platform
@@ -387,6 +402,27 @@ async function handleOther(api, url, threadId, threadType) {
     logWarn("[AutoDown] Không tìm thấy format phù hợp.");
 }
 
+// ─── Lấy URL từ event message ──────────────────────────────────────────────────
+function extractUrl(msg) {
+    const raw = msg.data || {};
+
+    // Nội dung text thông thường (content là string)
+    const body = extractBody(raw);
+
+    // Link card (content là object chứa href/url/link)
+    const content = raw.content;
+    let linkCardUrl = "";
+    if (content && typeof content === "object") {
+        linkCardUrl = content.href || content.url || content.link || "";
+        if (typeof linkCardUrl !== "string") linkCardUrl = "";
+    }
+
+    // Ghép body + href để tìm URL
+    const searchText = [body, linkCardUrl].filter(Boolean).join(" ");
+    const urlMatch   = searchText.match(/https?:\/\/[^\s]+/);
+    return urlMatch ? urlMatch[0] : null;
+}
+
 // ─── Main listener ──────────────────────────────────────────────────────────────
 function startAutoDown(api) {
     api.listener.on("message", async (msg) => {
@@ -398,16 +434,9 @@ function startAutoDown(api) {
         const senderId = msg.data?.uidFrom ? String(msg.data.uidFrom) : null;
         if (botId && senderId && senderId === botId) return;
 
-        // Lấy nội dung tin nhắn
-        const content  = typeof msg.data?.content === "string" ? msg.data.content.trim() : "";
-        const href     = typeof msg.data?.content?.href === "string" ? msg.data.content.href.trim() : "";
-        const bodyText = typeof msg.message?.body === "string" ? msg.message.body.trim() : "";
-        const body     = content || bodyText || href;
-
-        // Phải là URL hợp lệ
-        const urlMatch = body?.match(/https?:\/\/[^\s]+/);
-        if (!urlMatch) return;
-        const url = urlMatch[0];
+        // Lấy URL từ tin nhắn (text hoặc link card)
+        const url = extractUrl(msg);
+        if (!url) return;
 
         // TikTok / Douyin / CapCut → xử lý riêng (không cần qua SUPPORTED_LINKS)
         const isTikTok = isTikTokUrl(url);
@@ -431,19 +460,17 @@ function startAutoDown(api) {
             const status = err?.response?.status;
             logWarn(`[AutoDown] Lỗi: ${err.message}`);
 
-            if (status || isTikTok) {
-                try {
-                    let errMsg;
-                    if (status === 500 || status === 502 || status === 503) {
-                        errMsg = `⚠️ AutoDown: Máy chủ lỗi (${status}), thử lại sau.`;
-                    } else if (status === 404) {
-                        errMsg = `⚠️ AutoDown: Không tìm thấy media tại link này.`;
-                    } else {
-                        errMsg = `⚠️ AutoDown: Không thể tải — ${err.message}`;
-                    }
-                    await api.sendMessage({ msg: errMsg, ttl: 300_000 }, threadId, threadType);
-                } catch {}
-            }
+            try {
+                let errMsg;
+                if (status === 500 || status === 502 || status === 503) {
+                    errMsg = `⚠️ AutoDown: Máy chủ lỗi (${status}), thử lại sau.`;
+                } else if (status === 404) {
+                    errMsg = `⚠️ AutoDown: Không tìm thấy media tại link này.`;
+                } else {
+                    errMsg = `⚠️ AutoDown: Không thể tải — ${err.message}`;
+                }
+                await api.sendMessage({ msg: errMsg, ttl: 300_000 }, threadId, threadType);
+            } catch {}
         }
     });
 }

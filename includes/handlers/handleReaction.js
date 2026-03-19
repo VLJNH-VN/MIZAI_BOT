@@ -24,11 +24,7 @@ const ANGRY_ICONS = new Set(
  */
 function registerReaction({ messageId, commandName, payload = {}, ttl = DEFAULT_TTL_MS }) {
   if (!messageId || !commandName) return;
-  reactionStore.set(String(messageId), {
-    commandName,
-    payload,
-    expireAt: ttl > 0 ? Date.now() + ttl : null
-  });
+  reactionStore.register({ messageId, commandName, payload, ttl });
 }
 
 function findTrackedReaction(raw) {

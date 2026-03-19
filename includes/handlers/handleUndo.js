@@ -23,12 +23,7 @@ const undoStore      = createTtlStore(DEFAULT_TTL_MS);
  */
 function registerUndo({ messageId, commandName, payload = {}, ttl = DEFAULT_TTL_MS }) {
   if (!messageId || !commandName) return;
-
-  undoStore.set(String(messageId), {
-    commandName,
-    payload,
-    expireAt: ttl > 0 ? Date.now() + ttl : null
-  });
+  undoStore.register({ messageId, commandName, payload, ttl });
 }
 
 function findTrackedUndo(raw) {

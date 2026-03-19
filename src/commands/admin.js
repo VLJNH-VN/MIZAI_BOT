@@ -35,18 +35,20 @@ function trackGroup(threadID) {
 }
 
 // ── Lấy UID từ mention hoặc args ─────────────────────────────────────────────
-function isValidUid(uid) {
+function isNumericUid(uid) {
   return uid && /^\d{5,}$/.test(String(uid).trim());
 }
 
 function extractUid(args, event) {
   const mentions = event?.data?.mentions;
   if (mentions && typeof mentions === "object") {
-    const uids = Object.keys(mentions).filter(isValidUid);
-    if (uids.length > 0) return uids[0];
+    const keys = Object.keys(mentions).filter(k => k && k.trim() && k !== "0");
+    if (keys.length > 0) return keys[0];
   }
-  const raw = args[1] ? String(args[1]).trim() : null;
-  if (raw && isValidUid(raw)) return raw;
+  for (let i = 1; i < args.length; i++) {
+    const candidate = String(args[i]).trim();
+    if (isNumericUid(candidate)) return candidate;
+  }
   return null;
 }
 

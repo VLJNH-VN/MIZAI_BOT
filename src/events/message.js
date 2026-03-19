@@ -117,8 +117,10 @@ async function handleMessage(params) {
   // ── Warm cache chạy nền, không block pipeline ──────────────────────────────
   warmupFromEvent({ api, event }).catch(() => {});
 
+  const isAdmin = senderId && isBotAdmin(senderId);
+
   // ── Anti features (chỉ áp dụng trong nhóm) ────────────────────────────────
-  if (event.type === ThreadType.Group && senderId && !isBotAdmin(senderId)) {
+  if (event.type === ThreadType.Group && senderId && !isAdmin) {
     const isGAdmin = await isGroupAdmin({ api, groupId: threadID, userId: senderId }).catch(() => false);
 
     if (!isGAdmin) {

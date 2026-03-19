@@ -11,10 +11,21 @@ const fs   = require("fs");
 const path = require("path");
 const os   = require("os");
 
-const { sendVideo, getVideoMeta } = require("../../utils/media/media");
+const { execSync } = require("child_process");
 
 const ROOT      = process.cwd();
 const VIDEO_DIR = path.join(ROOT, "includes", "cache", "videos");
+
+function getVideoMeta(filePath) {
+  try {
+    const out  = execSync(`ffprobe -v error -show_format -show_streams -of json "${filePath}"`, { timeout: 15000 }).toString();
+    const data = JSON.parse(out);
+    const vs   = data.streams?.find(s => s.codec_type === "video");
+    const dur  = parseFloat(data.format?.duration || 0);
+    return { width: vs?.width || 720, height: vs?.height || 1280, duration: dur > 0 ? Math.max(1, Math.ceil(dur)) : 1 };
+  } catch { return { width: 720, height: 1280, duration: 1 }; }
+}
+
 const VIDEO_EXTS = new Set([".mp4", ".mov", ".mkv", ".webm"]);
 
 function getRandomVideo() {
@@ -82,13 +93,20 @@ module.exports = {
 
     try {
       await send(info);
-      const meta = getVideoMeta(videoPath);
-      await sendVideo(api, videoPath, threadID, event.type, {
-        width:    meta.width    || 1280,
-        height:   meta.height   || 720,
-        duration: meta.duration || 0,
-        msg:      "",
-      });
+      const meta     = getVideoMeta(videoPath);
+      const uploaded = await api.uploadAttachment([videoPath], threadID, event.type);
+      const fileUrl  = uploaded?.[0]?.fileUrl;
+      if (fileUrl) {
+        await api.sendVideo({
+          videoUrl:     fileUrl,
+          thumbnailUrl: "",
+          msg:          "",
+          width:        meta.width    || 1280,
+          height:       meta.height   || 720,
+          duration:     Math.max(1000, (meta.duration || 1) * 1000),
+          ttl:          500_000,
+        }, threadID, event.type);
+      }
     } catch (err) {
       global.logError?.(`[uptime] video lỗi: ${err?.message || err}`);
     }

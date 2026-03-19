@@ -9,7 +9,7 @@ const path   = require("path");
 const fs     = require("fs");
 const { execSync } = require("child_process");
 const { ThreadType } = require("zca-js");
-const { sendVideo, sendVoice, tempDir } = require("../../utils/media/media");
+const tempDir = path.join(process.cwd(), "includes", "cache");
 
 const SETTINGS_FILE = path.join(process.cwd(), "includes", "data", "auto.json");
 
@@ -126,7 +126,12 @@ async function handleAudio(api, audioUrl, thumbnail, caption, threadId, threadTy
         }
 
         await api.sendMessage({ msg: caption, attachments, ttl: 500_000 }, threadId, threadType);
-        await sendVoice(api, aacPath, threadId, threadType);
+
+        const voiceUploaded = await api.uploadAttachment([aacPath], threadId, threadType);
+        const voiceUrl = voiceUploaded?.[0]?.fileUrl;
+        if (voiceUrl) {
+          await api.sendVoice({ voiceUrl, ttl: 500_000 }, threadId, threadType);
+        }
     } finally {
         cleanupFiles([tempPath, aacPath, ...attachments]);
     }
@@ -161,13 +166,19 @@ async function handleVideo(api, videoUrl, thumbnail, caption, threadId, threadTy
 
         const meta = getVideoMetadata(uploadPath);
 
-        await sendVideo(api, uploadPath, threadId, threadType, {
-            msg: caption,
+        const vidUploaded = await api.uploadAttachment([uploadPath], threadId, threadType);
+        const vidUrl = vidUploaded?.[0]?.fileUrl;
+        if (vidUrl) {
+          await api.sendVideo({
+            videoUrl:     vidUrl,
             thumbnailUrl: thumbnail || "",
-            width: meta.width,
-            height: meta.height,
-            duration: duration || meta.duration  // giây — sendVideo tự nhân 1000
-        });
+            msg:          caption,
+            width:        meta.width,
+            height:       meta.height,
+            duration:     Math.max(1000, (duration || meta.duration || 1) * 1000),
+            ttl:          500_000,
+          }, threadId, threadType);
+        }
     } catch (err) {
         logWarn(`[AutoDown] Gửi video lỗi, thử gửi trực tiếp: ${err.message}`);
         try {

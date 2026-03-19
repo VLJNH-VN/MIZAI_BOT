@@ -116,7 +116,7 @@ async function downloadMp3Buffer(mp3Url) {
 function downloadHlsToBuffer(m3u8Url) {
   const { execSync } = require("child_process");
   const tmpOut = path.join(
-    require("../../utils/media/media").tempDir,
+    path.join(process.cwd(), "includes", "cache"),
     `scl_hls_${Date.now()}.mp3`
   );
   execSync(

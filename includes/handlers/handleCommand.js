@@ -116,20 +116,43 @@ async function handleCommand({ api, event, commands, prefix }) {
     const raw = event?.data ?? null;
     if (!raw) return;
 
-    const body = extractBody(raw);
-    if (!body || !body.startsWith(prefix)) return;
+    let body = extractBody(raw);
+    if (!body) return;
+
+    // ── Strip leading @mention(s): "@Tên người !lệnh" → "!lệnh" ──────────────
+    if (!body.startsWith(prefix)) {
+      const idx = body.indexOf(prefix);
+      if (idx > 0 && /^@/.test(body.slice(0, idx).trim())) {
+        body = body.slice(idx);
+      }
+    }
+
+    if (!body.startsWith(prefix)) return;
 
     const withoutPrefix = body.slice(prefix.length).trim();
-    if (!withoutPrefix) return;
-
-    const parts = withoutPrefix.split(/\s+/);
-    const commandName = parts.shift().toLowerCase();
-    const args = parts;
 
     const senderId = getSenderId(raw);
     const threadID = event.threadId;
     const isGroup = event.type === ThreadType.Group;
     const send = buildSend(api, raw, threadID, event.type);
+
+    // ── Prefix một mình (gõ "!" hoặc "@Bot !") → hiện help ───────────────────
+    if (!withoutPrefix) {
+      if (isGroup && threadID) trackGroupForBroadcast(threadID);
+      const helpCmd = commands.get("help") || commands.get("menu");
+      if (helpCmd) {
+        await helpCmd.run({
+          api, event, args: [], send, commands, prefix,
+          commandName: "help", senderId, threadID, isGroup,
+          isBotAdmin, isGroupAdmin, registerReply, registerReaction, registerUndo
+        });
+      }
+      return;
+    }
+
+    const parts = withoutPrefix.split(/\s+/);
+    const commandName = parts.shift().toLowerCase();
+    const args = parts;
 
     if (isGroup && threadID) trackGroupForBroadcast(threadID);
 

@@ -179,30 +179,18 @@ setInterval(cleanupOldFiles, 5 * 60 * 1000);
 
 // ─── Gửi VIDEO ─────────────────────────────────────────────────────────────────
 // sendVideo: info = { thumbnail, duration, width, height }
-//   Bước 1: api.sendVideo với URL gốc công khai (HEAD request thành công → Zalo phát inline)
-//   Bước 2: Download → convert H264 → sendMessage+attachments (file fallback)
+//
+// Tại sao KHÔNG dùng direct URL (tikwm/yt-dlp) cho api.sendVideo:
+//   - URL tikwm/yt-dlp có TTL ngắn → Zalo app fetch lại khi phát sẽ lỗi
+//   - URL proxy render.com → Zalo server không stream được
+//   - api.sendVideo "thành công" chỉ là Zalo API nhận message, không verify URL
+//
+// Flow đúng:
+//   Bước 1: Download → convert H264 → githubUpload → api.sendVideo(ghUrl)
+//           raw.githubusercontent.com là URL vĩnh cửu, Zalo stream được
+//   Bước 2: sendMessage + attachments (nếu file > 50MB hoặc thiếu githubToken)
 //   Bước 3: gửi link text
 async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
-    // ── Bước 1: Thử api.sendVideo với URL gốc công khai ──────────────────────
-    // URL tikwm/yt-dlp là CDN công khai → HEAD request trả về Content-Length đúng
-    // Zalo nhận params hợp lệ → phát video inline trong chat
-    try {
-        await api.sendVideo({
-            videoUrl,
-            thumbnailUrl: info.thumbnail || "",
-            msg:          caption,
-            width:        info.width    || 720,
-            height:       info.height   || 1280,
-            duration:     (info.duration || 0) * 1000,
-            ttl:          500_000,
-        }, threadId, threadType);
-        logInfo("[AutoDown] sendVideo (inline) thành công.");
-        return;
-    } catch (e1) {
-        logWarn(`[AutoDown] sendVideo direct URL thất bại: ${e1.message}`);
-    }
-
-    // ── Bước 2: Download → convert H264 → tìm URL công khai → sendVideo ────────
     const uid      = uniqueId();
     const rawPath  = path.join(tempDir, `ad_raw_${uid}.mp4`);
     const h264Path = path.join(tempDir, `ad_h264_${uid}.mp4`);
@@ -227,10 +215,10 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
 
         const meta     = probeStreams(uploadPath);
         const fileSize = fs.statSync(uploadPath).size;
-        logInfo(`[AutoDown] Video local: ${path.basename(uploadPath)} (${meta.width}x${meta.height}, ${meta.duration}s, ${(fileSize / 1024 / 1024).toFixed(1)}MB)`);
+        logInfo(`[AutoDown] Video: ${path.basename(uploadPath)} (${meta.width}x${meta.height}, ${meta.duration}s, ${(fileSize / 1024 / 1024).toFixed(1)}MB)`);
 
-        // ── Bước 2a: GitHub upload → api.sendVideo (GitHub raw URL là URL công khai)
-        // Zalo stream được từ raw.githubusercontent.com, tránh lỗi proxy URL render.com
+        // ── Bước 1: GitHub upload → api.sendVideo ────────────────────────────
+        // GitHub raw URL vĩnh cửu, Zalo stream được ổn định
         if (typeof global.githubUpload === "function" && fileSize < 50 * 1024 * 1024) {
             try {
                 const repoPath = `autodown/vid_${uid}.mp4`;
@@ -245,7 +233,7 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
                         duration:     meta.duration * 1000,
                         ttl:          500_000,
                     }, threadId, threadType);
-                    logInfo("[AutoDown] sendVideo (GitHub CDN) thành công.");
+                    logInfo("[AutoDown] sendVideo (GitHub) thành công.");
                     return;
                 }
             } catch (egh) {
@@ -253,7 +241,7 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
             }
         }
 
-        // ── Bước 2b: sendMessage + attachments (file fallback) ───────────────
+        // ── Bước 2: sendMessage + attachments ────────────────────────────────
         try {
             await api.sendMessage(
                 { msg: caption, attachments: [uploadPath], ttl: 500_000 },

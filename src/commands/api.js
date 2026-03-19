@@ -4,6 +4,7 @@ const fs   = require("fs");
 const path = require("path");
 const os   = require("os");
 
+const { ThreadType }       = require("zca-js");
 const { registerReaction } = require("../../includes/handlers/handleReaction");
 
 const LIST_API_DIR = path.join(__dirname, "../../includes/listapi");
@@ -178,6 +179,33 @@ module.exports = {
       "api get <tên>          — Lấy link ngẫu nhiên",
     ].join("\n"),
     cooldowns: 5,
+  },
+
+  // ── onLoad ───────────────────────────────────────────────────────────────
+  onLoad: async ({ api, commands }) => {
+    try {
+      const ownerId = global.config?.ownerId;
+      if (!ownerId) return;
+
+      const total   = new Set([...commands.values()]).size;
+      const names   = [...new Set([...commands.values()])]
+        .map(c => c.config?.name)
+        .filter(Boolean)
+        .sort()
+        .join(", ");
+
+      const msg =
+        `✅ Bot đã load xong tất cả lệnh!\n` +
+        `━━━━━━━━━━━━━━━━\n` +
+        `📦 Tổng lệnh: ${total}\n` +
+        `📋 Danh sách: ${names}\n` +
+        `━━━━━━━━━━━━━━━━\n` +
+        `🕒 ${new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`;
+
+      await api.sendMessage({ msg }, ownerId, ThreadType.User);
+    } catch (err) {
+      global.logError?.(`[api onLoad] ${err?.message || err}`);
+    }
   },
 
   // ── run ───────────────────────────────────────────────────────────────────

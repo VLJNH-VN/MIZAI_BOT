@@ -2,7 +2,7 @@ const { getDb, run, get, all } = require("./sqlite");
 const fs = require("fs");
 const path = require("path");
 
-const RENT_KEY_PATH = path.join(__dirname, "../../modules/data/RentKey.json");
+const RENT_KEY_PATH = path.join(__dirname, "../data/RentKey.json");
 
 function ensureRentKeyFile() {
   const dir = path.dirname(RENT_KEY_PATH);

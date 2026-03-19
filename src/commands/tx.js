@@ -7,6 +7,7 @@
 
 const fs   = require("fs");
 const path = require("path");
+const { registerReply } = require("../../includes/handlers/handleReply");
 const { getUserMoney, updateUserMoney } = require("../../includes/database/economy");
 const { resolveSenderName }             = require("../../includes/database/infoCache");
 const { isBotAdmin, isGroupAdmin }      = require("../../utils/bot/botManager");
@@ -374,14 +375,18 @@ module.exports = {
         else     player.input -= betAmount;
         writeJson(MONEY_FILE, checkmn);
 
-        return send(
+        const sent = await send(
           `🎲 KẾT QUẢ:\n` +
           `━━━━━━━━━━━━━━\n` +
           `🎲 [ ${ket_qua.dice1} | ${ket_qua.dice2} | ${ket_qua.dice3} ] — ${ket_qua.result.toUpperCase()} (${ket_qua.total})\n` +
           `🎯 Bạn chọn: ${sub}\n` +
           `${win ? `🏆 THẮNG +${fmtMoney(betAmount)} VNĐ` : `💀 THUA -${fmtMoney(betAmount)} VNĐ`}\n` +
-          `💰 Số dư: ${fmtMoney(player.input)} VNĐ`
+          `💰 Số dư: ${fmtMoney(player.input)} VNĐ\n` +
+          `💬 Reply: tài/xỉu <tiền> để đặt tiếp`
         );
+        const msgId = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId;
+        if (msgId) registerReply({ messageId: msgId, commandName: "tx", payload: { senderId } });
+        return;
       }
 
       // ── Mode phòng (nhóm đã bật game) ─────────────────────────────────────
@@ -420,5 +425,68 @@ module.exports = {
     }
 
     return send(`❌ Lệnh không hợp lệ!\nDùng ${prefix}tx để xem hướng dẫn.`);
+  },
+
+  // ── Xử lý reply đặt cược nhanh ─────────────────────────────────────────────
+  onReply: async ({ api, event, data, send }) => {
+    const raw      = event?.data ?? {};
+    const body     = typeof raw.content === "string"
+      ? raw.content
+      : (raw.content?.text || raw.content?.msg || "");
+    const parts    = body.trim().toLowerCase().split(/\s+/);
+    const sub      = parts[0];
+    const betArg   = parts[1] || "";
+    const senderId = String(raw.ownerId || raw.fromId || data?.senderId || "");
+    const threadID = event.threadId;
+
+    if (sub !== "tài" && sub !== "xỉu") {
+      return send(`❌ Reply bằng: tài <tiền> hoặc xỉu <tiền>`);
+    }
+
+    const checkmn = readJson(MONEY_FILE);
+    const player  = checkmn.find(e => String(e.senderID) === senderId);
+    if (!player)        return send("⚠️ Bạn chưa có tiền trong game! Dùng lệnh nạp để nạp tiền.");
+    if (player.input <= 0) return send("⚠️ Tiền game bằng 0! Dùng lệnh nạp để nạp tiền.");
+
+    let betAmount;
+    if (betArg === "all") {
+      betAmount = player.input;
+    } else if (betArg.includes("%")) {
+      const pct = parseInt(betArg);
+      if (isNaN(pct) || pct <= 0) return send("❌ Phần trăm không hợp lệ!");
+      betAmount = Math.round(player.input * pct / 100);
+    } else {
+      betAmount = parseInt(betArg);
+    }
+
+    if (isNaN(betAmount) || betAmount <= 0) return send("❌ Số tiền cược không hợp lệ!");
+    if (betAmount < 1000 && betArg !== "all") return send("❌ Cược tối thiểu 1,000 VNĐ!");
+    if (betAmount > player.input) return send("❌ Không đủ tiền game!");
+    betAmount = Math.round(betAmount);
+
+    const ket_qua = {
+      dice1: Math.floor(Math.random() * 6) + 1,
+      dice2: Math.floor(Math.random() * 6) + 1,
+      dice3: Math.floor(Math.random() * 6) + 1,
+    };
+    ket_qua.total  = ket_qua.dice1 + ket_qua.dice2 + ket_qua.dice3;
+    ket_qua.result = ket_qua.total <= 10 ? "xỉu" : "tài";
+
+    const win = ket_qua.result === sub;
+    if (win) player.input += betAmount;
+    else     player.input -= betAmount;
+    writeJson(MONEY_FILE, checkmn);
+
+    const sent = await send(
+      `🎲 KẾT QUẢ:\n` +
+      `━━━━━━━━━━━━━━\n` +
+      `🎲 [ ${ket_qua.dice1} | ${ket_qua.dice2} | ${ket_qua.dice3} ] — ${ket_qua.result.toUpperCase()} (${ket_qua.total})\n` +
+      `🎯 Bạn chọn: ${sub}\n` +
+      `${win ? `🏆 THẮNG +${fmtMoney(betAmount)} VNĐ` : `💀 THUA -${fmtMoney(betAmount)} VNĐ`}\n` +
+      `💰 Số dư: ${fmtMoney(player.input)} VNĐ\n` +
+      `💬 Reply: tài/xỉu <tiền> để đặt tiếp`
+    );
+    const msgId = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId;
+    if (msgId) registerReply({ messageId: msgId, commandName: "tx", payload: { senderId } });
   },
 };

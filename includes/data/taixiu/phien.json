@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "phien": 2,
+    "result": "xỉu",
+    "dice1": 4,
+    "dice2": 1,
+    "dice3": 1
+  },
+  {
+    "phien": 3,
+    "result": "tài",
+    "dice1": 2,
+    "dice2": 6,
+    "dice3": 5
+  }
+]

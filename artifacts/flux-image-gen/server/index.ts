@@ -47,17 +47,21 @@ interface CredsDB {
   accounts: CFAccount[];
 }
 
+// Lấy admin key: ưu tiên biến môi trường ADMIN_KEY, fallback sang key lưu trong file
+function getAdminKey(): string {
+  if (process.env.ADMIN_KEY) return process.env.ADMIN_KEY;
+  return loadCreds().adminKey;
+}
+
 function loadCreds(): CredsDB {
   try {
     const data = JSON.parse(fs.readFileSync(CREDS_FILE, "utf-8"));
     if (!data.adminKey) {
-      // Chỉ tạo 1 lần duy nhất nếu chưa có — KHÔNG BAO GIỜ tạo lại
       data.adminKey = "ADMIN-" + crypto.randomBytes(16).toString("hex").toUpperCase();
       fs.writeFileSync(CREDS_FILE, JSON.stringify(data, null, 2));
     }
     return data;
   } catch {
-    // Lần đầu tiên khởi chạy — tạo admin key vĩnh viễn
     const adminKey = "ADMIN-" + crypto.randomBytes(16).toString("hex").toUpperCase();
     const fresh: CredsDB = { currentIndex: 0, adminKey, accounts: [] };
     fs.writeFileSync(CREDS_FILE, JSON.stringify(fresh, null, 2));
@@ -71,9 +75,8 @@ function saveCreds(db: CredsDB): void {
 
 // Middleware kiểm tra admin key
 function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction): void {
-  const adminKey = req.headers["x-admin-key"] as string || req.query.adminKey as string;
-  const db = loadCreds();
-  if (!adminKey || adminKey !== db.adminKey) {
+  const provided = req.headers["x-admin-key"] as string || req.query.adminKey as string;
+  if (!provided || provided !== getAdminKey()) {
     res.status(403).json({ error: "❌ Không có quyền. Cần Admin Key hợp lệ trong header X-Admin-Key" });
     return;
   }
@@ -810,15 +813,18 @@ app.post("/api/admin/credentials/reset-all", requireAdmin, (_req, res) => {
 
 // GET /api/admin/key — xem admin key (chỉ admin mới biết key để gọi endpoint này)
 app.get("/api/admin/key", requireAdmin, (_req, res) => {
-  const db = loadCreds();
-  res.json({ adminKey: db.adminKey });
+  res.json({
+    adminKey: getAdminKey(),
+    source: process.env.ADMIN_KEY ? "env:ADMIN_KEY" : "file",
+  });
 });
 
 app.listen(API_PORT, () => {
-  const db = loadCreds();
+  const adminKey = getAdminKey();
+  const source = process.env.ADMIN_KEY ? "biến môi trường ADMIN_KEY" : "tự sinh (lưu trong file)";
   console.log(`\n${"═".repeat(60)}`);
   console.log(`  API server running on port ${API_PORT}`);
-  console.log(`  🔑 ADMIN KEY: ${db.adminKey}`);
-  console.log(`  Lưu key này để truy cập admin panel.`);
+  console.log(`  🔑 ADMIN KEY: ${adminKey}`);
+  console.log(`  Nguồn: ${source}`);
   console.log(`${"═".repeat(60)}\n`);
 });

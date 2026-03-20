@@ -63,7 +63,31 @@ function _normalizeEntry(raw, source) {
   let isText   = false;
 
   if (typeof c === "string" && c.length > 0) {
-    isText = true;
+    // Thử parse JSON string trước (một số tin nhắn Zalo dùng JSON string)
+    if (c.charCodeAt(0) === 123 || c.charCodeAt(0) === 91) {
+      try {
+        const parsed = JSON.parse(c);
+        if (parsed && typeof parsed === "object") {
+          const pUrl = parsed.url || parsed.normalUrl || parsed.hdUrl || parsed.href ||
+                       parsed.fileUrl || parsed.downloadUrl || parsed.src || null;
+          if (pUrl) {
+            mediaUrl = pUrl;
+            ext      = parsed.ext
+              ? (parsed.ext.startsWith(".") ? parsed.ext : "." + parsed.ext)
+              : _pickExt(pUrl);
+            isMedia  = true;
+          }
+        }
+      } catch (_) {}
+    }
+    // Nếu content là URL thuần (voice message Zalo thường lưu URL thẳng vào content)
+    if (!isMedia && /^https?:\/\//i.test(c)) {
+      mediaUrl = c;
+      ext      = _pickExt(c);
+      isMedia  = true;
+    }
+    // Còn lại mới là text
+    if (!isMedia) isText = true;
   } else if (c && typeof c === "object") {
     mediaUrl = c.url || c.normalUrl || c.hdUrl || c.href ||
                c.fileUrl || c.downloadUrl || c.src || null;

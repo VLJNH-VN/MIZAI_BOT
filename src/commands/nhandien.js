@@ -17,6 +17,26 @@ const AUDD_API     = "https://api.audd.io/";
 const AUDD_RETURN  = "apple_music,spotify,deezer";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Map ext → MIME type cho AudD
+// ─────────────────────────────────────────────────────────────────────────────
+const EXT_MIME = {
+  ".mp3":  "audio/mpeg",
+  ".aac":  "audio/aac",
+  ".m4a":  "audio/mp4",
+  ".amr":  "audio/amr",
+  ".ogg":  "audio/ogg",
+  ".wav":  "audio/wav",
+  ".flac": "audio/flac",
+  ".webm": "audio/webm",
+  ".mp4":  "audio/mp4",
+};
+
+function getMime(filename) {
+  const ext = ("." + filename.split(".").pop()).toLowerCase();
+  return EXT_MIME[ext] || "application/octet-stream";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Tải audio từ URL → Buffer
 // ─────────────────────────────────────────────────────────────────────────────
 async function fetchAudioBuffer(url) {
@@ -24,8 +44,10 @@ async function fetchAudioBuffer(url) {
     responseType:     "arraybuffer",
     timeout:          60_000,
     maxContentLength: 50 * 1024 * 1024,
+    maxBodyLength:    50 * 1024 * 1024,
     headers: {
       "User-Agent": global.userAgent,
+      "Referer":    "https://chat.zalo.me/",
     },
   });
   return Buffer.from(res.data);
@@ -35,19 +57,20 @@ async function fetchAudioBuffer(url) {
 // Gọi AudD API — truyền file binary (chính xác hơn URL do Zalo có auth)
 // ─────────────────────────────────────────────────────────────────────────────
 async function recognizeAudio(audioBuffer, filename = "audio.mp3") {
+  const mime = getMime(filename);
   const form = new FormData();
   form.append("api_token", AUDD_TOKEN);
   form.append("return",    AUDD_RETURN);
   form.append("file",      audioBuffer, {
     filename,
-    contentType: "audio/mpeg",
+    contentType: mime,
   });
 
   const res = await global.axios.post(AUDD_API, form, {
-    headers: {
-      ...form.getHeaders(),
-    },
-    timeout: 30_000,
+    headers:        { ...form.getHeaders() },
+    timeout:        40_000,
+    maxBodyLength:  Infinity,
+    maxContentLength: Infinity,
   });
 
   return res.data;
@@ -155,7 +178,17 @@ module.exports = {
       }
 
       audioUrl = ctx.mediaUrl;
-      if (ctx.ext) filename = `audio${ctx.ext}`;
+      if (ctx.ext) {
+        filename = `audio${ctx.ext}`;
+      } else {
+        // Thử đoán ext từ URL (Zalo voice thường là .aac hoặc .m4a)
+        const rawExt = audioUrl.split("?")[0].split(".").pop().toLowerCase();
+        if (["mp3","aac","m4a","amr","ogg","wav","flac","webm"].includes(rawExt)) {
+          filename = `audio.${rawExt}`;
+        } else {
+          filename = "audio.aac"; // fallback cho Zalo voice message
+        }
+      }
     }
 
     if (!audioUrl) {

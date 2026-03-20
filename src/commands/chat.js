@@ -11,8 +11,8 @@ function parseDurationToSeconds(str) {
 
 module.exports = {
   config: {
-    name: "chatset",
-    aliases: ["cs", "chatmanage"],
+    name: "chat",
+    aliases: ["chatset", "cs"],
     version: "1.0.0",
     hasPermssion: 0,
     credits: "MIZAI",
@@ -37,14 +37,14 @@ module.exports = {
     if (!sub) {
       return send(
         `⚙️ CHATSET — CÀI ĐẶT CHAT\n━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `${prefix}chatset pin           Ghim chat\n` +
-        `${prefix}chatset unpin         Bỏ ghim\n` +
-        `${prefix}chatset hide          Ẩn chat\n` +
-        `${prefix}chatset unhide        Bỏ ẩn\n` +
-        `${prefix}chatset unread        Đánh dấu chưa đọc\n` +
-        `${prefix}chatset read          Bỏ đánh dấu\n` +
-        `${prefix}chatset autodelete <thời gian|off>  Tự xóa\n` +
-        `${prefix}chatset delete        Xóa hội thoại ⚠️`
+        `${prefix}chat pin           Ghim chat\n` +
+        `${prefix}chat unpin         Bỏ ghim\n` +
+        `${prefix}chat hide          Ẩn chat\n` +
+        `${prefix}chat unhide        Bỏ ẩn\n` +
+        `${prefix}chat unread        Đánh dấu chưa đọc\n` +
+        `${prefix}chat read          Bỏ đánh dấu\n` +
+        `${prefix}chat autodelete <thời gian|off>  Tự xóa\n` +
+        `${prefix}chat delete        Xóa hội thoại ⚠️`
       );
     }
 
@@ -89,10 +89,10 @@ module.exports = {
           if (!param) {
             return send(
               `⚠️ Chọn thời gian hoặc off:\n` +
-              `${prefix}chatset autodelete 10m\n` +
-              `${prefix}chatset autodelete 1h\n` +
-              `${prefix}chatset autodelete 1d\n` +
-              `${prefix}chatset autodelete off`
+              `${prefix}chat autodelete 10m\n` +
+              `${prefix}chat autodelete 1h\n` +
+              `${prefix}chat autodelete 1d\n` +
+              `${prefix}chat autodelete off`
             );
           }
 
@@ -115,7 +115,7 @@ module.exports = {
           if (confirm !== "xacnhan") {
             return send(
               `⚠️ Lệnh này sẽ XÓA toàn bộ hội thoại hiện tại!\n` +
-              `Nếu chắc chắn, gõ: ${prefix}chatset delete xacnhan`
+              `Nếu chắc chắn, gõ: ${prefix}chat delete xacnhan`
             );
           }
           await api.deleteChat(
@@ -127,7 +127,7 @@ module.exports = {
         }
 
         default:
-          return send(`❌ Lệnh không hợp lệ. Dùng: ${prefix}chatset để xem hướng dẫn.`);
+          return send(`❌ Lệnh không hợp lệ. Dùng: ${prefix}chat để xem hướng dẫn.`);
       }
     } catch (err) {
       const msg = err?.response?.data?.error || err?.message || "Lỗi không xác định";

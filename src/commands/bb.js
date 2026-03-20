@@ -9,8 +9,8 @@ function fmtTime(ms) {
 
 module.exports = {
   config: {
-    name: "friend",
-    aliases: ["ban", "banjbe"],
+    name: "bb",
+    aliases: ["friend", "ban"],
     version: "1.0.0",
     hasPermssion: 0,
     credits: "MIZAI",
@@ -46,22 +46,22 @@ module.exports = {
       return send(
         `👤 FRIEND — QUẢN LÝ BẠN BÈ\n` +
         `━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `${prefix}friend find <sdt>       Tìm người\n` +
-        `${prefix}friend phones <sdts>    Tìm nhiều người\n` +
-        `${prefix}friend all              Danh sách bạn\n` +
-        `${prefix}friend online           Bạn đang online\n` +
-        `${prefix}friend close            Bạn thân\n` +
-        `${prefix}friend suggest          Gợi ý kết bạn\n` +
-        `${prefix}friend add <uid>        Gửi lời mời\n` +
-        `${prefix}friend accept @tag      Chấp nhận\n` +
-        `${prefix}friend reject @tag      Từ chối\n` +
-        `${prefix}friend undo @tag        Rút lời mời\n` +
-        `${prefix}friend remove @tag      Xóa bạn\n` +
-        `${prefix}friend block @tag       Chặn\n` +
-        `${prefix}friend unblock @tag     Bỏ chặn\n` +
-        `${prefix}friend lastonline @tag  Lần cuối online\n` +
-        `${prefix}friend alias @tag <tên> Đặt biệt danh\n` +
-        `${prefix}friend unalias @tag     Xóa biệt danh`
+        `${prefix}bb find <sdt>       Tìm người\n` +
+        `${prefix}bb phones <sdts>    Tìm nhiều người\n` +
+        `${prefix}bb all              Danh sách bạn\n` +
+        `${prefix}bb online           Bạn đang online\n` +
+        `${prefix}bb close            Bạn thân\n` +
+        `${prefix}bb suggest          Gợi ý kết bạn\n` +
+        `${prefix}bb add <uid>        Gửi lời mời\n` +
+        `${prefix}bb accept @tag      Chấp nhận\n` +
+        `${prefix}bb reject @tag      Từ chối\n` +
+        `${prefix}bb undo @tag        Rút lời mời\n` +
+        `${prefix}bb remove @tag      Xóa bạn\n` +
+        `${prefix}bb block @tag       Chặn\n` +
+        `${prefix}bb unblock @tag     Bỏ chặn\n` +
+        `${prefix}bb lastonline @tag  Lần cuối online\n` +
+        `${prefix}bb alias @tag <tên> Đặt biệt danh\n` +
+        `${prefix}bb unalias @tag     Xóa biệt danh`
       );
     }
 
@@ -70,7 +70,7 @@ module.exports = {
 
         case "find": {
           const phone = args[1];
-          if (!phone) return send(`⚠️ Nhập số điện thoại. Ví dụ: ${prefix}friend find 0901234567`);
+          if (!phone) return send(`⚠️ Nhập số điện thoại. Ví dụ: ${prefix}bb find 0901234567`);
           const user = await api.findUser(phone);
           if (!user) return send("❌ Không tìm thấy người dùng này.");
           return send(
@@ -84,7 +84,7 @@ module.exports = {
 
         case "phones": {
           const phones = (args[1] || "").split(",").map(p => p.trim()).filter(Boolean);
-          if (!phones.length) return send(`⚠️ Ví dụ: ${prefix}friend phones 0901111111,0902222222`);
+          if (!phones.length) return send(`⚠️ Ví dụ: ${prefix}bb phones 0901111111,0902222222`);
           const users = await api.getMultiUsersByPhones(phones);
           if (!users || !users.length) return send("❌ Không tìm thấy ai.");
           const lines = users.map(u =>
@@ -131,44 +131,44 @@ module.exports = {
 
         case "add": {
           const targetId = args[1];
-          if (!targetId) return send(`⚠️ Ví dụ: ${prefix}friend add 123456789`);
+          if (!targetId) return send(`⚠️ Ví dụ: ${prefix}bb add 123456789`);
           const msg = args.slice(2).join(" ") || "Xin chào! Mình muốn kết bạn với bạn.";
           await api.sendFriendRequest(msg, targetId);
           return send(`✅ Đã gửi lời mời kết bạn đến UID: ${targetId}`);
         }
 
         case "accept": {
-          if (!uid1) return send(`⚠️ Tag người cần chấp nhận. Ví dụ: ${prefix}friend accept @tên`);
+          if (!uid1) return send(`⚠️ Tag người cần chấp nhận. Ví dụ: ${prefix}bb accept @tên`);
           await api.acceptFriendRequest(uid1);
           return send(`✅ Đã chấp nhận lời mời kết bạn từ UID: ${uid1}`);
         }
 
         case "reject": {
-          if (!uid1) return send(`⚠️ Tag người cần từ chối. Ví dụ: ${prefix}friend reject @tên`);
+          if (!uid1) return send(`⚠️ Tag người cần từ chối. Ví dụ: ${prefix}bb reject @tên`);
           await api.rejectFriendRequest(uid1);
           return send(`✅ Đã từ chối lời mời kết bạn từ UID: ${uid1}`);
         }
 
         case "undo": {
-          if (!uid1) return send(`⚠️ Tag hoặc nhập UID. Ví dụ: ${prefix}friend undo @tên`);
+          if (!uid1) return send(`⚠️ Tag hoặc nhập UID. Ví dụ: ${prefix}bb undo @tên`);
           await api.undoFriendRequest(uid1);
           return send(`✅ Đã rút lại lời mời kết bạn đến UID: ${uid1}`);
         }
 
         case "remove": {
-          if (!uid1) return send(`⚠️ Tag người cần xóa. Ví dụ: ${prefix}friend remove @tên`);
+          if (!uid1) return send(`⚠️ Tag người cần xóa. Ví dụ: ${prefix}bb remove @tên`);
           await api.removeFriend(uid1);
           return send(`✅ Đã xóa bạn UID: ${uid1} khỏi danh sách bạn bè.`);
         }
 
         case "block": {
-          if (!uid1) return send(`⚠️ Tag người cần chặn. Ví dụ: ${prefix}friend block @tên`);
+          if (!uid1) return send(`⚠️ Tag người cần chặn. Ví dụ: ${prefix}bb block @tên`);
           await api.blockUser(uid1);
           return send(`🚫 Đã chặn UID: ${uid1}`);
         }
 
         case "unblock": {
-          if (!uid1) return send(`⚠️ Tag người cần bỏ chặn. Ví dụ: ${prefix}friend unblock @tên`);
+          if (!uid1) return send(`⚠️ Tag người cần bỏ chặn. Ví dụ: ${prefix}bb unblock @tên`);
           await api.unblockUser(uid1);
           return send(`✅ Đã bỏ chặn UID: ${uid1}`);
         }
@@ -181,7 +181,7 @@ module.exports = {
         }
 
         case "alias": {
-          if (!uid1) return send(`⚠️ Ví dụ: ${prefix}friend alias @tên BiệtDanh`);
+          if (!uid1) return send(`⚠️ Ví dụ: ${prefix}bb alias @tên BiệtDanh`);
           const alias = args.slice(mentions.length ? 2 : 2).join(" ");
           if (!alias) return send("⚠️ Nhập biệt danh muốn đặt.");
           await api.changeFriendAlias(alias, uid1);
@@ -195,7 +195,7 @@ module.exports = {
         }
 
         default:
-          return send(`❌ Lệnh con không hợp lệ. Dùng: ${prefix}friend để xem hướng dẫn.`);
+          return send(`❌ Lệnh con không hợp lệ. Dùng: ${prefix}bb để xem hướng dẫn.`);
       }
     } catch (err) {
       const msg = err?.response?.data?.error || err?.message || "Lỗi không xác định";

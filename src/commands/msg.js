@@ -2,8 +2,8 @@ const { isBotAdmin } = require("../../utils/bot/botManager");
 
 module.exports = {
   config: {
-    name: "quickmsg",
-    aliases: ["qm", "tinnhanhanhh"],
+    name: "msg",
+    aliases: ["quickmsg", "qm"],
     version: "1.0.0",
     hasPermssion: 2,
     credits: "MIZAI",
@@ -26,11 +26,11 @@ module.exports = {
     if (!sub) {
       return send(
         `⚡ QUICKMSG — TIN NHẮN NHANH\n━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `${prefix}quickmsg list            Xem danh sách\n` +
-        `${prefix}quickmsg add <tắt>|<nd>  Thêm tin nhắn nhanh\n` +
-        `${prefix}quickmsg remove <id>     Xóa\n` +
-        `${prefix}quickmsg send <tắt>      Gửi vào chat\n\n` +
-        `💡 Ví dụ:\n${prefix}quickmsg add xc | Xin chào! Mình là Mizai Bot.`
+        `${prefix}msg list            Xem danh sách\n` +
+        `${prefix}msg add <tắt>|<nd>  Thêm tin nhắn nhanh\n` +
+        `${prefix}msg remove <id>     Xóa\n` +
+        `${prefix}msg send <tắt>      Gửi vào chat\n\n` +
+        `💡 Ví dụ:\n${prefix}msg add xc | Xin chào! Mình là Mizai Bot.`
       );
     }
 
@@ -53,7 +53,7 @@ module.exports = {
           const fullText = args.slice(1).join(" ");
           const parts = fullText.split("|");
           if (parts.length < 2) {
-            return send(`⚠️ Ví dụ: ${prefix}quickmsg add xc | Xin chào bạn!`);
+            return send(`⚠️ Ví dụ: ${prefix}msg add xc | Xin chào bạn!`);
           }
           const shortcut = parts[0].trim();
           const message = parts.slice(1).join("|").trim();
@@ -67,7 +67,7 @@ module.exports = {
         case "rm":
         case "del": {
           const id = args[1];
-          if (!id) return send(`⚠️ Ví dụ: ${prefix}quickmsg remove xc`);
+          if (!id) return send(`⚠️ Ví dụ: ${prefix}msg remove xc`);
           await api.removeQuickMessage(id);
           return send(`✅ Đã xóa tin nhắn nhanh: "${id}"`);
         }
@@ -75,7 +75,7 @@ module.exports = {
         case "send":
         case "use": {
           const shortcut = args[1];
-          if (!shortcut) return send(`⚠️ Ví dụ: ${prefix}quickmsg send xc`);
+          if (!shortcut) return send(`⚠️ Ví dụ: ${prefix}msg send xc`);
           const res = await api.getQuickMessageList();
           const items = res?.quickMessages || res?.data || res || [];
           const found = items.find(i => (i.shortcut || i.trigger || i.id) === shortcut);
@@ -86,7 +86,7 @@ module.exports = {
         }
 
         default:
-          return send(`❌ Lệnh không hợp lệ. Dùng: ${prefix}quickmsg để xem hướng dẫn.`);
+          return send(`❌ Lệnh không hợp lệ. Dùng: ${prefix}msg để xem hướng dẫn.`);
       }
     } catch (err) {
       const msg = err?.response?.data?.error || err?.message || "Lỗi không xác định";

@@ -6,8 +6,8 @@ const { isBotAdmin } = require("../../utils/bot/botManager");
 
 module.exports = {
   config: {
-    name: "botprofile",
-    aliases: ["btp", "botset"],
+    name: "mizai",
+    aliases: ["botprofile", "btp"],
     version: "1.0.0",
     hasPermssion: 2,
     credits: "MIZAI",
@@ -32,12 +32,12 @@ module.exports = {
     if (!sub) {
       return send(
         `🤖 BOTPROFILE — QUẢN LÝ BOT\n━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `${prefix}botprofile name <tên>    Đổi tên bot\n` +
-        `${prefix}botprofile bio <bio>     Cập nhật bio\n` +
-        `${prefix}botprofile avatar        Đổi avatar (reply ảnh)\n` +
-        `${prefix}botprofile qr [uid]      Lấy QR code\n` +
-        `${prefix}botprofile online        Bật online\n` +
-        `${prefix}botprofile offline       Tắt online`
+        `${prefix}mizai name <tên>    Đổi tên bot\n` +
+        `${prefix}mizai bio <bio>     Cập nhật bio\n` +
+        `${prefix}mizai avatar        Đổi avatar (reply ảnh)\n` +
+        `${prefix}mizai qr [uid]      Lấy QR code\n` +
+        `${prefix}mizai online        Bật online\n` +
+        `${prefix}mizai offline       Tắt online`
       );
     }
 
@@ -46,14 +46,14 @@ module.exports = {
 
         case "name": {
           const newName = args.slice(1).join(" ").trim();
-          if (!newName) return send(`⚠️ Ví dụ: ${prefix}botprofile name Mizai Bot`);
+          if (!newName) return send(`⚠️ Ví dụ: ${prefix}mizai name Mizai Bot`);
           await api.updateProfile({ displayName: newName });
           return send(`✅ Đã đổi tên bot thành: "${newName}"`);
         }
 
         case "bio": {
           const bio = args.slice(1).join(" ").trim();
-          if (!bio) return send(`⚠️ Ví dụ: ${prefix}botprofile bio Bot AI Zalo`);
+          if (!bio) return send(`⚠️ Ví dụ: ${prefix}mizai bio Bot AI Zalo`);
           await api.updateProfileBio(bio);
           return send(`✅ Đã cập nhật bio: "${bio}"`);
         }
@@ -64,7 +64,7 @@ module.exports = {
             || raw?.quote?.content?.normalUrl;
 
           if (!imgUrl) {
-            return send(`⚠️ Reply một ảnh rồi dùng: ${prefix}botprofile avatar`);
+            return send(`⚠️ Reply một ảnh rồi dùng: ${prefix}mizai avatar`);
           }
 
           const tmpPath = path.join(os.tmpdir(), `botavatar_${Date.now()}.jpg`);
@@ -108,7 +108,7 @@ module.exports = {
         }
 
         default:
-          return send(`❌ Lệnh không hợp lệ. Dùng: ${prefix}botprofile để xem hướng dẫn.`);
+          return send(`❌ Lệnh không hợp lệ. Dùng: ${prefix}mizai để xem hướng dẫn.`);
       }
     } catch (err) {
       const msg = err?.response?.data?.error || err?.message || "Lỗi không xác định";

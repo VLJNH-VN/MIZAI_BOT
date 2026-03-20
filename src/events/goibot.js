@@ -200,60 +200,89 @@ async function addReactionToQuote(api, reactionType, raw, threadId, type) {
   }
 }
 
-//  ẢNH AI — Pollinations.ai (miễn phí, không cần token)
+//  ẢNH AI — HuggingFace (chính) + Pollinations.ai (dự phòng)
 // ════════════════════════════════════════════════════════════════════════════════
-const POLL_MODELS = {
-  flux:           { id: "flux",         label: "Flux",          w: 1024, h: 1024 },
-  "flux-realism": { id: "flux-realism", label: "Flux Realism",  w: 768,  h: 1024 },
-  "flux-anime":   { id: "flux-anime",   label: "Flux Anime",    w: 768,  h: 1024 },
-  "flux-3d":      { id: "flux-3d",      label: "Flux 3D",       w: 1024, h: 1024 },
-  "flux-pro":     { id: "flux-pro",     label: "Flux Pro",      w: 1024, h: 1024 },
-  turbo:          { id: "turbo",        label: "Turbo",         w: 512,  h: 512  },
-  sana:           { id: "flux",         label: "Flux",          w: 1024, h: 1024 },
-  "any-dark":     { id: "flux-realism", label: "Flux Realism",  w: 768,  h: 1024 },
+const IMG_MODELS = {
+  flux:           { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux",         label: "Flux",         w: 1024, h: 1024 },
+  "flux-realism": { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-realism", label: "Flux Realism", w: 768,  h: 1024 },
+  "flux-anime":   { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-anime",   label: "Flux Anime",   w: 768,  h: 1024 },
+  "flux-3d":      { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-3d",      label: "Flux 3D",      w: 1024, h: 1024 },
+  "flux-pro":     { hf: "black-forest-labs/FLUX.1-dev",     poll: "flux-pro",     label: "Flux Pro",     w: 1024, h: 1024 },
+  turbo:          { hf: "black-forest-labs/FLUX.1-schnell", poll: "turbo",        label: "Turbo",        w: 512,  h: 512  },
+  sana:           { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux",         label: "Flux",         w: 1024, h: 1024 },
+  "any-dark":     { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-realism", label: "Flux Realism", w: 768,  h: 1024 },
 };
 
-const POLL_TIMEOUT = 90000;
+const HF_IMG_BASE  = "https://router.huggingface.co/hf-inference/models";
+const IMG_TIMEOUT  = 120000;
 
-async function generatePollinationsImage({ prompt, modelKey = "flux", width, height, seed }) {
-  const m = POLL_MODELS[modelKey] || POLL_MODELS["flux"];
+async function generateImage({ prompt, modelKey = "flux", width, height }) {
+  const m = IMG_MODELS[modelKey] || IMG_MODELS["flux"];
   const w = width  || m.w;
   const h = height || m.h;
-  const s = seed   || Math.floor(Math.random() * 999999);
 
+  const hfToken = global?.config?.hfToken || process.env.HF_TOKEN || "";
+
+  // ── Thử HuggingFace trước ──────────────────────────────────────────────────
+  if (hfToken) {
+    try {
+      const res = await axios.post(
+        `${HF_IMG_BASE}/${m.hf}`,
+        { inputs: prompt, parameters: { width: w, height: h, num_inference_steps: 4 } },
+        {
+          headers: {
+            Authorization : `Bearer ${hfToken}`,
+            "Content-Type": "application/json",
+            Accept        : "image/jpeg",
+          },
+          responseType: "arraybuffer",
+          timeout: IMG_TIMEOUT,
+        }
+      );
+      const ct = res.headers?.["content-type"] || "";
+      if (ct.startsWith("image/") && res.data?.byteLength > 500) {
+        return Buffer.from(res.data);
+      }
+      throw new Error(`HF trả về không phải ảnh (${ct})`);
+    } catch (hfErr) {
+      global.logWarn?.(`[goibot/img] HuggingFace thất bại (${hfErr?.response?.status || hfErr.message}), thử Pollinations...`);
+    }
+  }
+
+  // ── Fallback: Pollinations.ai ──────────────────────────────────────────────
+  const seed = Math.floor(Math.random() * 999999);
   const encodedPrompt = encodeURIComponent(prompt);
-  const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${w}&height=${h}&model=${m.id}&seed=${s}&nologo=true&enhance=false`;
+  const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${w}&height=${h}&model=${m.poll}&seed=${seed}&nologo=true&enhance=false`;
 
   const res = await axios.get(url, {
     responseType: "arraybuffer",
-    timeout: POLL_TIMEOUT,
+    timeout: IMG_TIMEOUT,
     headers: { "User-Agent": global.userAgent || "Mozilla/5.0" },
   });
 
   const contentType = res.headers?.["content-type"] || "";
   if (!contentType.startsWith("image/")) {
-    throw new Error(`API trả về không phải ảnh (${contentType})`);
+    throw new Error(`Pollinations trả về không phải ảnh (${contentType})`);
   }
   if (!res.data || res.data.byteLength < 500) {
-    throw new Error("API trả về dữ liệu rỗng");
+    throw new Error("Pollinations trả về dữ liệu rỗng");
   }
-
   return Buffer.from(res.data);
 }
 
 async function handleImgAction(api, imgAction, raw, threadId, type, send) {
   const prompt   = (imgAction.prompt || "").trim();
   let   modelKey = imgAction.model || "flux";
-  if (!POLL_MODELS[modelKey]) modelKey = "flux";
+  if (!IMG_MODELS[modelKey]) modelKey = "flux";
   if (!prompt) return send("❌ Không có mô tả ảnh để tạo.");
 
-  const label = POLL_MODELS[modelKey]?.label || modelKey;
+  const label = IMG_MODELS[modelKey]?.label || modelKey;
   await send(`🎨 Đang tạo ảnh: "${prompt}"\n🤖 Model: ${label}`);
 
-  const tmpFile = path.join(os.tmpdir(), `mizai_img_${Date.now()}.png`);
+  const tmpFile = path.join(os.tmpdir(), `mizai_img_${Date.now()}.jpg`);
 
   try {
-    const imgBuf = await generatePollinationsImage({ prompt, modelKey });
+    const imgBuf = await generateImage({ prompt, modelKey });
     fs.writeFileSync(tmpFile, imgBuf);
     await api.sendMessage({ msg: `🖼️ ${prompt}`, attachments: [tmpFile] }, threadId, type);
     setTimeout(() => { try { fs.unlinkSync(tmpFile); } catch {} }, 60000);

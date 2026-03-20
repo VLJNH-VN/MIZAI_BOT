@@ -3,11 +3,11 @@
 const fs   = require("fs");
 const path = require("path");
 
-const getToken = () => global?.config?.hfToken || process.env.HF_TOKEN || "";
+const getToken = () => global?.config?.hfToken || process.env.HF_TOKEN || "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";
 
-const TEXT_MODEL  = "mistralai/Mistral-7B-Instruct-v0.3";
-const HF_API      = "https://router.huggingface.co/hf-inference/models";
-const POLL_IMG_URL = "https://image.pollinations.ai/prompt";
+const TEXT_MODEL = "mistralai/Mistral-7B-Instruct-v0.3";
+const IMG_MODEL  = "black-forest-labs/FLUX.1-schnell";
+const HF_API     = "https://router.huggingface.co/hf-inference/models";
 
 async function hfText(prompt) {
   const url = `${HF_API}/${TEXT_MODEL}/v1/chat/completions`;
@@ -31,9 +31,41 @@ async function hfText(prompt) {
 }
 
 async function hfImage(prompt) {
-  const seed = Math.floor(Math.random() * 999999);
+  const token = getToken();
+
+  // ── Thử HuggingFace Inference API (FLUX.1-schnell) ────────────────────────
+  if (token) {
+    try {
+      const res = await global.axios.post(
+        `${HF_API}/${IMG_MODEL}`,
+        { inputs: prompt, parameters: { width: 1024, height: 1024, num_inference_steps: 4 } },
+        {
+          headers: {
+            Authorization : `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Accept        : "image/jpeg",
+          },
+          responseType: "arraybuffer",
+          timeout: 120_000,
+        }
+      );
+      const ct = res.headers?.["content-type"] || "";
+      if (ct.startsWith("image/") && res.data?.byteLength > 500) {
+        return Buffer.from(res.data);
+      }
+      throw new Error(`HF trả về không phải ảnh (${ct})`);
+    } catch (hfErr) {
+      const st = hfErr?.response?.status;
+      // 503 = model đang tải, 429 = rate limit → thử fallback
+      if (st !== 503 && st !== 429 && st !== 500) throw hfErr;
+      logWarn?.(`[hf/img] HuggingFace lỗi ${st}, thử Pollinations...`);
+    }
+  }
+
+  // ── Fallback: Pollinations.ai ─────────────────────────────────────────────
+  const seed    = Math.floor(Math.random() * 999999);
   const encoded = encodeURIComponent(prompt);
-  const url = `${POLL_IMG_URL}/${encoded}?width=1024&height=1024&model=flux&seed=${seed}&nologo=true&enhance=false`;
+  const url     = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&model=flux&seed=${seed}&nologo=true&enhance=false`;
 
   const res = await global.axios.get(url, {
     responseType: "arraybuffer",
@@ -43,7 +75,7 @@ async function hfImage(prompt) {
 
   const contentType = res.headers?.["content-type"] || "";
   if (!contentType.startsWith("image/")) {
-    throw new Error("API trả về không phải ảnh, thử lại sau.");
+    throw new Error("Cả hai API đều không trả về ảnh hợp lệ, thử lại sau.");
   }
   if (!res.data || res.data.byteLength < 500) {
     throw new Error("API trả về dữ liệu rỗng, thử lại sau.");

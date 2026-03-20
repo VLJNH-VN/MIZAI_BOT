@@ -21,7 +21,6 @@ async function handleListen({ api, event, commands, prefix }) {
     }
   }
 }
-const { warmupFromEvent } = require("../../includes/database/infoCache");
 const { autoSaveFromEvent } = require("../../includes/database/dataManager");
 const { isBotAdmin, isGroupAdmin } = require("../../utils/bot/botManager");
 const { getGroupAnti, recordMessage, clearSpam } = require("../../utils/bot/botManager");
@@ -117,10 +116,7 @@ async function handleMessage(params) {
   // ── Lưu tin nhắn vào MessageCache (phục vụ resolveQuote) ──────────────────
   try { storeMsgCache(event); } catch (_) {}
 
-  // ── Warm cache chạy nền, không block pipeline ──────────────────────────────
-  warmupFromEvent({ api, event }).catch(() => {});
-
-  // ── Lưu user + group vào DB (chạy nền) ────────────────────────────────────
+  // ── Lưu user + group vào DB, refresh tên nếu stale (chạy nền) ───────────────
   autoSaveFromEvent(api, event).catch(() => {});
 
   const isAdmin = senderId && isBotAdmin(senderId);

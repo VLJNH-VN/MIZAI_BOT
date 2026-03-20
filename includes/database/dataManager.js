@@ -271,50 +271,64 @@ async function getGroupStats() {
   };
 }
 
+// TTL: bao lâu thì gọi lại API để refresh (giống infoCache)
+const USER_TTL_MS  = 7 * 24 * 60 * 60 * 1000; // 7 ngày
+const GROUP_TTL_MS = 24 * 60 * 60 * 1000;      // 1 ngày
+
 // ══════════════════════════════════════════════════════════════════════════════
 //  AUTO SAVE FROM EVENT
+//  Thay thế hoàn toàn warmupFromEvent (infoCache.js).
+//  Gọi MỘT LẦN trong handleMessage() — chạy nền, không block pipeline.
+//
+//  Làm 3 việc trên mỗi tin nhắn:
+//    1. Tăng msg_count của user
+//    2. Nếu user chưa có tên hoặc stale (>7 ngày) → gọi api.getUserInfo
+//    3. Nếu group chưa có hoặc stale (>1 ngày)    → gọi api.getGroupInfo
 // ══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Tự động lưu user + group mỗi khi nhận được tin nhắn.
- * Gọi trong handleMessage() — chạy nền, không block pipeline.
- */
 async function autoSaveFromEvent(api, event) {
   const raw      = event?.data || {};
   const userId   = raw?.uidFrom ? String(raw.uidFrom) : null;
   const threadId = event?.threadId ? String(event.threadId) : null;
   const isGroup  = Number(event?.type) === 1; // ThreadType.Group
+  const now      = Date.now();
 
   const tasks = [];
 
-  // ── Lưu user ───────────────────────────────────────────────────────────────
+  // ── 1. Lưu user + refresh nếu cần ─────────────────────────────────────────
   if (userId && userId !== String(global.botId)) {
     tasks.push((async () => {
       try {
-        const name = raw?.dName || raw?.displayName || null;
-        await saveUser(userId, { name });
+        // Tên lấy từ event (nhanh, không tốn API)
+        const eventName = raw?.dName || raw?.displayName || raw?.senderName || null;
 
-        // Fetch profile từ API nếu chưa có tên
-        if (!name && api && typeof api.getUserInfo === "function") {
-          try {
-            const res     = await api.getUserInfo(userId);
-            const profile = res?.changed_profiles?.[userId] || null;
-            const fetchedName = profile?.displayName || profile?.zaloName || null;
-            if (fetchedName) await saveUser(userId, { name: fetchedName, profile }, { increment: false });
-          } catch {}
+        // Lưu ngay với tên từ event, tăng msg_count
+        await saveUser(userId, { name: eventName });
+
+        // Kiểm tra xem có cần gọi API không
+        const existing  = await getUser(userId);
+        const hasFresh  = existing?.name && existing.updatedAt && (now - existing.updatedAt < USER_TTL_MS);
+
+        if (!hasFresh && api && typeof api.getUserInfo === "function") {
+          const res     = await api.getUserInfo(userId);
+          const profile = res?.changed_profiles?.[userId] || null;
+          const name    = profile?.displayName || profile?.zaloName || profile?.username || null;
+          if (name || profile) {
+            await saveUser(userId, { name, profile }, { increment: false });
+          }
         }
       } catch {}
     })());
   }
 
-  // ── Lưu group ──────────────────────────────────────────────────────────────
+  // ── 2. Lưu group + refresh nếu cần ────────────────────────────────────────
   if (isGroup && threadId) {
     tasks.push((async () => {
       try {
-        const existing = await getGroup(threadId);
-        const needFetch = !existing || (Date.now() - (existing.updatedAt || 0) > 24 * 60 * 60 * 1000);
+        const existing  = await getGroup(threadId);
+        const hasFresh  = existing && existing.updatedAt && (now - existing.updatedAt < GROUP_TTL_MS);
 
-        if (needFetch && api && typeof api.getGroupInfo === "function") {
+        if (!hasFresh && api && typeof api.getGroupInfo === "function") {
           const res  = await api.getGroupInfo(threadId);
           const info = res?.gridInfoMap?.[threadId] || null;
           if (info) {
@@ -326,6 +340,7 @@ async function autoSaveFromEvent(api, event) {
             });
           }
         } else if (!existing) {
+          // Chưa có record → tạo mới với data tối thiểu
           await saveGroup(threadId, {});
         }
       } catch {}

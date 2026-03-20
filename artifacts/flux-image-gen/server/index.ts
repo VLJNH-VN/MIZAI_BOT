@@ -153,7 +153,11 @@ function hashIP(ip: string): string {
 
 function loadDB(): KeysDB {
   try {
-    return JSON.parse(fs.readFileSync(KEYS_FILE, "utf-8"));
+    const data = JSON.parse(fs.readFileSync(KEYS_FILE, "utf-8"));
+    if (!data.users || typeof data.users !== "object") {
+      data.users = {};
+    }
+    return data;
   } catch {
     return { users: {} };
   }

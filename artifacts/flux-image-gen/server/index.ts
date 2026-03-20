@@ -358,36 +358,25 @@ const SIZES = [
 //  KEY ENDPOINTS
 // ══════════════════════════════════════════════════════════════════════════════
 
-// POST /api/key/register — tạo key free theo IP (chỉ hiển thị 1 lần)
+// POST /api/key/register — tạo hoặc lấy lại key free theo IP
 app.post("/api/key/register", (req, res) => {
   const ip = getClientIP(req);
   const db = loadDB();
-  const [ipId, user, isNew] = getOrCreateUserByIP(db, ip);
+  const [ipId, user] = getOrCreateUserByIP(db, ip);
 
-  if (!isNew && user.keyShown) {
-    const u = resetQuotaIfNeeded(user);
-    res.status(409).json({
-      error: "IP này đã đăng ký rồi. Key không hiển thị lại vì lý do bảo mật.",
-      type: u.type,
-      quota: u.type === "free"
-        ? `${u.dailyUsage}/${FREE_DAILY_QUOTA} hôm nay`
-        : "VIP — không giới hạn",
-    });
-    return;
-  }
-
-  // Lần đầu hoặc chưa hiển thị key
-  user.keyShown = true;
-  db.users[ipId] = user;
+  const u = resetQuotaIfNeeded(user);
+  u.keyShown = true;
+  db.users[ipId] = u;
   saveDB(db);
 
   res.json({
     success: true,
-    key: user.key,
-    type: "free",
+    key: u.key,
+    type: u.type,
     ip: ip,
-    quota: `${FREE_DAILY_QUOTA} ảnh/ngày`,
-    note: "⚠️ Key chỉ hiển thị 1 lần duy nhất. Hãy lưu giữ cẩn thận!",
+    quota: u.type === "free"
+      ? `${u.dailyUsage}/${FREE_DAILY_QUOTA} hôm nay`
+      : "VIP — không giới hạn",
   });
 });
 
@@ -715,12 +704,14 @@ Rules:
 app.get("/api/me", (req, res) => {
   const ip = getClientIP(req);
   const db = loadDB();
-  const [, user] = getOrCreateUserByIP(db, ip);
+  const [ipId, user] = getOrCreateUserByIP(db, ip);
   const u = resetQuotaIfNeeded(user);
+  u.keyShown = true;
+  db.users[ipId] = u;
+  saveDB(db);
   res.json({
     ip,
-    key: u.keyShown ? "********" : null,
-    keyReady: u.keyShown,
+    key: u.key,
     type: u.type,
     quota: u.type === "free"
       ? { used: u.dailyUsage, limit: FREE_DAILY_QUOTA, remaining: Math.max(0, FREE_DAILY_QUOTA - u.dailyUsage) }

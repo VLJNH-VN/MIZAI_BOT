@@ -14,7 +14,6 @@ const { saveLastSeen }            = require("./utils/system/lastSeen");
 const { fetchMissedMessages }     = require("./utils/system/fetchMissed");
 
 // ── Database loaders ──────────────────────────────────────────────────────────
-const { loadAllGroups }    = require("./includes/database/groupLoader");
 
 // ── Events ────────────────────────────────────────────────────────────────────
 const { handleMessage }    = require("./src/events/message");
@@ -73,9 +72,6 @@ async function main(isFirstRun = true) {
       );
 
       // Load toàn bộ data nhóm vào DB (chạy nền, không block)
-      loadAllGroups(api).catch(err =>
-        logError(`[groupLoader] Lỗi load nhóm: ${err?.message}`)
-      );
 
       // Fetch tin nhắn bỏ lỡ khi bot offline (chạy nền, không block)
       fetchMissedMessages(api, global.commands, global.prefix).catch(err =>

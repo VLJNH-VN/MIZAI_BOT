@@ -133,8 +133,8 @@ module.exports = {
     }
   },
 
-  // ── onReply: tải bài được chọn ────────────────────────────────────────────
-  onReply: async ({ event, data, send }) => {
+  // ── onReply: tải bài được chọn qua fown API (YouTube Music) ──────────────
+  onReply: async ({ api, event, data, send }) => {
     const { tracks = [] } = data || {};
     if (!tracks.length) return send("❌ Hết dữ liệu. Vui lòng tìm lại.");
 
@@ -149,37 +149,28 @@ module.exports = {
     const track = tracks[choice - 1];
     await send(`⏳ Đang tải: ${track.title} — ${track.author}`);
 
+    const FOWN_API = "https://fown.onrender.com";
+
     try {
-      const trackUrl   = encodeURIComponent(track.link);
-      const apiRes     = await global.axios.get(
-        `https://www.bhandarimilan.info.np/spotify?url=${trackUrl}`,
+      // Tìm bài trên YouTube Music bằng title + author
+      const keyword   = `${track.title} ${track.author}`;
+      const searchRes = await global.axios.get(
+        `${FOWN_API}/api/search?ytmsearch=${encodeURIComponent(keyword)}&svl=1`,
         { timeout: 30000 }
       );
+      const ytmUrl = searchRes.data?.results?.[0]?.url;
+      if (!ytmUrl) return send("❌ Không tìm thấy nhạc trên YouTube Music. Thử bài khác.");
 
-      if (!apiRes.data?.success || !apiRes.data?.link) {
-        return send("❌ Không lấy được link tải nhạc. Thử lại sau.");
-      }
+      // Lấy download_audio_url (GitHub Releases — URL vĩnh cửu)
+      const mediaRes = await global.axios.get(
+        `${FOWN_API}/api/media?url=${encodeURIComponent(ytmUrl)}`,
+        { timeout: 120000 }
+      );
+      const audioUrl = mediaRes.data?.download_audio_url || mediaRes.data?.download_url;
+      if (!audioUrl) return send("❌ Không lấy được link tải nhạc. Thử lại sau.");
 
-      const audioLink = apiRes.data.link;
-      const tmpFile   = path.join(os.tmpdir(), `spt_${Date.now()}.mp3`);
-
-      const audioRes = await global.axios.get(audioLink, {
-        responseType: "arraybuffer",
-        timeout:      60000,
-      });
-      fs.writeFileSync(tmpFile, Buffer.from(audioRes.data));
-
-      const size = fmtSize(fs.statSync(tmpFile).size);
-      const meta = apiRes.data.metadata || {};
-
-      try {
-        await send({
-          msg: `🎵 ${meta.title || track.title}\n👤 ${meta.artists || track.author}\n📅 ${meta.releaseDate || ""}\n💽 ${size}`,
-          attachments: [tmpFile],
-        });
-      } finally {
-        try { fs.unlinkSync(tmpFile); } catch {}
-      }
+      await send(`🎵 ${track.title}\n👤 ${track.author}\n⏳ ${fmtDuration(track.duration)}`);
+      await api.sendVoice({ voiceUrl: audioUrl }, event.threadId, event.type);
     } catch (err) {
       return send(`❌ Lỗi tải nhạc: ${err.message}`);
     }

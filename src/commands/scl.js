@@ -1,136 +1,21 @@
 "use strict";
 
 /**
- * src/commands/scl.js — SoundCloud search + download + GitHub upload → sendVoice
+ * src/commands/scl.js — SoundCloud search + tải nhạc qua fown API
  *
- * Flow khi reply số:
- *   1. Lấy progressive transcoding URL từ data track (đã lưu lúc search)
- *   2. Gọi URL đó + client_id → nhận direct mp3 link
- *   3. Tải mp3 → buffer
- *   4. Upload buffer lên GitHub → rawUrl công khai
- *   5. api.sendVoice({ voiceUrl: rawUrl }) — không cần uploadAttachment
+ * Flow:
+ *   Search: GET /api/search?scsearch=<q>&svl=5  → danh sách track
+ *   Download: GET /api/media?url=<sc_url>        → download_audio_url (GitHub Releases)
+ *   Gửi: api.sendVoice({ voiceUrl: download_audio_url }) → phát inline
  */
-
-const fs   = require("fs");
-const path = require("path");
 
 const { registerReply } = require("../../includes/handlers/handleReply");
 
-const SC_API  = "https://api-v2.soundcloud.com";
-const SC_HOME = "https://soundcloud.com";
-const LIMIT   = 5;
+const FOWN_API = "https://fown.onrender.com";
+const LIMIT    = 5;
 
-const HEADERS = {
-  "User-Agent":      global.userAgent,
-  "Accept":          "application/json, text/javascript, */*; q=0.01",
-  "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8",
-  "Referer":         "https://soundcloud.com/",
-  "Origin":          "https://soundcloud.com",
-};
-
-// ─── Client ID cache ──────────────────────────────────────────────────────────
-let _clientId = null;
-let _clientAt = 0;
-
-async function getClientId() {
-  if (_clientId && Date.now() - _clientAt < 3_600_000) return _clientId;
-
-  const axios = global.axios;
-  const html  = (await axios.get(SC_HOME, { headers: HEADERS, timeout: 15000 })).data;
-
-  const urls = [];
-  const re   = /src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g;
-  let m;
-  while ((m = re.exec(html)) !== null) urls.push(m[1]);
-
-  for (const url of urls.slice(-8)) {
-    try {
-      const r     = await axios.get(url, { headers: HEADERS, timeout: 10000 });
-      const match = r.data.match(/client_id\s*:\s*"([a-zA-Z0-9]{32})"/);
-      if (match) { _clientId = match[1]; _clientAt = Date.now(); return _clientId; }
-    } catch (_) {}
-  }
-  throw new Error("Không lấy được client_id từ SoundCloud");
-}
-
-// ─── Search tracks (lưu transcodings để dùng khi download) ───────────────────
-async function searchTracks(query) {
-  const clientId = await getClientId();
-  const res = await global.axios.get(`${SC_API}/search/tracks`, {
-    params: { q: query, client_id: clientId, limit: LIMIT, offset: 0 },
-    headers: HEADERS,
-    timeout: 15000,
-  });
-
-  return (res.data?.collection || []).map(t => ({
-    id:           t.id,
-    title:        t.title,
-    username:     t.user?.username  || "Không rõ",
-    fullName:     t.user?.full_name || t.user?.username || "Không rõ",
-    permalink:    t.permalink_url,
-    duration:     t.duration,
-    plays:        t.playback_count,
-    likes:        t.likes_count,
-    transcodings: t.media?.transcodings || [],   // <-- lưu để download sau
-  }));
-}
-
-// ─── Lấy direct mp3 URL từ transcoding ───────────────────────────────────────
-async function resolveStreamUrl(transcodings) {
-  const clientId = await getClientId();
-  const axios    = global.axios;
-
-  // Ưu tiên progressive (direct mp3) trước HLS
-  const sorted = [...transcodings].sort((a, b) => {
-    const score = t => (t.format?.protocol === "progressive" ? 0 : 1);
-    return score(a) - score(b);
-  });
-
-  for (const tc of sorted) {
-    if (!tc.url) continue;
-    try {
-      const res = await axios.get(tc.url, {
-        params:  { client_id: clientId },
-        headers: HEADERS,
-        timeout: 15000,
-      });
-      const url = res.data?.url;
-      if (url) return { url, isHls: tc.format?.protocol === "hls" };
-    } catch (_) {}
-  }
-  throw new Error("Không lấy được stream URL từ transcodings");
-}
-
-// ─── Tải mp3 từ direct URL → Buffer ──────────────────────────────────────────
-async function downloadMp3Buffer(mp3Url) {
-  const res = await global.axios.get(mp3Url, {
-    responseType: "arraybuffer",
-    timeout:      120_000,
-    maxContentLength: 50 * 1024 * 1024,
-    headers: { "User-Agent": HEADERS["User-Agent"] },
-  });
-  return Buffer.from(res.data);
-}
-
-// ─── Tải HLS → mp3 qua ffmpeg (khi progressive không có) ────────────────────
-function downloadHlsToBuffer(m3u8Url) {
-  const { execSync } = require("child_process");
-  const tmpOut = path.join(
-    path.join(process.cwd(), "includes", "cache"),
-    `scl_hls_${Date.now()}.mp3`
-  );
-  execSync(
-    `ffmpeg -y -i "${m3u8Url}" -c:a libmp3lame -q:a 4 "${tmpOut}"`,
-    { stdio: "pipe", timeout: 90_000 }
-  );
-  const buf = fs.readFileSync(tmpOut);
-  try { fs.unlinkSync(tmpOut); } catch (_) {}
-  return buf;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function fmtDuration(ms) {
-  const s = Math.floor(ms / 1000);
+function fmtDuration(sec) {
+  const s = Math.round(sec);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 function fmtNum(n) {
@@ -140,21 +25,19 @@ function fmtNum(n) {
   return String(n);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 module.exports = {
   config: {
     name:            "scl",
     aliases:         ["soundcloud", "sc"],
-    version:         "3.0.0",
+    version:         "4.0.0",
     hasPermssion:    0,
     credits:         "MiZai",
-    description:     "Tìm & tải nhạc SoundCloud → gửi file đính kèm",
+    description:     "Tìm & tải nhạc SoundCloud",
     commandCategory: "Giải Trí",
     usages:          "<từ khóa>",
     cooldowns:       5,
   },
 
-  // ── Tìm kiếm ────────────────────────────────────────────────────────────────
   run: async ({ args, send }) => {
     const query = args.join(" ").trim();
     if (!query) return send("🎵 Dùng: scl <từ khóa>\nVí dụ: scl bóng phù hoa TVS");
@@ -163,9 +46,12 @@ module.exports = {
 
     let tracks;
     try {
-      tracks = await searchTracks(query);
+      const res = await global.axios.get(
+        `${FOWN_API}/api/search?scsearch=${encodeURIComponent(query)}&svl=${LIMIT}`,
+        { timeout: 30000 }
+      );
+      tracks = res.data?.results || [];
     } catch (err) {
-      global.logError?.(`[scl] search: ${err?.message || err}`);
       return send("❌ Lỗi tìm kiếm: " + (err?.message || "Không xác định"));
     }
 
@@ -174,7 +60,7 @@ module.exports = {
     let msg = `🎵 KẾT QUẢ SOUNDCLOUD\n🔎 "${query}"\n━━━━━━━━━━━━━━━━\n`;
     tracks.forEach((t, i) => {
       msg += `${i + 1}. 🎶 ${t.title}\n`;
-      msg += `   👤 ${t.fullName}  ⏱ ${fmtDuration(t.duration)}  ▶️ ${fmtNum(t.plays)}\n`;
+      msg += `   👤 ${t.uploader}  ⏱ ${fmtDuration(t.duration)}  ▶️ ${fmtNum(t.view_count)}\n`;
     });
     msg += `━━━━━━━━━━━━━━━━\n💬 Reply số từ 1-${tracks.length} để tải nhạc`;
 
@@ -185,7 +71,6 @@ module.exports = {
     }
   },
 
-  // ── Xử lý reply ─────────────────────────────────────────────────────────────
   onReply: async ({ api, event, data, send }) => {
     const { tracks = [] } = data || {};
     if (!tracks.length) return send("❌ Hết dữ liệu. Vui lòng tìm lại.");
@@ -201,84 +86,30 @@ module.exports = {
     }
 
     const t = tracks[choice - 1];
+    await send(`⏳ Đang tải: ${t.title}\n👤 ${t.uploader}  ⏱ ${fmtDuration(t.duration)}`);
 
-    if (!t.transcodings?.length) {
-      return send("❌ Bài này không có dữ liệu stream. Vui lòng thử bài khác.");
-    }
-
-    await send(`⏳ Đang tải: ${t.title}\n👤 ${t.fullName}  ⏱ ${fmtDuration(t.duration)}`);
-
-    // 1. Lấy direct URL từ transcodings
-    let streamInfo;
+    let audioUrl;
     try {
-      streamInfo = await resolveStreamUrl(t.transcodings);
+      const res = await global.axios.get(
+        `${FOWN_API}/api/media?url=${encodeURIComponent(t.url)}`,
+        { timeout: 120000 }
+      );
+      audioUrl = res.data?.download_audio_url || res.data?.download_url;
     } catch (err) {
-      global.logError?.(`[scl] resolveStream: ${err?.message || err}`);
-      return send("❌ Không lấy được stream: " + err.message);
-    }
-
-    global.logInfo?.(`[scl] stream url (isHls=${streamInfo.isHls}): ${streamInfo.url.slice(0, 80)}...`);
-
-    // 2. Tải audio → buffer
-    let audioBuf;
-    try {
-      if (streamInfo.isHls) {
-        audioBuf = downloadHlsToBuffer(streamInfo.url);
-      } else {
-        audioBuf = await downloadMp3Buffer(streamInfo.url);
-      }
-    } catch (err) {
-      global.logError?.(`[scl] download: ${err?.message || err}`);
       return send("❌ Lỗi tải nhạc: " + err.message);
     }
 
-    global.logInfo?.(`[scl] downloaded ${(audioBuf.length / 1024).toFixed(0)} KB`);
+    if (!audioUrl) return send("❌ Không lấy được link tải nhạc. Thử bài khác.");
 
-    // 3. Lưu buffer ra file tạm
-    const tmpDir  = path.join(process.cwd(), "includes", "cache");
-    const tmpFile = path.join(tmpDir, `scl_${t.id}_${Date.now()}.mp3`);
-    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-    fs.writeFileSync(tmpFile, audioBuf);
-
-    // 4. Upload lên GitHub lấy rawUrl (nếu thất bại thì dùng attachment)
-    let ghRawUrl = null;
-    try {
-      const repoPath = `audio/scl_${t.id}_${Date.now()}.mp3`;
-      ghRawUrl = await global.githubUpload(tmpFile, repoPath);
-      // Chuyển download_url → raw content URL
-      if (ghRawUrl && ghRawUrl.includes("github.com")) {
-        ghRawUrl = ghRawUrl
-          .replace("https://github.com/", "https://raw.githubusercontent.com/")
-          .replace("/blob/", "/");
-      }
-      global.logInfo?.(`[scl] github raw url: ${ghRawUrl}`);
-    } catch (e) {
-      global.logWarn?.(`[scl] github upload thất bại: ${e.message}`);
-    }
-
-    const caption = `✅ Download SoundCloud\n📝 ${t.title}\n👤 ${t.fullName}\n⏳ ${fmtDuration(t.duration)} · ▶️ ${fmtNum(t.plays)} · ❤️ ${fmtNum(t.likes)}`;
+    const caption =
+      `✅ SoundCloud\n📝 ${t.title}\n👤 ${t.uploader}\n` +
+      `⏳ ${fmtDuration(t.duration)} · ▶️ ${fmtNum(t.view_count)}`;
 
     try {
-      if (ghRawUrl) {
-        // Gửi bằng URL GitHub raw
-        await api.sendMessage(
-          { msg: caption + `\n☁️ ${ghRawUrl}`, attachments: [tmpFile] },
-          event.threadId,
-          event.type
-        );
-      } else {
-        // Fallback: gửi file đính kèm trực tiếp
-        await api.sendMessage(
-          { msg: caption, attachments: [tmpFile] },
-          event.threadId,
-          event.type
-        );
-      }
+      await api.sendMessage({ msg: caption }, event.threadId, event.type);
+      await api.sendVoice({ voiceUrl: audioUrl }, event.threadId, event.type);
     } catch (err) {
-      global.logError?.(`[scl] sendMessage: ${err?.message || err}`);
       return send("❌ Lỗi gửi audio: " + err.message);
-    } finally {
-      try { fs.unlinkSync(tmpFile); } catch (_) {}
     }
   },
 };

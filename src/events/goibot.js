@@ -198,73 +198,6 @@ async function addReactionToQuote(api, reactionType, raw, threadId, type) {
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════════
-//  NHẠC — SoundCloud
-// ════════════════════════════════════════════════════════════════════════════════
-let _scClientId = null;
-
-async function getSCClientId() {
-  if (_scClientId) return _scClientId;
-  const res = await axios.get("https://soundcloud.com", {
-    headers: { "User-Agent": global.userAgent }, timeout: 12000
-  });
-  const scripts = [...res.data.matchAll(/src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g)].map(m => m[1]);
-  for (const src of scripts.slice(-4)) {
-    try {
-      const s = await axios.get(src, { timeout: 10000 });
-      const m = s.data.match(/client_id:"([a-zA-Z0-9]+)"/);
-      if (m) { _scClientId = m[1]; return _scClientId; }
-    } catch {}
-  }
-  throw new Error("Không lấy được SoundCloud client_id");
-}
-
-async function searchSoundCloud(query) {
-  const clientId = await getSCClientId();
-  const res      = await axios.get("https://api-v2.soundcloud.com/search/tracks", {
-    params: { q: query, limit: 10, client_id: clientId },
-    timeout: 10000
-  });
-  const tracks  = res.data.collection || [];
-  const singles = tracks.filter(t => t.duration >= 60000 && t.duration <= 480000);
-  const pool    = singles.length ? singles : tracks;
-  return pool.map(t => ({
-    title:         `${t.title} - ${t.user?.username || ""}`.trim(),
-    url:           t.permalink_url,
-    duration:      Math.round(t.duration / 1000),
-    transcodings:  t.media?.transcodings || [],
-  }));
-}
-
-async function getSCStreamUrl(transcodings, clientId) {
-  const progressive = transcodings.find(
-    tc => tc.format?.protocol === "progressive" && !tc.snip
-  ) || transcodings.find(tc => !tc.snip) || transcodings[0];
-  if (!progressive) throw new Error("Không có transcoding hợp lệ");
-  const res = await axios.get(progressive.url, {
-    params:  { client_id: clientId },
-    timeout: 15000,
-    headers: { "User-Agent": global.userAgent },
-  });
-  const streamUrl = res.data?.url;
-  if (!streamUrl) throw new Error("Không lấy được stream URL từ SoundCloud");
-  return streamUrl;
-}
-
-async function downloadAudio(streamUrl, outPath) {
-  const res = await axios.get(streamUrl, {
-    responseType: "stream",
-    timeout:      120000,
-    headers:      { "User-Agent": global.userAgent }
-  });
-  await new Promise((resolve, reject) => {
-    const writer = fs.createWriteStream(outPath);
-    res.data.pipe(writer);
-    writer.on("finish", resolve);
-    writer.on("error",  reject);
-  });
-}
-
 //  ẢNH AI — Pollinations.ai (miễn phí, không cần token)
 // ════════════════════════════════════════════════════════════════════════════════
 const POLL_MODELS = {
@@ -627,27 +560,36 @@ async function handleGoibot({ api, event }) {
     if (botMsg?.nhac?.status) {
       const keyword = botMsg.nhac.keyword;
       if (!keyword) return send("❌ Lỗi tìm nhạc: không có keyword");
-      const results = await searchSoundCloud(keyword);
-      if (!results.length) return send(`❎ Không tìm thấy nhạc: "${keyword}"`);
-      const track = results[0];
-      if (track.duration > 900) return send(`❎ Không tìm được bài đơn cho "${keyword}". Bạn cho tên bài và ca sĩ cụ thể nhé!`);
-      const filePath = path.join(CACHE_DIR, `${Date.now()}.mp3`);
+
+      const FOWN = "https://fown.onrender.com";
       try {
-        const clientId  = await getSCClientId();
-        const streamUrl = await getSCStreamUrl(track.transcodings, clientId);
-        await downloadAudio(streamUrl, filePath);
-        if (!fs.existsSync(filePath)) return send(`❌ Không tải được nhạc: ${keyword}`);
-        const uploads = await api.uploadAttachment([filePath], threadId, event.type);
-        if (!uploads?.[0]?.fileUrl) return send(`❌ Upload nhạc thất bại: ${keyword}`);
-        await send(`🎶 ${track.title}`);
-        await api.sendVoice({ voiceUrl: uploads[0].fileUrl }, threadId, event.type);
+        // 1. Tìm trên SoundCloud qua fown API
+        const searchRes = await axios.get(
+          `${FOWN}/api/search?scsearch=${encodeURIComponent(keyword)}&svl=1`,
+          { timeout: 30000 }
+        );
+        const results = searchRes.data?.results || [];
+        if (!results.length) return send(`❎ Không tìm thấy nhạc: "${keyword}"`);
+
+        const track = results[0];
+        if (track.duration > 900) {
+          return send(`❎ Không tìm được bài đơn cho "${keyword}". Bạn cho tên bài và ca sĩ cụ thể nhé!`);
+        }
+
+        // 2. Lấy download_audio_url (GitHub Releases — URL vĩnh cửu)
+        const mediaRes = await axios.get(
+          `${FOWN}/api/media?url=${encodeURIComponent(track.url)}`,
+          { timeout: 120000 }
+        );
+        const audioUrl = mediaRes.data?.download_audio_url || mediaRes.data?.download_url;
+        if (!audioUrl) return send(`❌ Không tải được nhạc: ${keyword}`);
+
+        // 3. Gửi voice inline
+        await send(`🎶 ${track.title} - ${track.uploader}`);
+        await api.sendVoice({ voiceUrl: audioUrl }, threadId, event.type);
       } catch (dlErr) {
-        const dlMsg = dlErr?.stderr || dlErr?.message || String(dlErr);
-        global.logError?.(`[goibot] Tải nhạc lỗi: ${dlMsg}`);
-        if (dlMsg.includes("client_id") || dlMsg.includes("401")) _scClientId = null;
+        global.logError?.(`[goibot] Tải nhạc lỗi: ${dlErr?.message}`);
         return send(`❌ Không tải được nhạc "${keyword}". Thử bài khác nhé!`);
-      } finally {
-        setTimeout(() => { try { fs.unlinkSync(filePath); } catch {} }, 2 * 60 * 1000);
       }
     }
 

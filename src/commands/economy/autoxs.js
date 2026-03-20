@@ -24,14 +24,14 @@ function nowVN() {
   return { h: d.getHours(), m: d.getMinutes(), s: d.getSeconds() };
 }
 
-// ─── Xổ số Miền Nam ───────────────────────────────────────────────────────────
-async function xsmn() {
+// ─── Helper: parse bảng KQ nhiều tỉnh (dùng chung cho MN và MT) ──────────────
+async function parseMultiProvince(containerId) {
   const axios   = global.axios;
   const cheerio = require("cheerio");
   const url = "https://xsmn.mobi/";
   const res = await axios.get(url, { timeout: 30000 });
   const $   = cheerio.load(res.data);
-  const con = $("#load_kq_mn_0");
+  const con = $(containerId);
 
   const Names = [];
   con.find("table.extendable tbody tr.gr-yellow th").each((_, th) => {
@@ -69,6 +69,16 @@ async function xsmn() {
     });
     return { name, results: data };
   });
+}
+
+// ─── Xổ số Miền Nam ───────────────────────────────────────────────────────────
+async function xsmn() {
+  return parseMultiProvince("#load_kq_mn_0");
+}
+
+// ─── Xổ số Miền Trung ─────────────────────────────────────────────────────────
+async function xsmt() {
+  return parseMultiProvince("#load_kq_mt_0");
 }
 
 // ─── Xổ số Miền Bắc ───────────────────────────────────────────────────────────
@@ -164,7 +174,7 @@ module.exports = {
           `5️⃣ Giải 5: ${(fd["G.5"] || []).join(", ")}\n` +
           `6️⃣ Giải 6: ${(fd["G.6"] || []).join(", ")}\n` +
           `7️⃣ Giải 7: ${(fd["G.7"] || []).join(", ")}\n\n` +
-          `👍 Thả cảm xúc để xem kết quả xổ số Miền Nam`;
+          `👍 Thả cảm xúc để xem kết quả xổ số Miền Nam & Miền Trung`;
 
         const disabledIds = readData();
         const groups      = readGroups();
@@ -205,25 +215,38 @@ module.exports = {
     }
   },
 
-  // ── onReaction: gửi xổ số Miền Nam khi ai đó thả cảm xúc ─────────────────
+  // ── onReaction: gửi xổ số Miền Nam + Miền Trung khi ai đó thả cảm xúc ────
   onReaction: async ({ data, send }) => {
     if (data?.type !== "xsmn") return;
-    try {
-      const provinces = await xsmn();
-      const msg = provinces.map(p =>
-        `📋 Kết quả xổ số tỉnh ${p.name}:\n` +
-        Object.entries({
-          ĐB: "Giải Đặc Biệt", G1: "Giải Nhất", G2: "Giải Nhì",
-          G3: "Giải Ba", G4: "Giải 4", G5: "Giải 5",
-          G6: "Giải 6", G7: "Giải 7", G8: "Giải 8"
-        }).map(([key, label]) => {
+
+    const GIAI_MAP = {
+      ĐB: "Giải Đặc Biệt", G1: "Giải Nhất", G2: "Giải Nhì",
+      G3: "Giải Ba",        G4: "Giải 4",    G5: "Giải 5",
+      G6: "Giải 6",         G7: "Giải 7",    G8: "Giải 8"
+    };
+
+    function formatProvinces(provinces, region) {
+      if (!provinces || provinces.length === 0) return `Không có dữ liệu xổ số ${region}.`;
+      return provinces.map(p =>
+        `📋 ${p.name}:\n` +
+        Object.entries(GIAI_MAP).map(([key, label]) => {
           const r = p.results.find(x => x.giải === key);
           return r ? `${label}: ${r.kết_quả.join(", ")}` : "";
         }).filter(Boolean).join("\n")
       ).join("\n\n");
-      return send(msg || "Không có dữ liệu xổ số Miền Nam.");
-    } catch (err) {
-      return send(`❌ Lỗi lấy xổ số Miền Nam: ${err.message}`);
     }
+
+    const [mnResult, mtResult] = await Promise.allSettled([xsmn(), xsmt()]);
+
+    const mnMsg = mnResult.status === "fulfilled"
+      ? formatProvinces(mnResult.value, "Miền Nam")
+      : `❌ Lỗi lấy xổ số Miền Nam: ${mnResult.reason?.message}`;
+
+    const mtMsg = mtResult.status === "fulfilled"
+      ? formatProvinces(mtResult.value, "Miền Trung")
+      : `❌ Lỗi lấy xổ số Miền Trung: ${mtResult.reason?.message}`;
+
+    await send(`🌿 ─── KẾT QUẢ XỔ SỐ MIỀN NAM ───\n\n${mnMsg}`);
+    await send(`🌸 ─── KẾT QUẢ XỔ SỐ MIỀN TRUNG ───\n\n${mtMsg}`);
   },
 };

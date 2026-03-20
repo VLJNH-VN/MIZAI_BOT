@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-20T11:47:37.584Z",
+  "generatedAt": "2026-03-20T11:56:26.009Z",
   "total": 15,
   "users": [
     {
@@ -127,9 +127,9 @@
         "oa_status": null
       },
       "firstSeen": 1773993057052,
-      "msgCount": 65,
+      "msgCount": 67,
       "profileAt": 1773994572480,
-      "updatedAt": 1774007188757
+      "updatedAt": 1774007296521
     },
     {
       "userId": "1669731236676931404",
@@ -216,9 +216,9 @@
         "oa_status": null
       },
       "firstSeen": 1773993895117,
-      "msgCount": 51,
+      "msgCount": 55,
       "profileAt": 1773994417530,
-      "updatedAt": 1774007097416
+      "updatedAt": 1774007454987
     },
     {
       "userId": "2817603034815564154",

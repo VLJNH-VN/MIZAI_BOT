@@ -99,23 +99,27 @@ const MEDIA_CT_RE   = /^(video|audio|image)\//;
 // ── Helper: Fetch URL → lấy toàn bộ link có thể download bên trong ───────────
 // Ưu tiên: 1) JSON array  2) file media trực tiếp  3) scrape HTML/JS
 async function extractMediaLinks(url) {
-  // 1. Fetch nội dung URL (text mode để parse JSON / HTML)
-  let body = "", contentType = "";
+  // 1. Fetch nội dung URL dạng arraybuffer để xử lý cả file binary lẫn text
+  let bodyBuf, body = "", contentType = "";
   try {
     const res = await global.axios.get(url, {
       timeout: 20000,
-      responseType: "text",
+      responseType: "arraybuffer",
       headers: { "User-Agent": "Mozilla/5.0" },
-      maxContentLength: 10 * 1024 * 1024  // giới hạn 10 MB text
+      maxContentLength: 20 * 1024 * 1024
     });
-    body        = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+    bodyBuf     = Buffer.from(res.data);
+    body        = bodyBuf.toString("utf-8");
     contentType = (res.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
-  } catch { return [url]; } // nếu fetch lỗi → trả về chính URL đó
+  } catch (e) {
+    global.logWarn?.(`[api] extractMediaLinks fetch lỗi: ${e.message}`);
+    return [url]; // nếu fetch lỗi → trả về chính URL đó
+  }
 
   // 2. Thử parse JSON (file .bin / .json chứa mảng link)
   try {
     const parsed = JSON.parse(body);
-    // Mảng string → lấy tất cả URL hợp lệ (không lọc theo đuôi file)
+    // Mảng string → lấy tất cả URL hợp lệ
     if (Array.isArray(parsed)) {
       const links = parsed.filter(v => typeof v === "string" && isValidUrl(v));
       if (links.length > 0) return links;
@@ -131,32 +135,27 @@ async function extractMediaLinks(url) {
     }
   } catch { /* không phải JSON */ }
 
-  // 3. Nếu là file media trực tiếp → trả về chính URL đó
-  if (MEDIA_CT_RE.test(contentType) || MEDIA_EXTS_RE.test(url.split("?")[0])) {
+  // 3. Nếu là file media trực tiếp (theo content-type hoặc magic bytes) → trả về URL
+  const detectedExt = extFromMagic(bodyBuf);
+  if (MEDIA_CT_RE.test(contentType) || detectedExt || MEDIA_EXTS_RE.test(url.split("?")[0])) {
     return [url];
   }
 
   // 4. Scrape HTML / JS để tìm tất cả link có đuôi media
   const found = new Set();
 
-  // Tìm trong src="..." và href="..."
   for (const m of body.matchAll(/(?:src|href|url|file|link|path|source)=?["'\s:]?\s*["']?(https?:\/\/[^"'\s<>,]+)/gi)) {
-    const link = m[1];
-    if (MEDIA_EXTS_RE.test(link.split("?")[0]) || isValidUrl(link)) {
-      try {
-        const abs = new URL(link, url).href;
-        if (MEDIA_EXTS_RE.test(abs.split("?")[0])) found.add(abs);
-      } catch { /* skip */ }
-    }
+    try {
+      const abs = new URL(m[1], url).href;
+      if (MEDIA_EXTS_RE.test(abs.split("?")[0])) found.add(abs);
+    } catch { /* skip */ }
   }
 
-  // Tìm link https://... xuất hiện tự do trong JS / JSON
   for (const m of body.matchAll(/https?:\/\/[^\s"'<>()[\]{}]+/gi)) {
-    const link = m[0].replace(/[.,;)}\]]+$/, ""); // bỏ dấu câu cuối
+    const link = m[0].replace(/[.,;)}\]]+$/, "");
     if (MEDIA_EXTS_RE.test(link.split("?")[0])) found.add(link);
   }
 
-  // Nếu không tìm thấy gì → trả về chính URL ban đầu để bot thử upload
   return found.size > 0 ? [...found] : [url];
 }
 
@@ -316,25 +315,28 @@ module.exports = {
         const { dataPath, data } = loadJsonList(tipName);
         let success = 0, failed = 0;
         const addedUrls = [];
+        const failReasons2 = [];
 
         for (const mUrl of mediaLinks) {
-          if (data.includes(mUrl)) continue; // bỏ qua link trùng đã là GitHub
+          if (data.includes(mUrl)) continue;
           try {
-            const ext      = extFromUrl(mUrl);
-            const fileName = `${tipName}_${Date.now()}.${ext}`;
-            const ghUrl    = await uploadToGithub(mUrl, fileName);
+            const ghUrl = await uploadToGithub(mUrl, `${tipName}_${Date.now()}`);
             if (ghUrl && !data.includes(ghUrl)) {
               data.push(ghUrl);
               addedUrls.push(ghUrl);
               success++;
             }
-          } catch { failed++; }
+          } catch (e) {
+            failed++;
+            failReasons2.push(e.message?.slice(0, 60) || "unknown");
+            global.logWarn?.(`[api] Upload lỗi: ${e.message} | URL: ${mUrl}`);
+          }
         }
 
         fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), "utf-8");
 
         let msg = `✅ Đã upload ${success} link vào listapi/${tipName}.json\n📦 Tổng: ${data.length} link`;
-        if (failed > 0) msg += `\n⚠️ Upload lỗi: ${failed}`;
+        if (failed > 0) msg += `\n⚠️ Upload lỗi: ${failed} (${[...new Set(failReasons2)].join(", ")})`;
         if (addedUrls.length <= 5) msg += "\n\n" + addedUrls.map(u => `🔗 ${u}`).join("\n");
         return send(msg);
       }
@@ -347,11 +349,18 @@ module.exports = {
         event
       });
 
-      // Ưu tiên lấy URL từ reply: mediaUrl hoặc link text trong tin nhắn
+      // Ưu tiên lấy URL từ reply: mediaUrl → link trong text/content
       const replyUrl = quote?.mediaUrl || (() => {
-        const txt = quote?.text || quote?.content || "";
-        const m = txt.match(/https?:\/\/\S+/);
-        return m ? m[0] : null;
+        let txt = "";
+        if (typeof quote?.content === "string") txt = quote.content;
+        else if (quote?.content && typeof quote.content === "object") {
+          txt = quote.content.url || quote.content.href || quote.content.normalUrl ||
+                quote.content.fileUrl || quote.content.downloadUrl || "";
+          if (!txt) txt = JSON.stringify(quote.content);
+        }
+        if (!txt && typeof quote?.text === "string") txt = quote.text;
+        const m = txt.match(/https?:\/\/[^\s"'<>]+/);
+        return m ? m[0].replace(/[.,;)}\]]+$/, "") : null;
       })();
 
       if (!replyUrl) {
@@ -389,24 +398,27 @@ module.exports = {
       let success = 0, failed = 0;
       const addedUrls = [];
 
+      const failReasons = [];
       for (const mUrl of mediaLinks) {
         if (data.includes(mUrl)) continue;
         try {
-          const ext      = extFromUrl(mUrl);
-          const fileName = `${tipName}_${Date.now()}.${ext}`;
-          const ghUrl    = await uploadToGithub(mUrl, fileName);
+          const ghUrl = await uploadToGithub(mUrl, `${tipName}_${Date.now()}`);
           if (ghUrl && !data.includes(ghUrl)) {
             data.push(ghUrl);
             addedUrls.push(ghUrl);
             success++;
           }
-        } catch { failed++; }
+        } catch (e) {
+          failed++;
+          failReasons.push(e.message?.slice(0, 60) || "unknown");
+          global.logWarn?.(`[api] Upload lỗi: ${e.message} | URL: ${mUrl}`);
+        }
       }
 
       fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), "utf-8");
 
       let msg = `✅ Đã upload ${success} link vào listapi/${tipName}.json\n📦 Tổng: ${data.length} link`;
-      if (failed > 0) msg += `\n⚠️ Upload lỗi: ${failed}`;
+      if (failed > 0) msg += `\n⚠️ Upload lỗi: ${failed} (${[...new Set(failReasons)].join(", ")})`;
       if (addedUrls.length > 0 && addedUrls.length <= 5)
         msg += "\n\n" + addedUrls.map(u => `🔗 ${u}`).join("\n");
       return send(msg);

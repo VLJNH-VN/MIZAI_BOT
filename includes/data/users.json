@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-20T11:29:53.594Z",
+  "generatedAt": "2026-03-20T11:36:42.923Z",
   "total": 15,
   "users": [
     {
@@ -134,11 +134,48 @@
     {
       "userId": "1669731236676931404",
       "name": "A Di Đà Phật",
-      "profile": null,
+      "profile": {
+        "userId": "1669731236676931404",
+        "username": "t_m7ezez8inf",
+        "displayName": "A Di Đà Phật",
+        "zaloName": "A Di Đà Phật",
+        "avatar": "https://s120-25-ava-talk.zadn.vn/42/7bcec5dcb5e0adf2f6cdf94f0a750f77.jpg?key=f7A3prkClMqjfNk4XVVFxw&time=1779190355",
+        "bgavatar": "",
+        "cover": "https://cover-talk.zadn.vn/9/6/3/f/10/7bcec5dcb5e0adf2f6cdf94f0a750f77.jpg",
+        "gender": 0,
+        "dob": 0,
+        "sdob": "07/04",
+        "status": "...",
+        "phoneNumber": "",
+        "isFr": 0,
+        "isBlocked": 0,
+        "lastActionTime": 1774006355269,
+        "lastUpdateTime": 1773399791,
+        "isActive": 1,
+        "key": 0,
+        "type": 0,
+        "isActivePC": 0,
+        "isActiveWeb": 1,
+        "isValid": 1,
+        "userKey": "1669731236676931404",
+        "accountStatus": 0,
+        "oaInfo": null,
+        "user_mode": 0,
+        "globalId": "FI5JC2HA5MJH0A7REUB1DJPBHI985380",
+        "bizPkg": {
+          "label": {
+            "VI": "Business",
+            "EN": "Business"
+          },
+          "pkgId": 1
+        },
+        "createdTs": 1745634193,
+        "oa_status": null
+      },
       "firstSeen": 1773992098394,
-      "msgCount": 51,
-      "profileAt": 0,
-      "updatedAt": 1773993305596
+      "msgCount": 53,
+      "profileAt": 1774006355873,
+      "updatedAt": 1774006359767
     },
     {
       "userId": "2817603034815564154",
@@ -222,9 +259,9 @@
         "oa_status": null
       },
       "firstSeen": 1773993895117,
-      "msgCount": 39,
+      "msgCount": 41,
       "profileAt": 1773994417530,
-      "updatedAt": 1774006176485
+      "updatedAt": 1774006426664
     },
     {
       "userId": "8009347465992207686",

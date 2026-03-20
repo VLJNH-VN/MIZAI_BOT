@@ -232,69 +232,81 @@ module.exports = {
     );
   },
 
-  // ── onReply: xử lý khi user reply vào danh sách ──────────────────────────
+  // ── onReply: xử lý khi user reply ────────────────────────────────────────
   onReply: async ({ api, event, data: replyData, send, registerReply }) => {
-    if (!replyData || replyData.type !== "list") return;
+    if (!replyData) return;
 
     const raw = event?.data;
     const body = (raw?.content || raw?.msg || "").trim();
-    const parts = body.split(/\s+/);
-    const cmd = (parts[0] || "").toLowerCase();
-    const stt = parseInt(parts[1], 10);
     const threadID = event.threadId;
+    const senderId = raw?.uidFrom ? String(raw.uidFrom) : String(event.senderId || "");
 
-    const { data: listSlice } = replyData;
-
-    if (cmd === "giahan") {
-      if (!stt || stt < 1 || stt > listSlice.length) {
-        return send(`❌ STT không hợp lệ (1–${listSlice.length}).`);
-      }
-      const days = parseInt(parts[2], 10) || 30;
-      const allData = readThuebot();
-      const target = listSlice[stt - 1];
-      const rec = allData.find(item => item.t_id === target.t_id);
-      if (!rec) return send("❌ Không tìm thấy nhóm trong dữ liệu.");
-      const newEnd = addDays(rec.time_end, days);
-      if (!isAfter(newEnd, rec.time_start)) {
-        return send(`❌ Ngày kết thúc không thể trước ngày bắt đầu (${rec.time_start}).`);
-      }
-      rec.time_end = newEnd;
-      saveThuebot(allData);
-      return send(`✅ Đã gia hạn nhóm ${rec.t_id} đến: ${newEnd}`);
+    // ── Reply nhập key kích hoạt (từ thông báo chặn chưa thuê) ───────────────
+    if (replyData.type === "RentKey") {
+      const key = body.trim();
+      if (!key) return send("❌ Vui lòng nhập key thuê bot.");
+      const data = readThuebot();
+      return _activateKey({ key, threadID, senderId, data, send });
     }
 
-    if (cmd === "del") {
-      if (!stt || stt < 1 || stt > listSlice.length) {
-        return send(`❌ STT không hợp lệ (1–${listSlice.length}).`);
-      }
-      const target = listSlice[stt - 1];
-      const allData = readThuebot();
-      const idx = allData.findIndex(item => item.t_id === target.t_id);
-      if (idx === -1) return send("❌ Không tìm thấy nhóm trong dữ liệu.");
-      allData.splice(idx, 1);
-      saveThuebot(allData);
-      return send(`✅ Đã xóa thông tin thuê bot nhóm ${target.t_id}.`);
-    }
+    // ── Reply trong danh sách rent list ───────────────────────────────────────
+    if (replyData.type === "list") {
+      const parts = body.split(/\s+/);
+      const cmd = (parts[0] || "").toLowerCase();
+      const stt = parseInt(parts[1], 10);
+      const { data: listSlice } = replyData;
 
-    if (cmd === "out") {
-      const stts = parts.slice(1).map(Number).filter(n => n >= 1 && n <= listSlice.length);
-      if (stts.length === 0) return send("❌ Không có STT hợp lệ.");
-      for (const n of stts) {
-        const target = listSlice[n - 1];
-        try {
-          await api.removeGroupMember(api.getSelfInfo?.()?.uid || "", target.t_id);
-        } catch {}
+      if (cmd === "giahan") {
+        if (!stt || stt < 1 || stt > listSlice.length) {
+          return send(`❌ STT không hợp lệ (1–${listSlice.length}).`);
+        }
+        const days = parseInt(parts[2], 10) || 30;
+        const allData = readThuebot();
+        const target = listSlice[stt - 1];
+        const rec = allData.find(item => item.t_id === target.t_id);
+        if (!rec) return send("❌ Không tìm thấy nhóm trong dữ liệu.");
+        const newEnd = addDays(rec.time_end, days);
+        if (!isAfter(newEnd, rec.time_start)) {
+          return send(`❌ Ngày kết thúc không thể trước ngày bắt đầu (${rec.time_start}).`);
+        }
+        rec.time_end = newEnd;
+        saveThuebot(allData);
+        return send(`✅ Đã gia hạn nhóm ${rec.t_id} đến: ${newEnd}`);
       }
-      return send(`✅ Đã thoát ${stts.length} nhóm theo yêu cầu.`);
-    }
 
-    return send(
-      `❓ Không hiểu lệnh reply.\n` +
-      `💡 Các lệnh hợp lệ:\n` +
-      `  giahan <stt> [ngày]\n` +
-      `  del <stt>\n` +
-      `  out <stt>`
-    );
+      if (cmd === "del") {
+        if (!stt || stt < 1 || stt > listSlice.length) {
+          return send(`❌ STT không hợp lệ (1–${listSlice.length}).`);
+        }
+        const target = listSlice[stt - 1];
+        const allData = readThuebot();
+        const idx = allData.findIndex(item => item.t_id === target.t_id);
+        if (idx === -1) return send("❌ Không tìm thấy nhóm trong dữ liệu.");
+        allData.splice(idx, 1);
+        saveThuebot(allData);
+        return send(`✅ Đã xóa thông tin thuê bot nhóm ${target.t_id}.`);
+      }
+
+      if (cmd === "out") {
+        const stts = parts.slice(1).map(Number).filter(n => n >= 1 && n <= listSlice.length);
+        if (stts.length === 0) return send("❌ Không có STT hợp lệ.");
+        for (const n of stts) {
+          const target = listSlice[n - 1];
+          try {
+            await api.removeGroupMember(api.getSelfInfo?.()?.uid || "", target.t_id);
+          } catch {}
+        }
+        return send(`✅ Đã thoát ${stts.length} nhóm theo yêu cầu.`);
+      }
+
+      return send(
+        `❓ Không hiểu lệnh reply.\n` +
+        `💡 Các lệnh hợp lệ:\n` +
+        `  giahan <stt> [ngày]\n` +
+        `  del <stt>\n` +
+        `  out <stt>`
+      );
+    }
   },
 };
 

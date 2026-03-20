@@ -8,6 +8,27 @@ const { registerReaction } = require("./handleReaction");
 const { registerUndo } = require("./handleUndo");
 const fs = require("fs");
 const path = require("path");
+const { readConfig } = require("../../utils/helpers");
+
+// ── Đọc dữ liệu thuê bot ──────────────────────────────────────────────────────
+const THUEBOT_PATH = path.join(__dirname, "../../includes/data/thuebot.json");
+
+function readThuebot() {
+  try {
+    if (fs.existsSync(THUEBOT_PATH)) return JSON.parse(fs.readFileSync(THUEBOT_PATH, "utf-8"));
+  } catch {}
+  return [];
+}
+
+function parseDateVN(str) {
+  const [dd, mm, yyyy] = str.split("/").map(Number);
+  return new Date(Date.UTC(yyyy, mm - 1, dd));
+}
+
+function isRentExpired(dateStr) {
+  // So sánh với giờ VN (UTC+7)
+  return parseDateVN(dateStr).getTime() <= Date.now() + 7 * 3600 * 1000;
+}
 
 // ── Ghi nhớ nhóm cho broadcast ────────────────────────────────────────────────
 const GROUPS_CACHE_PATH = path.join(__dirname, "../../includes/database/groupsCache.json");
@@ -163,6 +184,46 @@ async function handleCommand({ api, event, commands, prefix }) {
     const args = parts;
 
     if (isGroup && threadID) trackGroupForBroadcast(threadID);
+
+    // ── Kiểm tra thuê bot (chỉ trong nhóm, bỏ qua admin bot) ─────────────────
+    if (isGroup && threadID && !isBotAdmin(senderId)) {
+      const thuebot = readThuebot();
+      const rentInfo = thuebot.find(item => String(item.t_id) === String(threadID));
+
+      const sendRentBlock = async (msg) => {
+        const sentMsg = await api.sendMessage({ msg }, threadID, event.type);
+        const msgId = sentMsg?.msgId || sentMsg?.messageId || sentMsg?.cliMsgId;
+        if (msgId) {
+          registerReply({
+            messageId: String(msgId),
+            commandName: "rent",
+            payload: { type: "RentKey", threadID, senderId }
+          });
+        }
+      };
+
+      if (!rentInfo) {
+        const cfg = readConfig();
+        const fbAdmin = cfg.FACEBOOK_ADMIN || cfg.facebookAdmin || "";
+        await sendRentBlock(
+          `❎ Nhóm của bạn chưa thuê bot!\n` +
+          `💡 Reply tin nhắn này và nhập key thuê bot để kích hoạt.\n` +
+          (fbAdmin ? `📩 Liên hệ admin để lấy key: ${fbAdmin}` : `📩 Liên hệ admin bot để lấy key thuê.`)
+        );
+        return;
+      }
+
+      if (isRentExpired(rentInfo.time_end)) {
+        const cfg = readConfig();
+        const fbAdmin = cfg.FACEBOOK_ADMIN || cfg.facebookAdmin || "";
+        await sendRentBlock(
+          `⚠️ Thời hạn thuê bot của nhóm đã hết (${rentInfo.time_end})!\n` +
+          `💡 Reply tin nhắn này và nhập key gia hạn để tiếp tục sử dụng.\n` +
+          (fbAdmin ? `📩 Liên hệ admin để lấy key: ${fbAdmin}` : `📩 Liên hệ admin bot để lấy key thuê.`)
+        );
+        return;
+      }
+    }
 
     const command = commands.get(commandName);
 

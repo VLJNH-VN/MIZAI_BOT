@@ -667,12 +667,15 @@ async function handleGoibot({ api, event }) {
     const msg      = err?.response?.data?.error?.message || err?.stderr || err?.message || String(err);
     const msgLower = msg.toLowerCase();
     global.logError?.(`[goibot] Lỗi: ${msg}`);
+
+    // Không có key → im lặng, không spam nhóm
+    if (msgLower.includes("không có") && msgLower.includes("key")) return;
+    if (msgLower.includes("no key") || msgLower.includes("chưa có")) return;
+
     if (msgLower.includes("rate-limit") || msgLower.includes("rate_limit") || msgLower.includes("too many") || msgLower.includes("cooldown"))
       await send("⏳ Mizai đang bận, thử lại sau ít giây nhé.");
     else if (msgLower.includes("hết quota") || msgLower.includes("resource_exhausted") || msgLower.includes("quota"))
       await send("💳 Key AI hết quota rồi. Thêm key mới bằng .key add nhé!");
-    else if (msgLower.includes("không có") && msgLower.includes("key"))
-      await send("🔑 Chưa có API key nào. Dùng .key add AIza... hoặc .key add gsk_... để thêm.");
     else if (msgLower.includes("401") || msgLower.includes("invalid_api_key") || msgLower.includes("invalid key"))
       await send("🔑 API key không hợp lệ. Kiểm tra lại bằng .key check nhé.");
     else

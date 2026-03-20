@@ -312,7 +312,10 @@ async function callGemini(userMessage, historyEntries, opts = {}) {
   const { imageParts = [], useSearch = false, urls = [] } = opts;
 
   const keys = getLiveGeminiKeys();
-  if (!keys.length) throw new Error("Không có Gemini key nào. Dùng .key add AIza... để thêm.");
+  if (!keys.length) {
+    global.logWarn?.("[goibot][Gemini] Chưa có Gemini key, bỏ qua.");
+    return null;
+  }
 
   const userParts = [];
   for (const img of imageParts) {
@@ -380,14 +383,18 @@ async function sendToGroq(userMessage, threadId, opts = {}) {
 
   if (!needGemini) {
     resultText = await callGroq(userMessage, history);
-    if (resultText !== null) {
-      usedEngine = "Groq";
-    }
+    if (resultText !== null) usedEngine = "Groq";
   }
 
   if (resultText === null) {
     usedEngine = "Gemini";
     resultText = await callGemini(userMessage, history, { imageParts, useSearch, urls });
+  }
+
+  // Cả hai engine đều không có key hoặc không phản hồi
+  if (resultText === null) {
+    global.logWarn?.("[goibot] Không có engine nào khả dụng, bỏ qua.");
+    return null;
   }
 
   global.logInfo?.(`[goibot] Engine: ${usedEngine}`);

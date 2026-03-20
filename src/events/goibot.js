@@ -583,6 +583,9 @@ async function handleGoibot({ api, event }) {
       urls,
     });
 
+    // Không có engine nào khả dụng → im lặng
+    if (!responseText) return;
+
     let botMsg;
     try {
       botMsg = JSON.parse(responseText.replace(/```json|```/g, "").trim());

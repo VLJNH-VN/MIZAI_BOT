@@ -11,8 +11,8 @@ const path = require("path");
 const os   = require("os");
 const { registerReply } = require("../../includes/handlers/handleReply");
 
-const SPT_ID     = "b9d2557a2dd64105a37f413fa5ffcda4";
-const SPT_SECRET = "41bdf804974e4e70bfa0515bb3097fbb";
+const SPT_ID     = "1530d567ec6542669896bc96efd370f3";
+const SPT_SECRET = "6e0241b124da40dfb98728b7f29cedfd";
 
 function fmtDuration(ms) {
   const s = Math.floor(ms / 1000);

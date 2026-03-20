@@ -55,9 +55,14 @@ function parseMentionIds(event) {
     } catch {}
   }
 
-  // 2. raw.mentions — object dạng { uid: name }
+  // 2. raw.mentions — array: [{"uid":"123","pos":0,"len":6,"type":0}]
   const mentions = raw.mentions;
-  if (mentions && typeof mentions === "object" && !Array.isArray(mentions)) {
+  if (Array.isArray(mentions)) {
+    const ids = mentions.map(m => String(m.uid || m.id || "")).filter(uid => uid && uid !== "0");
+    if (ids.length) return ids;
+  }
+  // 2b. raw.mentions — object dạng { uid: name }
+  if (mentions && typeof mentions === "object") {
     const ids = Object.keys(mentions).filter(k => k && k !== "0" && /^\d+$/.test(k));
     if (ids.length) return ids;
   }
@@ -170,8 +175,6 @@ module.exports = {
 
     // ── admin add ─────────────────────────────────────────────────────────
     if (sub === "add") {
-      const _raw = event?.data || {};
-      logInfo(`[ADMIN_DEBUG] mentionInfo=${JSON.stringify(_raw.mentionInfo)} | mentions=${JSON.stringify(_raw.mentions)} | content=${JSON.stringify(_raw.content)?.slice(0,200)}`);
       const uid = extractUid(args, event);
       if (!uid) {
         return send(`❌ Không tìm thấy UID hợp lệ.\n💡 Dùng: ${prefix}admin add <uid số>\nVí dụ: ${prefix}admin add 123456789\n⚠️ Tag @tên có thể không lấy được UID — hãy dùng lệnh ${prefix}id hoặc ${prefix}admin tang @tên để lấy UID trước.`);
@@ -359,12 +362,10 @@ module.exports = {
 
     // ── admin tang ────────────────────────────────────────────────────────
     if (sub === "tang") {
-      const mentions = event?.data?.mentions;
-      if (mentions && Object.keys(mentions).length > 0) {
-        const lines = Object.entries(mentions)
-          .map(([uid, name]) => `👤 ${name || uid}: ${uid}`)
-          .join("\n");
-        return send(`🆔 ID của người được tag:\n${lines}`);
+      const mentionIds = parseMentionIds(event);
+      if (mentionIds.length > 0) {
+        const lines = mentionIds.map(uid => `🆔 UID: ${uid}`).join("\n");
+        return send(`${lines}`);
       }
 
       const uid = args[1] ? String(args[1]).trim() : null;

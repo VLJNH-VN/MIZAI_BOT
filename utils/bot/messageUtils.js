@@ -328,9 +328,14 @@ function parseMentionIds(event) {
     } catch {}
   }
 
-  // 2. raw.mentions — object dạng { uid: name }
+  // 2. raw.mentions — array: [{"uid":"123","pos":0,"len":6,"type":0}]
   const mentions = raw.mentions;
-  if (mentions && typeof mentions === "object" && !Array.isArray(mentions)) {
+  if (Array.isArray(mentions)) {
+    const ids = mentions.map(m => String(m.uid || m.id || "")).filter(uid => uid && uid !== "0");
+    if (ids.length) return ids;
+  }
+  // 2b. raw.mentions — object dạng { uid: name }
+  if (mentions && typeof mentions === "object") {
     const ids = Object.keys(mentions).filter(k => k && k !== "0" && /^\d+$/.test(k));
     if (ids.length) return ids;
   }

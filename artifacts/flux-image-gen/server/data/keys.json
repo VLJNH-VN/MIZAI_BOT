@@ -1,0 +1,14 @@
+{
+  "users": {
+    "test_user_001": {
+      "key": "FLUX-893E29-55FA57-03B51B",
+      "keyShown": true,
+      "type": "free",
+      "cfAccountId": "",
+      "cfToken": "",
+      "dailyUsage": 0,
+      "lastReset": "2026-03-20",
+      "registeredAt": "2026-03-20T17:20:53.188Z"
+    }
+  }
+}

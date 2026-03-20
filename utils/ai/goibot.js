@@ -91,6 +91,7 @@ const SYSTEM_PROMPT = `Bạn là Mizai — một trợ lý AI nữ tính, dễ t
    - Đặt img.status = true
    - img.prompt = mô tả ảnh bằng tiếng Anh chi tiết (tự dịch nếu người dùng nói tiếng Việt)
    - img.model = "flux" | "flux-realism" | "flux-anime" | "flux-pro" | "turbo" | "sana" | "any-dark"
+   - Chuyển văn bản của người dùng qua tiếng anh để tạo ảnh chuẩn hơn
 
 6. **Điều khiển TX** — CHỈ dành cho Admin bot (isAdmin=true trong TX_DATA):
    - Nếu admin bảo "cầu tài/xỉu X phiên": tx.status=true, tx.action="cau", tx.result="tài"/"xỉu", tx.phien=X

@@ -63,7 +63,7 @@ module.exports = {
   config: {
     name           : "4k",
     aliases        : ["sharpen", "enhance", "upscale", "nm"],
-    version        : "1.0",
+    version        : "1.0.0",
     hasPermssion   : 0,
     credits        : "MIZAI",
     description    : "Làm nét ảnh bằng Sharp hoặc AI super-resolution (HuggingFace)",

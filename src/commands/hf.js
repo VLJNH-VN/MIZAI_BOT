@@ -71,7 +71,7 @@ module.exports = {
   config: {
     name           : "hf",
     aliases        : ["huggingface", "hfai"],
-    version        : "1.1",
+    version        : "1.1.0",
     hasPermssion   : 0,
     credits        : "MIZAI",
     description    : "Dùng HuggingFace AI để chat hoặc tạo ảnh từ văn bản",

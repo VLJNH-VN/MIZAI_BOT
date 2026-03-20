@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
 
-const API_URL = "http://localhost:5001";
+const API_URL = "https://flux-image-gen-9rew.onrender.com/";
 
 const STYLE_MAP = {
   "thực tế": "photorealistic",

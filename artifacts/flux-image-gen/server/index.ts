@@ -5,7 +5,7 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
-import { scheduleBackup, runBackup } from "./backup.js";
+import { scheduleBackup, runBackup, restoreFromGitHub } from "./backup.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -858,6 +858,11 @@ if (IS_PRODUCTION) {
   app.get("*", (_req, res) => {
     res.sendFile(path.join(staticDir, "index.html"));
   });
+}
+
+// Trên Render: restore data từ GitHub trước khi lắng nghe (disk ephemeral)
+if (IS_PRODUCTION) {
+  await restoreFromGitHub();
 }
 
 app.listen(API_PORT, () => {

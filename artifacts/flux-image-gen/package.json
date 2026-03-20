@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "concurrently --kill-others-on-fail \"tsx watch server/index.ts\" \"vite --config vite.config.ts --host 0.0.0.0\"",
     "build": "BASE_PATH=/ NODE_ENV=production vite build --config vite.config.ts",
+    "build:render": "pnpm install --prod=false && BASE_PATH=/ NODE_ENV=production vite build --config vite.config.ts",
     "start": "NODE_ENV=production tsx server/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

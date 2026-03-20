@@ -11,7 +11,7 @@ const GITHUB_TOKEN  = process.env.GITHUB_TOKEN  || "";
 const GITHUB_REPO   = process.env.GITHUB_REPO   || "";   // VLJNH-VN/flux-image-gen
 const BACKUP_BRANCH = "main";
 
-// ── File cần backup (chỉ của flux-image-gen) ─────────────────────────────────
+// ── File cần backup / restore (chỉ của flux-image-gen) ───────────────────────
 const DATA_DIR = path.join(__dirname, "data");
 
 const BACKUP_FILES = [
@@ -84,7 +84,54 @@ async function uploadFile(localPath: string, remotePath: string): Promise<{ ok: 
   return { ok: res.status === 200 || res.status === 201, status: res.status };
 }
 
-// ── Hàm backup chính ──────────────────────────────────────────────────────────
+// ── Restore 1 file từ GitHub về local ────────────────────────────────────────
+async function downloadFile(remotePath: string, localPath: string): Promise<{ ok: boolean; skip?: boolean }> {
+  try {
+    const res = await githubRequest("GET", `/repos/${GITHUB_REPO}/contents/${remotePath}?ref=${BACKUP_BRANCH}`);
+    if (res.status === 404) return { ok: false, skip: true };
+    if (res.status !== 200) return { ok: false };
+
+    const content = (res.body as { content?: string }).content;
+    if (!content) return { ok: false };
+
+    // GitHub trả về base64 có newline, cần xóa đi
+    const decoded = Buffer.from(content.replace(/\n/g, ""), "base64");
+    fs.mkdirSync(path.dirname(localPath), { recursive: true });
+    fs.writeFileSync(localPath, decoded);
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
+
+// ── Restore toàn bộ data từ GitHub (dùng khi khởi động trên Render) ──────────
+export async function restoreFromGitHub(): Promise<void> {
+  if (!GITHUB_TOKEN || !GITHUB_REPO) {
+    console.warn("[Restore] Chưa cấu hình GITHUB_TOKEN / GITHUB_REPO — bỏ qua restore.");
+    return;
+  }
+
+  console.log(`[Restore] Đang restore data từ github.com/${GITHUB_REPO}...`);
+
+  for (const { local, remote } of BACKUP_FILES) {
+    const name = path.basename(local);
+    // Chỉ restore nếu file chưa tồn tại (tránh ghi đè data mới hơn)
+    if (fs.existsSync(local)) {
+      console.log(`[Restore] ⏭  ${name} (đã tồn tại, bỏ qua)`);
+      continue;
+    }
+    try {
+      const res = await downloadFile(remote, local);
+      if (res.skip)   console.log(`[Restore] ⏭  ${name} (chưa có backup trên GitHub)`);
+      else if (res.ok) console.log(`[Restore] ✅ ${name} ← github.com/${GITHUB_REPO}`);
+      else             console.error(`[Restore] ❌ ${name} (lỗi tải về)`);
+    } catch (err: unknown) {
+      console.error(`[Restore] ❌ ${name}: ${(err as Error).message}`);
+    }
+  }
+}
+
+// ── Backup chính ──────────────────────────────────────────────────────────────
 export async function runBackup(): Promise<{ success: boolean; ok: number; fail: number; skip: number; time: string }> {
   const now = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
 
@@ -99,9 +146,9 @@ export async function runBackup(): Promise<{ success: boolean; ok: number; fail:
     const name = path.basename(local);
     try {
       const res = await uploadFile(local, remote);
-      if (res.skip)     { skip++; console.log(`[Backup] ⏭  ${name} (không tồn tại)`); }
-      else if (res.ok)  { ok++;   console.log(`[Backup] ✅ ${name} → github.com/${GITHUB_REPO}`); }
-      else              { fail++;  console.error(`[Backup] ❌ ${name} (HTTP ${res.status})`); }
+      if (res.skip)    { skip++; console.log(`[Backup] ⏭  ${name} (không tồn tại)`); }
+      else if (res.ok) { ok++;   console.log(`[Backup] ✅ ${name} → github.com/${GITHUB_REPO}`); }
+      else             { fail++; console.error(`[Backup] ❌ ${name} (HTTP ${res.status})`); }
     } catch (err: unknown) {
       fail++;
       console.error(`[Backup] ❌ ${name}: ${(err as Error).message}`);
@@ -112,17 +159,16 @@ export async function runBackup(): Promise<{ success: boolean; ok: number; fail:
   return { success: true, ok, fail, skip, time: now };
 }
 
-// ── Lên lịch auto backup ──────────────────────────────────────────────────────
+// ── Auto backup theo lịch ─────────────────────────────────────────────────────
 export function scheduleBackup(intervalMs = 6 * 60 * 60 * 1000): void {
   if (!GITHUB_TOKEN || !GITHUB_REPO) {
     console.warn("[Backup] GITHUB_TOKEN / GITHUB_REPO chưa đặt → auto backup TẮT.");
     return;
   }
 
-  // Backup lần đầu sau 30 giây (đảm bảo server đã ready)
+  // Backup lần đầu sau 30 giây
   setTimeout(() => runBackup(), 30 * 1000);
-
-  // Lên lịch định kỳ
+  // Sau đó backup định kỳ
   setInterval(() => runBackup(), intervalMs).unref?.();
 
   const h = Math.round(intervalMs / 3600000);

@@ -74,7 +74,7 @@ async function main(isFirstRun = true) {
       // Load toàn bộ data nhóm vào DB (chạy nền, không block)
 
       // Fetch tin nhắn bỏ lỡ khi bot offline (chạy nền, không block)
-      fetchMissedMessages(api, global.commands, global.prefix).catch(err =>
+      fetchMissedMessages(api).catch(err =>
         logError(`[fetchMissed] Lỗi: ${err?.message}`)
       );
     }

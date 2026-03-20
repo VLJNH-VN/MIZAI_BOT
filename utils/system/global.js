@@ -88,6 +88,7 @@ const { checkGroqKey, setAutoCheck }          = require("./maintenance");
 const { processGaiData, resolveQuote }        = require("../bot/messageUtils");
 const msgCache                                = require("../../includes/database/messageCache");
 const groupLoader                             = require("../../includes/database/groupLoader");
+const dataManager                             = require("../../includes/database/dataManager");
 
 // ── Logger ────────────────────────────────────────────────────────────────────
 global.logInfo   = logInfo;
@@ -121,6 +122,22 @@ global.setAutoCheck  = setAutoCheck;
 // global.groupLoader.getGroupIds()           — danh sách group_id từ cache
 // global.groupLoader.saveGroupsSnapshot()    — xuất JSON ra includes/data/groups.json
 global.groupLoader = groupLoader;
+
+// ── Data Manager (user + group CRUD) ─────────────────────────────────────────
+// global.db.saveUser(userId, { name, profile }, { increment })
+// global.db.getUser(userId)
+// global.db.getAllUsers({ limit, orderBy })
+// global.db.searchUsers(keyword)
+// global.db.getUserStats()
+// global.db.saveGroup(groupId, { name, info, memVerList, pendingApprove })
+// global.db.getGroup(groupId)
+// global.db.getAllGroups({ limit, orderBy })
+// global.db.searchGroups(keyword)
+// global.db.getGroupStats()
+// global.db.autoSaveFromEvent(api, event)
+// global.db.saveSnapshot()
+// global.db.getStats()
+global.db = dataManager;
 
 // ── Xử lý video gai ──────────────────────────────────────────────────────────
 global.processGaiData = processGaiData;

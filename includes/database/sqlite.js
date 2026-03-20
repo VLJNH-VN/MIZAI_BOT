@@ -174,15 +174,35 @@ async function initSchema(db) {
   await run(db, "PRAGMA foreign_keys = ON;").catch(() => {});
 
   await run(db, `CREATE TABLE IF NOT EXISTS users (
-    user_id TEXT PRIMARY KEY, name TEXT,
-    profile_json TEXT, updated_at INTEGER
+    user_id      TEXT PRIMARY KEY,
+    name         TEXT,
+    profile_json TEXT,
+    first_seen   INTEGER DEFAULT 0,
+    msg_count    INTEGER DEFAULT 0,
+    updated_at   INTEGER
   )`);
   await run(db, `CREATE TABLE IF NOT EXISTS groups (
-    group_id TEXT PRIMARY KEY, name TEXT, info_json TEXT,
-    mem_ver_list_json TEXT, pending_approve_json TEXT, updated_at INTEGER
+    group_id             TEXT PRIMARY KEY,
+    name                 TEXT,
+    info_json            TEXT,
+    mem_ver_list_json    TEXT,
+    pending_approve_json TEXT,
+    member_count         INTEGER DEFAULT 0,
+    first_seen           INTEGER DEFAULT 0,
+    updated_at           INTEGER
   )`);
-  await run(db, "CREATE INDEX IF NOT EXISTS idx_users_updated_at ON users(updated_at);").catch(() => {});
+
+  // Migration: thêm cột mới nếu chưa có (tương thích DB cũ)
+  const userCols  = (await all(db, "PRAGMA table_info(users)")).map(c => c.name);
+  const groupCols = (await all(db, "PRAGMA table_info(groups)")).map(c => c.name);
+  if (!userCols.includes("first_seen"))  await run(db, "ALTER TABLE users  ADD COLUMN first_seen  INTEGER DEFAULT 0").catch(() => {});
+  if (!userCols.includes("msg_count"))   await run(db, "ALTER TABLE users  ADD COLUMN msg_count   INTEGER DEFAULT 0").catch(() => {});
+  if (!groupCols.includes("member_count")) await run(db, "ALTER TABLE groups ADD COLUMN member_count INTEGER DEFAULT 0").catch(() => {});
+  if (!groupCols.includes("first_seen"))   await run(db, "ALTER TABLE groups ADD COLUMN first_seen  INTEGER DEFAULT 0").catch(() => {});
+
+  await run(db, "CREATE INDEX IF NOT EXISTS idx_users_updated_at  ON users(updated_at);").catch(() => {});
   await run(db, "CREATE INDEX IF NOT EXISTS idx_groups_updated_at ON groups(updated_at);").catch(() => {});
+  await run(db, "CREATE INDEX IF NOT EXISTS idx_users_msg_count   ON users(msg_count);").catch(() => {});
 
   await run(db, `CREATE TABLE IF NOT EXISTS users_money (
     user_id TEXT PRIMARY KEY, name TEXT DEFAULT '',

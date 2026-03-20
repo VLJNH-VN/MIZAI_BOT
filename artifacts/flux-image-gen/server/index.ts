@@ -531,7 +531,7 @@ app.post("/api/key/check-cf", async (req, res) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", gemini: !!geminiBaseUrl, cloudflare: true, timestamp: new Date().toISOString() });
+  res.json({ status: "ok", gemini: !!ai, cloudflare: true, timestamp: new Date().toISOString() });
 });
 
 app.get("/api/styles", (_req, res) => res.json({ styles: STYLES }));

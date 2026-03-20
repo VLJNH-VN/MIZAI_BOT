@@ -5,6 +5,7 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { GoogleGenAI } from "@google/genai";
+import { scheduleBackup, runBackup } from "./backup.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -840,6 +841,16 @@ app.get("/api/admin/key", requireAdmin, (_req, res) => {
   });
 });
 
+// POST /api/admin/backup — chạy backup thủ công lên GitHub
+app.post("/api/admin/backup", requireAdmin, async (_req, res) => {
+  try {
+    const result = await runBackup();
+    res.json(result);
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 // ── Production: serve frontend static files ────────────────────────────────
 if (IS_PRODUCTION) {
   const staticDir = path.join(__dirname, "../dist/public");
@@ -852,10 +863,15 @@ if (IS_PRODUCTION) {
 app.listen(API_PORT, () => {
   const adminKey = getAdminKey();
   const source = process.env.ADMIN_KEY ? "biến môi trường ADMIN_KEY" : "tự sinh (lưu trong file)";
+  const repo = process.env.GITHUB_REPO || "(chưa cấu hình)";
   console.log(`\n${"═".repeat(60)}`);
   console.log(`  Server running on port ${API_PORT}`);
   console.log(`  Mode: ${IS_PRODUCTION ? "production (Render)" : "development (Replit)"}`);
   console.log(`  🔑 ADMIN KEY: ${adminKey}`);
   console.log(`  Nguồn: ${source}`);
+  console.log(`  📦 Backup repo: ${repo}`);
   console.log(`${"═".repeat(60)}\n`);
+
+  // Khởi động auto backup lên GitHub mỗi 6 giờ
+  scheduleBackup(6 * 60 * 60 * 1000);
 });

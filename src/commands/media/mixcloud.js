@@ -159,7 +159,7 @@ module.exports = {
     cooldowns: 5
   },
 
-  run: async ({ event, args, send }) => {
+  run: async ({ event, args, send, registerReply }) => {
     const searchTerm = args.join(" ").trim();
 
     if (!searchTerm) {
@@ -191,8 +191,6 @@ module.exports = {
 
       msg += `Dùng reply + số để chọn bài hát muốn phát.`;
 
-      // Gửi danh sách, đồng thời đăng ký chờ reply cho chính tin nhắn này
-      const { registerReply } = require('../../../includes/handlers/handleReply');
       const sent = await send(msg);
 
       // zca-js: sendMessage() trả về { message: { msgId }, attachment: [...] }

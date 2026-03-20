@@ -8,19 +8,8 @@
  * ⚠️ Yêu cầu: global.config.ACCESSTOKEN (Facebook Graph API token)
  */
 
-const { registerReaction } = require('../../../includes/handlers/handleReaction');
 const { parseMentionIds } = require('../../../utils/bot/messageUtils');
-
-function fmtTime(ts) {
-  const d  = new Date(ts);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yy = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mi = String(d.getMinutes()).padStart(2, "0");
-  const ss = String(d.getSeconds()).padStart(2, "0");
-  return `${hh}:${mi}:${ss} | ${dd}/${mm}/${yy}`;
-}
+const { fmtTimestamp: fmtTime } = require('../../../utils/helpers');
 
 function isValidURL(s) { try { new URL(s); return true; } catch { return false; } }
 
@@ -52,7 +41,7 @@ module.exports = {
     cooldowns:       5,
   },
 
-  run: async ({ api, event, args, send, senderId, threadID }) => {
+  run: async ({ api, event, args, send, senderId, threadID, registerReaction }) => {
     const raw      = event?.data || {};
     const token    = global.config?.ACCESSTOKEN;
     if (!token) return send("⛔ Chưa cấu hình ACCESSTOKEN trong config.json.");

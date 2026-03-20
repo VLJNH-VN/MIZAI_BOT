@@ -7,19 +7,7 @@ const {
   clearRentCache,
 } = require('../../../includes/database/rent');
 const { isBotAdmin, isGroupAdmin } = require('../../../utils/bot/botManager');
-
-// ── Config ────────────────────────────────────────────────────────────────────
-
-const CONFIG_PATH = path.join(__dirname, "../../../config.json");
-
-function readConfig() {
-  try { return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8")); }
-  catch { return {}; }
-}
-
-function saveConfig(cfg) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf-8");
-}
+const { readConfig, writeConfig, fmtMoney } = require('../../../utils/helpers');
 
 // ── Pricing tiers ─────────────────────────────────────────────────────────────
 
@@ -48,10 +36,6 @@ function fmtDays(d) {
   if (d === 1) return "⚠️ Còn 1 ngày";
   if (d <= 3)  return `⚠️ Còn ${d} ngày`;
   return `✅ Còn ${d} ngày`;
-}
-
-function fmtMoney(n) {
-  return n.toLocaleString("vi-VN") + "đ";
 }
 
 function statusBadge(timeEnd) {
@@ -162,7 +146,7 @@ module.exports = {
     // ── price ──────────────────────────────────────────────────────────────────
     if (sub === "price") {
       const lines = PRICE_TIERS.map((t, i) =>
-        `${i + 1}. 📦 Gói ${t.label.padEnd(6)} — ${t.days} ngày — ${fmtMoney(t.price)}`
+        `${i + 1}. 📦 Gói ${t.label.padEnd(6)} — ${t.days} ngày — ${fmtMoney(t.price, true)}`
       );
       return send(
         `╔══════════════════════╗\n` +
@@ -222,7 +206,7 @@ module.exports = {
       const enable = sub === "on";
       const cfg    = readConfig();
       cfg.rentMode = enable;
-      saveConfig(cfg);
+      writeConfig(cfg);
       global.config.rentMode = enable;
       clearRentCache();
       return send(

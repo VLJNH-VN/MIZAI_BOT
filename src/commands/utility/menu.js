@@ -7,8 +7,6 @@
  * Reply số để xem lệnh trong nhóm → reply tiếp để xem chi tiết lệnh.
  */
 
-const { registerReply } = require('../../../includes/handlers/handleReply');
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 function commandsGroup(cmds) {
@@ -56,7 +54,7 @@ module.exports = {
     cooldowns:       5,
   },
 
-  run: async ({ args, send, commands, prefix }) => {
+  run: async ({ args, send, commands, prefix, registerReply }) => {
     const p    = prefix || ".";
     const cmds = commands && typeof commands.values === "function" ? commands : new Map();
     const sub  = (args[0] || "").toLowerCase().trim();

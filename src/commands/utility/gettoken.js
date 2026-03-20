@@ -6,8 +6,6 @@
  * Credits: Dũngkon||Vtuan — converted MiZai
  */
 
-const { registerReply } = require('../../../includes/handlers/handleReply');
-
 const TOKEN_TYPES = {
   "1":  "350685531728",
   "2":  "256002347743983",
@@ -50,7 +48,7 @@ module.exports = {
     cooldowns:       5,
   },
 
-  run: async ({ api, event, send, senderId, threadID }) => {
+  run: async ({ api, event, send, senderId, threadID, registerReply }) => {
     const sent  = await send(TOKEN_MENU);
     const msgId = sent?.message?.msgId ?? sent?.msgId ?? sent?.data?.msgId;
     if (msgId) {
@@ -64,7 +62,7 @@ module.exports = {
   },
 
   // ── onReply: xử lý multi-step ─────────────────────────────────────────────
-  onReply: async ({ api, event, data, send }) => {
+  onReply: async ({ api, event, data, send, registerReply }) => {
     const raw  = event?.data || {};
     const body = (typeof raw.content === "string" ? raw.content : (raw.content?.text || "")).trim();
 

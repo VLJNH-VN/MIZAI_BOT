@@ -9,15 +9,11 @@
  *   Gửi: api.sendVoice({ voiceUrl: download_audio_url }) → phát inline
  */
 
-const { registerReply } = require('../../../includes/handlers/handleReply');
+const { fmtDurationSec: fmtDuration } = require('../../../utils/helpers');
 
 const FOWN_API = "https://fown.onrender.com";
 const LIMIT    = 5;
 
-function fmtDuration(sec) {
-  const s = Math.round(sec);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
 function fmtNum(n) {
   if (!n) return "0";
   if (n >= 1_000_000) return (n / 1e6).toFixed(1) + "M";
@@ -38,7 +34,7 @@ module.exports = {
     cooldowns:       5,
   },
 
-  run: async ({ args, send }) => {
+  run: async ({ args, send, registerReply }) => {
     const query = args.join(" ").trim();
     if (!query) return send("🎵 Dùng: scl <từ khóa>\nVí dụ: scl bóng phù hoa TVS");
 

@@ -7,11 +7,11 @@
 
 const fs   = require("fs");
 const path = require("path");
-const { registerReply } = require('../../../includes/handlers/handleReply');
 const { getUserMoney, updateUserMoney } = require('../../../includes/database/economy');
 const { resolveSenderName }             = require('../../../includes/database/infoCache');
 const { isBotAdmin, isGroupAdmin }      = require('../../../utils/bot/botManager');
 const { parseMentionIds }               = require('../../../utils/bot/messageUtils');
+const { fmtMoney, fmtTimeNow }          = require('../../../utils/helpers');
 
 const ROOT       = process.cwd();
 const TX_DIR     = path.join(ROOT, "includes", "data", "taixiu");
@@ -31,8 +31,6 @@ for (const f of [PHIEN_FILE, MONEY_FILE, CHECK_FILE]) {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function readJson(f)    { try { return JSON.parse(fs.readFileSync(f, "utf-8")); } catch { return []; } }
 function writeJson(f,d) { fs.writeFileSync(f, JSON.stringify(d, null, 2), "utf-8"); }
-function fmtMoney(n)    { return parseInt(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
-function fmtTime()      { return new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }); }
 function fmtTimeFull(ts){ return new Date(ts).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }); }
 function fmtClock()     { return new Date().toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }); }
 
@@ -124,7 +122,7 @@ module.exports = {
     cooldowns: 2,
   },
 
-  run: async ({ api, event, args, send, senderId, threadID, prefix }) => {
+  run: async ({ api, event, args, send, senderId, threadID, prefix, registerReply }) => {
     const raw    = event?.data ?? {};
     const sub    = (args[0] || "").toLowerCase().trim();
 
@@ -210,7 +208,7 @@ module.exports = {
         `💰 Đã set tiền thành công!\n` +
         `👤 ${name} (${uid})\n` +
         `➕ ${fmtMoney(input)} VNĐ\n` +
-        `🕒 ${fmtTime()}`
+        `🕒 ${fmtTimeNow()}`
       );
     }
 
@@ -238,7 +236,7 @@ module.exports = {
         `👤 ${name}\n` +
         `💰 Ví: ${fmtMoney(input)} VNĐ → Game: ${fmtMoney(gameInput)} VNĐ\n` +
         `📌 Tỉ lệ: 10 ví = 1 game\n` +
-        `🕒 ${fmtTime()}`
+        `🕒 ${fmtTimeNow()}`
       );
     }
 
@@ -292,7 +290,7 @@ module.exports = {
         `💸 Chuyển tiền thành công!\n` +
         `👤 ${sName} → ${rName}\n` +
         `💰 ${fmtMoney(input)} VNĐ\n` +
-        `🕒 ${fmtTime()}`
+        `🕒 ${fmtTimeNow()}`
       );
     }
 
@@ -308,7 +306,7 @@ module.exports = {
         `💰 Số dư game\n` +
         `👤 ${name}\n` +
         `💵 ${fmtMoney(p.input)} VNĐ\n` +
-        `🕒 ${fmtTime()}`
+        `🕒 ${fmtTimeNow()}`
       );
     }
 

@@ -9,18 +9,10 @@
 const fs   = require("fs");
 const path = require("path");
 const os   = require("os");
-const { registerReply } = require('../../../includes/handlers/handleReply');
+const { fmtDurationMs: fmtDuration } = require('../../../utils/helpers');
 
 const SPT_ID     = "1530d567ec6542669896bc96efd370f3";
 const SPT_SECRET = "6e0241b124da40dfb98728b7f29cedfd";
-
-function fmtDuration(ms) {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const h = Math.floor(m / 60);
-  if (h > 0) return `${h}:${String(m % 60).padStart(2,"0")}:${String(s % 60).padStart(2,"0")}`;
-  return `${m}:${String(s % 60).padStart(2,"0")}`;
-}
 
 function fmtSize(bytes) {
   const units = ["Bytes", "KB", "MB", "GB"];
@@ -72,7 +64,7 @@ module.exports = {
     cooldowns:       5,
   },
 
-  run: async ({ api, event, args, send, threadID }) => {
+  run: async ({ api, event, args, send, threadID, registerReply }) => {
     const keyword = args.join(" ").trim();
     if (!keyword) return send("⚠️ Nhập từ khóa tìm nhạc.\nVí dụ: spt shape of you");
 

@@ -9,7 +9,6 @@
 const fs   = require("fs");
 const path = require("path");
 const { ThreadType } = require("zca-js");
-const { registerReaction } = require('../../../includes/handlers/handleReaction');
 
 const DATA_FILE   = path.join(process.cwd(), "includes", "data", "auto_xo_so.json");
 const GROUPS_FILE = path.join(process.cwd(), "includes", "database", "groupsCache.json");
@@ -133,7 +132,7 @@ module.exports = {
   },
 
   // ── onLoad: khởi động interval gửi lúc 18:32 ──────────────────────────────
-  onLoad: async ({ api }) => {
+  onLoad: async ({ api, registerReaction }) => {
     let lastFired = "";
     setInterval(async () => {
       const { h, m, s } = nowVN();

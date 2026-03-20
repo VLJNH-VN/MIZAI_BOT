@@ -31,6 +31,55 @@ function isValidUrl(str) {
   try { return /^https?:\/\/.+/.test(new URL(str).href); } catch { return false; }
 }
 
+// ── Helper: Lấy tất cả link video từ trang HTML hoặc trả về chính URL nếu là file media ──
+async function extractMediaLinks(url) {
+  const VIDEO_EXTS = /\.(mp4|webm|mkv|avi|mov|flv|m4v|3gp|ogg|wmv)(\?.*)?$/i;
+  const IMAGE_EXTS = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i;
+
+  // 1. HEAD để lấy content-type
+  let contentType = "";
+  try {
+    const head = await global.axios.head(url, { timeout: 10000 });
+    contentType = (head.headers["content-type"] || "").toLowerCase();
+  } catch { /* bỏ qua */ }
+
+  // Nếu là file media trực tiếp → trả về chính nó
+  if (
+    contentType.startsWith("video/") ||
+    contentType.startsWith("image/") ||
+    VIDEO_EXTS.test(url) ||
+    IMAGE_EXTS.test(url)
+  ) {
+    return [url];
+  }
+
+  // 2. Fetch HTML rồi parse lấy link media
+  let html = "";
+  try {
+    const res = await global.axios.get(url, { timeout: 15000, headers: { "User-Agent": "Mozilla/5.0" } });
+    html = res.data || "";
+  } catch { return []; }
+
+  const found = new Set();
+
+  // Tìm trong src="...", href="..." và trong các thẻ <video>, <source>
+  const srcMatches = html.matchAll(/(?:src|href)=["']([^"']+)["']/gi);
+  for (const m of srcMatches) {
+    const link = m[1];
+    if (VIDEO_EXTS.test(link) || IMAGE_EXTS.test(link)) {
+      try {
+        found.add(new URL(link, url).href);
+      } catch { /* skip */ }
+    }
+  }
+
+  // Tìm link mp4/webm... xuất hiện thẳng trong JS hay JSON
+  const rawMatches = html.matchAll(/https?:\/\/[^\s"'<>]+\.(?:mp4|webm|mkv|mov|m4v|flv|ogg|3gp)[^\s"'<>]*/gi);
+  for (const m of rawMatches) found.add(m[0]);
+
+  return [...found];
+}
+
 // ── Helper: Link đã nằm trên GitHub chưa ─────────────────────────────────────
 function isGithubLink(url) {
   return url.includes("raw.githubusercontent.com") || url.includes("github.com");
@@ -114,7 +163,7 @@ module.exports = {
     commandCategory: "Admin",
     usages: [
       ".api add <tên>              — Reply ảnh/video để upload lên GitHub",
-      ".api add <tên> <link>       — Thêm link trực tiếp vào JSON (không upload)",
+      ".api add <tên> <url>        — Lấy video trong URL rồi upload lên GitHub",
       ".api add <tên> <file_json>  — Import link từ file JSON khác trong listapi",
       ".api check                  — Kiểm tra & convert TẤT CẢ file lên GitHub",
       ".api check <tên>            — Kiểm tra & convert 1 file cụ thể lên GitHub"
@@ -127,7 +176,7 @@ module.exports = {
       return send(
         "📝 Cách dùng:\n" +
         "  .api add <tên>              — Reply ảnh/video để upload lên GitHub\n" +
-        "  .api add <tên> <link>       — Thêm link trực tiếp vào JSON\n" +
+        "  .api add <tên> <url>        — Lấy video trong URL rồi upload lên GitHub\n" +
         "  .api add <tên> <file_json>  — Import từ file JSON khác trong listapi\n" +
         "  .api check                  — Kiểm tra & convert tất cả file lên GitHub\n" +
         "  .api check <tên>            — Kiểm tra & convert 1 file cụ thể"
@@ -169,19 +218,45 @@ module.exports = {
         );
       }
 
-      // ── Chế độ 2: Thêm link trực tiếp (không upload GitHub) ────────────────
+      // ── Chế độ 2: Nhập URL → tự lấy link video bên trong → upload lên GitHub ─
       if (thirdArg && isValidUrl(thirdArg)) {
-        const { dataPath, data } = loadJsonList(tipName);
-        if (data.includes(thirdArg)) {
-          return send("⚠️ Link này đã tồn tại trong danh sách, bỏ qua.");
+        if (!global.config?.githubToken || !global.config?.uploadRepo) {
+          return send("❌ Chưa cấu hình githubToken hoặc uploadRepo trong config.json");
         }
-        data.push(thirdArg);
+
+        await send(`⏳ Đang phân tích URL...\n🔍 ${thirdArg}`);
+
+        const mediaLinks = await extractMediaLinks(thirdArg);
+        if (mediaLinks.length === 0) {
+          return send("⚠️ Không tìm thấy link video/ảnh nào trong URL đó.");
+        }
+
+        await send(`🎬 Tìm thấy ${mediaLinks.length} link media, đang upload lên GitHub...`);
+
+        const { dataPath, data } = loadJsonList(tipName);
+        let success = 0, failed = 0;
+        const addedUrls = [];
+
+        for (const mUrl of mediaLinks) {
+          if (data.includes(mUrl)) continue; // bỏ qua link trùng đã là GitHub
+          try {
+            const ext      = extFromUrl(mUrl);
+            const fileName = `${tipName}_${Date.now()}.${ext}`;
+            const ghUrl    = await uploadToGithub(mUrl, fileName);
+            if (ghUrl && !data.includes(ghUrl)) {
+              data.push(ghUrl);
+              addedUrls.push(ghUrl);
+              success++;
+            }
+          } catch { failed++; }
+        }
+
         fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), "utf-8");
-        return send(
-          `✅ Đã thêm link vào listapi/${tipName}.json\n` +
-          `📦 Tổng: ${data.length} link\n` +
-          `🔗 ${thirdArg}`
-        );
+
+        let msg = `✅ Đã upload ${success} link vào listapi/${tipName}.json\n📦 Tổng: ${data.length} link`;
+        if (failed > 0) msg += `\n⚠️ Upload lỗi: ${failed}`;
+        if (addedUrls.length <= 5) msg += "\n\n" + addedUrls.map(u => `🔗 ${u}`).join("\n");
+        return send(msg);
       }
 
       // ── Chế độ 3: Reply đính kèm → upload lên GitHub ───────────────────────
@@ -196,7 +271,7 @@ module.exports = {
         return send(
           "⚠️ Không tìm thấy nội dung hợp lệ. Hãy:\n" +
           "  • Reply vào tin nhắn có ảnh/video/file, hoặc\n" +
-          "  • Thêm link trực tiếp: .api add <tên> <https://...>, hoặc\n" +
+          "  • Nhập URL trang web: .api add <tên> <https://...>, hoặc\n" +
           "  • Import JSON: .api add <tên> <file.json>"
         );
       }

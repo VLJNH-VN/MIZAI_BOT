@@ -31,10 +31,83 @@ function isValidUrl(str) {
   try { return /^https?:\/\/.+/.test(new URL(str).href); } catch { return false; }
 }
 
+// ── Helper: Link đã nằm trên GitHub chưa ─────────────────────────────────────
+function isGithubLink(url) {
+  return url.includes("raw.githubusercontent.com") || url.includes("github.com");
+}
+
+// ── Helper: Lấy extension từ URL ──────────────────────────────────────────────
+function extFromUrl(url) {
+  try {
+    const p = new URL(url).pathname;
+    const ext = path.extname(p).replace(".", "").toLowerCase();
+    return ext || "bin";
+  } catch { return "bin"; }
+}
+
+// ── Helper: Kiểm tra & convert 1 file JSON ───────────────────────────────────
+async function checkAndConvertFile(filePath, fileName, send) {
+  let links = [];
+  try { links = JSON.parse(fs.readFileSync(filePath, "utf-8")); } catch {
+    return `📄 ${fileName}\n  ❌ Không đọc được file.`;
+  }
+  if (!Array.isArray(links) || links.length === 0) {
+    return `📄 ${fileName}\n  ⚠️ File trống.`;
+  }
+
+  let live = 0, dead = 0, converted = 0, failed = 0;
+  const newLinks = [];
+
+  for (const link of links) {
+    // 1. Kiểm tra link còn sống không
+    let alive = false;
+    try {
+      const r = await global.axios.head(link, { timeout: 8000 });
+      alive = r.status === 200;
+    } catch { alive = false; }
+
+    if (!alive) {
+      dead++;
+      continue; // Bỏ link chết ra khỏi danh sách
+    }
+
+    // 2. Nếu sống nhưng chưa phải GitHub → convert lên GitHub
+    if (!isGithubLink(link)) {
+      try {
+        const ext      = extFromUrl(link);
+        const baseName = path.basename(fileName, ".json");
+        const ghUrl    = await uploadToGithub(link, `${baseName}_${Date.now()}.${ext}`);
+        if (ghUrl) {
+          newLinks.push(ghUrl);
+          converted++;
+        } else {
+          newLinks.push(link); // giữ nguyên nếu không lấy được URL
+          failed++;
+        }
+      } catch {
+        newLinks.push(link); // giữ nguyên nếu upload lỗi
+        failed++;
+      }
+    } else {
+      newLinks.push(link);
+      live++;
+    }
+  }
+
+  // Lưu lại danh sách đã cập nhật
+  fs.writeFileSync(filePath, JSON.stringify(newLinks, null, 2), "utf-8");
+
+  let summary = `📄 ${fileName}\n`;
+  summary += `  ✅ GitHub: ${live}  🔄 Converted: ${converted}  ❎ Đã xoá (die): ${dead}`;
+  if (failed > 0) summary += `  ⚠️ Convert lỗi: ${failed}`;
+  summary += `  📝 Còn lại: ${newLinks.length}`;
+  return summary;
+}
+
 module.exports = {
   config: {
     name: "api",
-    version: "2.1.0",
+    version: "2.2.0",
     hasPermssion: 2,
     credits: "DongDev (converted by MiZai)",
     description: "Quản lý link media trong listapi (GitHub / link trực tiếp / JSON khác)",
@@ -43,7 +116,8 @@ module.exports = {
       ".api add <tên>              — Reply ảnh/video để upload lên GitHub",
       ".api add <tên> <link>       — Thêm link trực tiếp vào JSON (không upload)",
       ".api add <tên> <file_json>  — Import link từ file JSON khác trong listapi",
-      ".api check                  — Kiểm tra số lượng link còn sống"
+      ".api check                  — Kiểm tra & convert TẤT CẢ file lên GitHub",
+      ".api check <tên>            — Kiểm tra & convert 1 file cụ thể lên GitHub"
     ].join("\n"),
     cooldowns: 5
   },
@@ -55,7 +129,8 @@ module.exports = {
         "  .api add <tên>              — Reply ảnh/video để upload lên GitHub\n" +
         "  .api add <tên> <link>       — Thêm link trực tiếp vào JSON\n" +
         "  .api add <tên> <file_json>  — Import từ file JSON khác trong listapi\n" +
-        "  .api check                  — Kiểm tra link còn sống trong listapi"
+        "  .api check                  — Kiểm tra & convert tất cả file lên GitHub\n" +
+        "  .api check <tên>            — Kiểm tra & convert 1 file cụ thể"
       );
     }
 
@@ -68,7 +143,7 @@ module.exports = {
       const tipName = args[1];
       if (!tipName) return send("⚠️ Vui lòng nhập tên tệp.\nVí dụ: .api add hinh");
 
-      const thirdArg = args[2]; // link hoặc tên file json khác (tuỳ chọn)
+      const thirdArg = args[2];
 
       // ── Chế độ 1: Import từ file JSON khác ─────────────────────────────────
       if (thirdArg && thirdArg.endsWith(".json")) {
@@ -76,7 +151,6 @@ module.exports = {
         if (!fs.existsSync(srcPath)) {
           return send(`❌ Không tìm thấy file: listapi/${thirdArg}`);
         }
-
         let srcLinks = [];
         try { srcLinks = JSON.parse(fs.readFileSync(srcPath, "utf-8")); } catch {
           return send(`❌ Không đọc được file JSON: ${thirdArg}`);
@@ -84,12 +158,10 @@ module.exports = {
         if (!Array.isArray(srcLinks) || srcLinks.length === 0) {
           return send(`⚠️ File ${thirdArg} trống hoặc không hợp lệ.`);
         }
-
         const { dataPath, data } = loadJsonList(tipName);
         const before = data.length;
-        const merged = [...new Set([...data, ...srcLinks])]; // loại trùng
+        const merged = [...new Set([...data, ...srcLinks])];
         fs.writeFileSync(dataPath, JSON.stringify(merged, null, 2), "utf-8");
-
         return send(
           `✅ Đã import từ ${thirdArg} → listapi/${tipName}.json\n` +
           `➕ Thêm mới: ${merged.length - before} link\n` +
@@ -100,14 +172,11 @@ module.exports = {
       // ── Chế độ 2: Thêm link trực tiếp (không upload GitHub) ────────────────
       if (thirdArg && isValidUrl(thirdArg)) {
         const { dataPath, data } = loadJsonList(tipName);
-
         if (data.includes(thirdArg)) {
           return send("⚠️ Link này đã tồn tại trong danh sách, bỏ qua.");
         }
-
         data.push(thirdArg);
         fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), "utf-8");
-
         return send(
           `✅ Đã thêm link vào listapi/${tipName}.json\n` +
           `📦 Tổng: ${data.length} link\n` +
@@ -144,12 +213,9 @@ module.exports = {
         const ext      = quote.ext || "bin";
         const fileName = `${tipName}_${Date.now()}.${ext}`;
         const ghUrl    = await uploadToGithub(quote.mediaUrl, fileName);
-
         if (!ghUrl) return send("❌ Upload thành công nhưng không lấy được URL từ GitHub.");
-
         data.push(ghUrl);
         fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), "utf-8");
-
         return send(
           `✅ Đã tải lên GitHub và lưu vào listapi/${tipName}.json\n` +
           `📦 Tổng: ${data.length} link\n` +
@@ -161,34 +227,44 @@ module.exports = {
     }
 
     // ══════════════════════════════════════════════════════
-    //  CHECK — kiểm tra link còn sống / đã die
+    //  CHECK — kiểm tra link & convert link không phải GitHub lên GitHub
+    //  .api check          → toàn bộ listapi
+    //  .api check <tên>    → chỉ file <tên>.json
     // ══════════════════════════════════════════════════════
     if (sub === "check") {
+      if (!global.config?.githubToken || !global.config?.uploadRepo) {
+        return send("❌ Chưa cấu hình githubToken hoặc uploadRepo trong config.json\n(Cần để convert link lên GitHub)");
+      }
+
       if (!fs.existsSync(LISTAPI_DIR)) {
         return send("📂 Thư mục listapi chưa có dữ liệu.");
       }
 
-      const files = fs.readdirSync(LISTAPI_DIR).filter(f => f.endsWith(".json"));
-      if (files.length === 0) return send("📂 Chưa có file nào trong listapi.");
+      const targetName = args[1]; // tuỳ chọn: check 1 file cụ thể
 
-      await send(`⏳ Đang kiểm tra ${files.length} file...`);
+      let files = [];
+      if (targetName) {
+        const targetFile = targetName.endsWith(".json") ? targetName : `${targetName}.json`;
+        const targetPath = path.join(LISTAPI_DIR, targetFile);
+        if (!fs.existsSync(targetPath)) {
+          return send(`❌ Không tìm thấy file: listapi/${targetFile}`);
+        }
+        files = [targetFile];
+      } else {
+        files = fs.readdirSync(LISTAPI_DIR).filter(f => f.endsWith(".json"));
+        if (files.length === 0) return send("📂 Chưa có file nào trong listapi.");
+      }
+
+      await send(
+        `⏳ Đang kiểm tra & convert ${files.length} file...\n` +
+        `(Link chết sẽ bị xoá, link chưa phải GitHub sẽ được upload lên GitHub)`
+      );
 
       const results = [];
-
       for (const file of files) {
         const filePath = path.join(LISTAPI_DIR, file);
-        let links = [];
-        try { links = JSON.parse(fs.readFileSync(filePath, "utf-8")); } catch { continue; }
-
-        let live = 0, dead = 0;
-
-        await Promise.all(links.map(link =>
-          global.axios.head(link, { timeout: 8000 })
-            .then(r => { r.status === 200 ? live++ : dead++; })
-            .catch(() => dead++)
-        ));
-
-        results.push(`📄 ${file}\n  ✅ Live: ${live}  ❎ Die: ${dead}  📝 Tổng: ${links.length}`);
+        const result = await checkAndConvertFile(filePath, file, send);
+        results.push(result);
       }
 
       return send(results.join("\n\n"));
@@ -197,6 +273,6 @@ module.exports = {
     // ══════════════════════════════════════════════════════
     //  Lệnh con không hợp lệ
     // ══════════════════════════════════════════════════════
-    return send("❓ Lệnh con không hợp lệ. Dùng: .api add <tên> | .api check");
+    return send("❓ Lệnh con không hợp lệ. Dùng: .api add <tên> | .api check [tên]");
   }
 };

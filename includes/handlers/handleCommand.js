@@ -6,7 +6,6 @@ const stringSimilarity = require("string-similarity");
 const { registerReply } = require("./handleReply");
 const { registerReaction } = require("./handleReaction");
 const { registerUndo } = require("./handleUndo");
-const { isGroupRented } = require("../database/rent");
 const fs = require("fs");
 const path = require("path");
 
@@ -219,23 +218,6 @@ async function handleCommand({ api, event, commands, prefix }) {
       send
     });
     if (!cooldownOk) return;
-
-    // ── Kiểm tra thuê bot (rentMode) ──────────────────────────────────────────
-    if (global.config?.rentMode && isGroup && !isBotAdmin(senderId)) {
-      const RENT_FREE_CMDS = new Set(["rent", "help", "menu"]);
-      if (!RENT_FREE_CMDS.has(canonicalName)) {
-        const rented = await isGroupRented(threadID).catch(() => false);
-        if (!rented) {
-          await send(
-            `⛔ Nhóm chưa thuê bot hoặc đã hết hạn.\n` +
-            `💡 Xem bảng giá: rent price\n` +
-            `🔑 Kích hoạt key: rent key <key>\n` +
-            `📞 Liên hệ admin để mua key.`
-          );
-          return;
-        }
-      }
-    }
 
     // ── Thực thi lệnh ─────────────────────────────────────────────────────────
     const startTime = Date.now();

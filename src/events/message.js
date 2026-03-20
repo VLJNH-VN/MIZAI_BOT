@@ -1,7 +1,6 @@
 const { handleCommand } = require("../../includes/handlers/handleCommand");
 const { handleReply } = require("../../includes/handlers/handleReply");
 const { handleUploadAttachments } = require("../../includes/handlers/handleUploadAttachments");
-const { isGroupRented } = require("../../includes/database/rent");
 
 async function handleListen({ api, event, commands, prefix }) {
   if (!commands || typeof commands.forEach !== "function") return;

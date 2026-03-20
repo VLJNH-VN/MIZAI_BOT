@@ -92,59 +92,72 @@ function isValidUrl(str) {
   try { return /^https?:\/\/.+/.test(new URL(str).href); } catch { return false; }
 }
 
-// ── Helper: Fetch URL → lấy danh sách link media bên trong ───────────────────
-// Ưu tiên: JSON array → file media trực tiếp → scrape HTML
-async function extractMediaLinks(url) {
-  const VIDEO_EXTS = /\.(mp4|webm|mkv|avi|mov|flv|m4v|3gp|ogg|wmv)(\?.*)?$/i;
-  const IMAGE_EXTS = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i;
+// ── Regex nhận dạng link media (video / ảnh / audio) ─────────────────────────
+const MEDIA_EXTS_RE = /\.(mp4|webm|mkv|avi|mov|flv|m4v|3gp|ogv|wmv|mp3|aac|m4a|ogg|wav|flac|jpg|jpeg|png|gif|webp|bmp|svg)(\?[^"'\s<>]*)?$/i;
+const MEDIA_CT_RE   = /^(video|audio|image)\//;
 
-  // 1. Fetch nội dung URL
-  let body, contentType = "";
+// ── Helper: Fetch URL → lấy toàn bộ link có thể download bên trong ───────────
+// Ưu tiên: 1) JSON array  2) file media trực tiếp  3) scrape HTML/JS
+async function extractMediaLinks(url) {
+  // 1. Fetch nội dung URL (text mode để parse JSON / HTML)
+  let body = "", contentType = "";
   try {
     const res = await global.axios.get(url, {
       timeout: 20000,
       responseType: "text",
-      headers: { "User-Agent": "Mozilla/5.0" }
+      headers: { "User-Agent": "Mozilla/5.0" },
+      maxContentLength: 10 * 1024 * 1024  // giới hạn 10 MB text
     });
-    body = res.data || "";
-    contentType = (res.headers["content-type"] || "").toLowerCase();
-  } catch { return []; }
+    body        = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+    contentType = (res.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+  } catch { return [url]; } // nếu fetch lỗi → trả về chính URL đó
 
-  // 2. Thử parse JSON trước (file .bin / .json chứa array link)
+  // 2. Thử parse JSON (file .bin / .json chứa mảng link)
   try {
     const parsed = JSON.parse(body);
+    // Mảng string → lấy tất cả URL hợp lệ (không lọc theo đuôi file)
     if (Array.isArray(parsed)) {
-      // Lọc ra các phần tử là string URL hợp lệ
       const links = parsed.filter(v => typeof v === "string" && isValidUrl(v));
       if (links.length > 0) return links;
     }
+    // Object có key là array → lấy mảng đầu tiên tìm thấy
+    if (parsed && typeof parsed === "object") {
+      for (const val of Object.values(parsed)) {
+        if (Array.isArray(val)) {
+          const links = val.filter(v => typeof v === "string" && isValidUrl(v));
+          if (links.length > 0) return links;
+        }
+      }
+    }
   } catch { /* không phải JSON */ }
 
-  // 3. Nếu là file media trực tiếp → trả về chính nó
-  if (
-    contentType.startsWith("video/") ||
-    contentType.startsWith("image/") ||
-    VIDEO_EXTS.test(url.split("?")[0]) ||
-    IMAGE_EXTS.test(url.split("?")[0])
-  ) {
+  // 3. Nếu là file media trực tiếp → trả về chính URL đó
+  if (MEDIA_CT_RE.test(contentType) || MEDIA_EXTS_RE.test(url.split("?")[0])) {
     return [url];
   }
 
-  // 4. Scrape HTML tìm link media
+  // 4. Scrape HTML / JS để tìm tất cả link có đuôi media
   const found = new Set();
 
-  const srcMatches = body.matchAll(/(?:src|href)=["']([^"']+)["']/gi);
-  for (const m of srcMatches) {
+  // Tìm trong src="..." và href="..."
+  for (const m of body.matchAll(/(?:src|href|url|file|link|path|source)=?["'\s:]?\s*["']?(https?:\/\/[^"'\s<>,]+)/gi)) {
     const link = m[1];
-    if (VIDEO_EXTS.test(link) || IMAGE_EXTS.test(link)) {
-      try { found.add(new URL(link, url).href); } catch { /* skip */ }
+    if (MEDIA_EXTS_RE.test(link.split("?")[0]) || isValidUrl(link)) {
+      try {
+        const abs = new URL(link, url).href;
+        if (MEDIA_EXTS_RE.test(abs.split("?")[0])) found.add(abs);
+      } catch { /* skip */ }
     }
   }
 
-  const rawMatches = body.matchAll(/https?:\/\/[^\s"'<>]+\.(?:mp4|webm|mkv|mov|m4v|flv|ogg|3gp)[^\s"'<>]*/gi);
-  for (const m of rawMatches) found.add(m[0]);
+  // Tìm link https://... xuất hiện tự do trong JS / JSON
+  for (const m of body.matchAll(/https?:\/\/[^\s"'<>()[\]{}]+/gi)) {
+    const link = m[0].replace(/[.,;)}\]]+$/, ""); // bỏ dấu câu cuối
+    if (MEDIA_EXTS_RE.test(link.split("?")[0])) found.add(link);
+  }
 
-  return [...found];
+  // Nếu không tìm thấy gì → trả về chính URL ban đầu để bot thử upload
+  return found.size > 0 ? [...found] : [url];
 }
 
 // ── Helper: Link đã nằm trên GitHub chưa ─────────────────────────────────────

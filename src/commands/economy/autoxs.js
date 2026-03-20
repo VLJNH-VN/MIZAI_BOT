@@ -135,8 +135,8 @@ module.exports = {
   onLoad: async ({ api, registerReaction }) => {
     let lastFired = "";
     setInterval(async () => {
-      const { h, m, s } = nowVN();
-      if (h !== 18 || m !== 32 || s !== 0) return;
+      const { h, m } = nowVN();
+      if (h !== 18 || m !== 32) return;
 
       const key = `${h}:${m}`;
       if (lastFired === key) return;
@@ -144,14 +144,19 @@ module.exports = {
 
       try {
         const { data } = await xsmb();
-        const dateKey  = Object.keys(data)[0];
+        if (!data || !Object.keys(data).length) return;
+
+        // Lấy ngày gần nhất (sort theo dd-MM-yyyy)
+        const dateKey = Object.keys(data).sort((a, b) => {
+          const toTs = s => { const [d,mo,y] = s.split("-"); return new Date(y,mo-1,d).getTime(); };
+          return toTs(b) - toTs(a);
+        })[0];
         if (!dateKey) return;
 
         const fd = data[dateKey];
         const msg =
           `📋 Kết quả xổ số Miền Bắc ngày: ${dateKey}\n\n` +
-          `🏅 Mã ĐB: ${(fd["Mã ĐB"] || []).join(" - ")}\n` +
-          `🎯 Giải ĐB: ${(fd["ĐB"] || []).join(", ")}\n` +
+          `🎯 Giải ĐB: ${(fd["ĐB"] || fd["G.ĐB"] || []).join(", ")}\n` +
           `1️⃣ Giải Nhất: ${(fd["G.1"] || []).join(", ")}\n` +
           `2️⃣ Giải Nhì: ${(fd["G.2"] || []).join(", ")}\n` +
           `3️⃣ Giải Ba: ${(fd["G.3"] || []).join(", ")}\n` +

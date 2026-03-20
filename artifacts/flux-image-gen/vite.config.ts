@@ -49,6 +49,9 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+    watch: {
+      ignored: ["**/server/**"],
+    },
     proxy: {
       "/api": {
         target: "http://localhost:5001",

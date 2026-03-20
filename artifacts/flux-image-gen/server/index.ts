@@ -43,19 +43,41 @@ interface CFAccount {
 
 interface CredsDB {
   currentIndex: number;
+  adminKey: string;
   accounts: CFAccount[];
 }
 
 function loadCreds(): CredsDB {
   try {
-    return JSON.parse(fs.readFileSync(CREDS_FILE, "utf-8"));
+    const data = JSON.parse(fs.readFileSync(CREDS_FILE, "utf-8"));
+    if (!data.adminKey) {
+      // Chỉ tạo 1 lần duy nhất nếu chưa có — KHÔNG BAO GIỜ tạo lại
+      data.adminKey = "ADMIN-" + crypto.randomBytes(16).toString("hex").toUpperCase();
+      fs.writeFileSync(CREDS_FILE, JSON.stringify(data, null, 2));
+    }
+    return data;
   } catch {
-    return { currentIndex: 0, accounts: [] };
+    // Lần đầu tiên khởi chạy — tạo admin key vĩnh viễn
+    const adminKey = "ADMIN-" + crypto.randomBytes(16).toString("hex").toUpperCase();
+    const fresh: CredsDB = { currentIndex: 0, adminKey, accounts: [] };
+    fs.writeFileSync(CREDS_FILE, JSON.stringify(fresh, null, 2));
+    return fresh;
   }
 }
 
 function saveCreds(db: CredsDB): void {
   fs.writeFileSync(CREDS_FILE, JSON.stringify(db, null, 2));
+}
+
+// Middleware kiểm tra admin key
+function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  const adminKey = req.headers["x-admin-key"] as string || req.query.adminKey as string;
+  const db = loadCreds();
+  if (!adminKey || adminKey !== db.adminKey) {
+    res.status(403).json({ error: "❌ Không có quyền. Cần Admin Key hợp lệ trong header X-Admin-Key" });
+    return;
+  }
+  next();
 }
 
 function resetCredIfNeeded(acc: CFAccount): CFAccount {
@@ -682,8 +704,25 @@ Rules:
 //  ADMIN ENDPOINTS — quản lý CF credentials pool
 // ══════════════════════════════════════════════════════════════════════════════
 
+// GET /api/me — thông tin user theo IP (key, quota, loại)
+app.get("/api/me", (req, res) => {
+  const ip = getClientIP(req);
+  const db = loadDB();
+  const [, user] = getOrCreateUserByIP(db, ip);
+  const u = resetQuotaIfNeeded(user);
+  res.json({
+    ip,
+    key: u.keyShown ? "********" : null,
+    keyReady: u.keyShown,
+    type: u.type,
+    quota: u.type === "free"
+      ? { used: u.dailyUsage, limit: FREE_DAILY_QUOTA, remaining: Math.max(0, FREE_DAILY_QUOTA - u.dailyUsage) }
+      : { used: u.dailyUsage, limit: "không giới hạn" },
+  });
+});
+
 // GET /api/admin/credentials — xem danh sách (token ẩn bớt)
-app.get("/api/admin/credentials", (_req, res) => {
+app.get("/api/admin/credentials", requireAdmin, (_req, res) => {
   const db = loadCreds();
   db.accounts = db.accounts.map(resetCredIfNeeded);
   saveCreds(db);
@@ -703,7 +742,7 @@ app.get("/api/admin/credentials", (_req, res) => {
 });
 
 // POST /api/admin/credentials — thêm account mới
-app.post("/api/admin/credentials", (req, res) => {
+app.post("/api/admin/credentials", requireAdmin, (req, res) => {
   const { accountId, token, label } = req.body as { accountId: string; token: string; label?: string };
   if (!accountId || !token) {
     res.status(400).json({ error: "Thiếu accountId hoặc token" });
@@ -728,7 +767,7 @@ app.post("/api/admin/credentials", (req, res) => {
 });
 
 // DELETE /api/admin/credentials/:index — xóa account
-app.delete("/api/admin/credentials/:index", (req, res) => {
+app.delete("/api/admin/credentials/:index", requireAdmin, (req, res) => {
   const idx = parseInt(req.params.index);
   const db = loadCreds();
   if (isNaN(idx) || idx < 0 || idx >= db.accounts.length) {
@@ -742,7 +781,7 @@ app.delete("/api/admin/credentials/:index", (req, res) => {
 });
 
 // POST /api/admin/credentials/:index/reset — reset quota của 1 account
-app.post("/api/admin/credentials/:index/reset", (req, res) => {
+app.post("/api/admin/credentials/:index/reset", requireAdmin, (req, res) => {
   const idx = parseInt(req.params.index);
   const db = loadCreds();
   if (isNaN(idx) || idx < 0 || idx >= db.accounts.length) {
@@ -757,7 +796,7 @@ app.post("/api/admin/credentials/:index/reset", (req, res) => {
 });
 
 // POST /api/admin/credentials/reset-all — reset tất cả
-app.post("/api/admin/credentials/reset-all", (_req, res) => {
+app.post("/api/admin/credentials/reset-all", requireAdmin, (_req, res) => {
   const db = loadCreds();
   db.accounts = db.accounts.map(a => ({ ...a, dailyUsage: 0, exhausted: false, lastReset: today() }));
   db.currentIndex = 0;
@@ -765,6 +804,17 @@ app.post("/api/admin/credentials/reset-all", (_req, res) => {
   res.json({ success: true, message: `Đã reset quota cho tất cả ${db.accounts.length} account(s)` });
 });
 
+// GET /api/admin/key — xem admin key (chỉ admin mới biết key để gọi endpoint này)
+app.get("/api/admin/key", requireAdmin, (_req, res) => {
+  const db = loadCreds();
+  res.json({ adminKey: db.adminKey });
+});
+
 app.listen(API_PORT, () => {
-  console.log(`API server running on port ${API_PORT}`);
+  const db = loadCreds();
+  console.log(`\n${"═".repeat(60)}`);
+  console.log(`  API server running on port ${API_PORT}`);
+  console.log(`  🔑 ADMIN KEY: ${db.adminKey}`);
+  console.log(`  Lưu key này để truy cập admin panel.`);
+  console.log(`${"═".repeat(60)}\n`);
 });

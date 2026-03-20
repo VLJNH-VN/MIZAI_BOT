@@ -288,16 +288,19 @@ async function sendAudio(api, audioUrl, info, caption, threadId, threadType) {
             );
         }
 
-        // ── Gửi voice: upload → sendVoice ────────────────────────────────────
-        try {
-            const uploaded = await api.uploadAttachment([aacPath], threadId, threadType);
-            const voiceUrl = uploaded?.[0]?.fileUrl;
-            if (!voiceUrl) throw new Error("uploadAttachment không trả về fileUrl");
-            await api.sendVoice({ voiceUrl, ttl: 500_000 }, threadId, threadType);
-            logInfo("[AutoDown] sendVoice thành công.");
-            return;
-        } catch (e1) {
-            logWarn(`[AutoDown] sendVoice thất bại: ${e1.message}`);
+        // ── Gửi voice: githubUpload → sendVoice(raw URL) ────────────────────
+        const aacSize = fs.statSync(aacPath).size;
+        if (typeof global.githubUpload === "function" && aacSize < 50 * 1024 * 1024) {
+            try {
+                const ghUrl = await global.githubUpload(aacPath, `autodown/aud_${uid}.aac`);
+                if (ghUrl) {
+                    await api.sendVoice({ voiceUrl: ghUrl, ttl: 500_000 }, threadId, threadType);
+                    logInfo("[AutoDown] sendVoice (GitHub raw) thành công.");
+                    return;
+                }
+            } catch (e1) {
+                logWarn(`[AutoDown] sendVoice GitHub thất bại: ${e1.message}`);
+            }
         }
 
         // ── Fallback: gửi file audio ──────────────────────────────────────────
@@ -352,7 +355,7 @@ async function handleTikTokTikwm(api, url, threadId, threadType) {
     const uid     = d.author?.unique_id       || "";
     const likes   = Number(d.digg_count || 0).toLocaleString("vi-VN");
     const caption =
-        `/-li 𝐀𝐮𝐭𝐨𝐃𝐨𝐰𝐧: TIKTOK\n` +
+        `/-li AUTODOWN: TIKTOK\n` +
         `📄 ${title}\n` +
         `👤 ${author}${uid ? ` (@${uid})` : ""}\n` +
         `❤️ ${likes} lượt thích`;
@@ -398,7 +401,7 @@ async function handleTikTok(api, url, threadId, threadType) {
     const r       = res.result;
     const title   = r.desc?.trim()     || "TikTok";
     const author  = r.author?.nickname || "Unknown";
-    const caption = `/-li 𝐀𝐮𝐭𝐨𝐃𝐨𝐰𝐧: TIKTOK\n📄 ${title}\n👤 ${author}`;
+    const caption = `/-li AutoDown: TIKTOK\n📄 ${title}\n👤 ${author}`;
 
     // Slideshow ảnh
     if (r.type === "image" && Array.isArray(r.images) && r.images.length) {
@@ -470,7 +473,20 @@ async function handleOther(api, url, threadId, threadType) {
 
     // Audio-only platform
     if (AUDIO_ONLY_SOURCES.has(source)) {
-        const audioUrl = d.download_audio_url || buildDownloadUrl(pageUrl, "audio");
+        // Ưu tiên download_audio_url từ fown API (GitHub Releases, URL vĩnh cửu)
+        // — giống video dùng download_url trực tiếp, không cần download local
+        if (d.download_audio_url) {
+            try {
+                await api.sendMessage({ msg: caption, ttl: 300_000 }, threadId, threadType);
+                await api.sendVoice({ voiceUrl: d.download_audio_url, ttl: 500_000 }, threadId, threadType);
+                logInfo("[AutoDown] sendVoice (GitHub Releases) thành công.");
+                return;
+            } catch (ev) {
+                logWarn(`[AutoDown] sendVoice GitHub Releases thất bại: ${ev.message}`);
+            }
+        }
+        // Fallback: download → convert → upload
+        const audioUrl = buildDownloadUrl(pageUrl, "audio");
         await sendAudio(api, audioUrl, { thumbnail, duration }, caption, threadId, threadType);
         return;
     }

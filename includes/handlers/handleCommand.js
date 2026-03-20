@@ -62,18 +62,23 @@ function formatUptime() {
 
 function buildSend(api, raw, threadID, eventType) {
   return async (message) => {
-    if (!threadID) {
-      logError("Không tìm thấy threadId để gửi tin nhắn.");
-      return;
-    }
-    if (typeof message === "string") {
+    if (!threadID) return null;
+    try {
+      const payload =
+        typeof message === "string"
+          ? { msg: message, quote: raw }
+          : message;
+      return await api.sendMessage(payload, threadID, eventType);
+    } catch {
+      // Quote bị từ chối hoặc lỗi API → thử lại không quote
       try {
-        return await api.sendMessage({ msg: message, quote: raw }, threadID, eventType);
+        const fallback =
+          typeof message === "string" ? { msg: message } : message;
+        return await api.sendMessage(fallback, threadID, eventType);
       } catch {
-        return api.sendMessage({ msg: message }, threadID, eventType);
+        return null;
       }
     }
-    return api.sendMessage(message, threadID, eventType);
   };
 }
 

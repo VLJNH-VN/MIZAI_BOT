@@ -2,25 +2,34 @@ const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
 
-const API_URL = "https://flux-image-gen-9rew.onrender.com/";
+const API_URL = "https://flux-image-gen-9rew.onrender.com";
 
 const STYLE_MAP = {
-  "thực tế": "photorealistic",
+  "tựđộng": "",
+  "tudong": "",
+  "auto": "",
+  "thựctế": "photorealistic",
   "thucte": "photorealistic",
   "photo": "photorealistic",
+  "anhthugate": "photorealistic",
   "số": "digital art",
   "digitalart": "digital art",
+  "nghệthuậtsố": "digital art",
+  "nts": "digital art",
   "anime": "anime",
   "sơndầu": "oil painting",
   "sondau": "oil painting",
+  "tranhsondau": "oil painting",
   "màunước": "watercolor",
   "maunuoc": "watercolor",
+  "tranhmaunuoc": "watercolor",
   "cyber": "cyberpunk",
   "cyberpunk": "cyberpunk",
   "fantasy": "fantasy art",
   "tốigiản": "minimalist",
   "toigian": "minimalist",
   "3d": "3D render",
+  "3drender": "3D render",
   "phácthảo": "sketch",
   "phacthao": "sketch",
   "điệnảnh": "cinematic",
@@ -50,17 +59,22 @@ module.exports = {
         `  flux <ý tưởng> --style <phong cách>\n` +
         `  flux <ý tưởng> --size <tỉ lệ> --steps <bước>\n\n` +
         `🎭 Phong cách:\n` +
-        `  anime, photo, cyber, fantasy\n` +
-        `  3d, sondau, maunuoc, dienhanh\n` +
-        `  toigian, phacthao, digitalart\n\n` +
+        `  auto (tự động), photo (ảnh thực tế)\n` +
+        `  digitalart (nghệ thuật số), anime\n` +
+        `  sondau (sơn dầu), maunuoc (màu nước)\n` +
+        `  cyber (cyberpunk), fantasy\n` +
+        `  toigian (tối giản), 3d (3D render)\n` +
+        `  phacthao (phác thảo), dienhanh (điện ảnh)\n\n` +
         `📐 Kích thước:\n` +
-        `  1:1 (1024×1024) — mặc định\n` +
+        `  1:1  (1024×1024) — mặc định\n` +
         `  16:9 (1360×768)\n` +
-        `  9:16 (768×1360)\n\n` +
+        `  9:16 (768×1360)\n` +
+        `  4:3  (1024×768)\n` +
+        `  3:4  (768×1024)\n\n` +
         `⚡ Ví dụ:\n` +
         `  flux một con rồng bay trên núi\n` +
         `  flux cô gái trong rừng --style anime\n` +
-        `  flux thành phố tương lai --style cyber --size 16:9`
+        `  flux thành phố tương lai --style cyber --size 16:9 --steps 6`
       );
     }
 

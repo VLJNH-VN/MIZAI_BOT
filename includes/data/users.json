@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-20T11:25:19.538Z",
+  "generatedAt": "2026-03-20T11:29:53.594Z",
   "total": 15,
   "users": [
     {
@@ -222,9 +222,9 @@
         "oa_status": null
       },
       "firstSeen": 1773993895117,
-      "msgCount": 34,
+      "msgCount": 39,
       "profileAt": 1773994417530,
-      "updatedAt": 1774001644945
+      "updatedAt": 1774006176485
     },
     {
       "userId": "8009347465992207686",

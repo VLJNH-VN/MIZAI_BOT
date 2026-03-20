@@ -265,7 +265,7 @@ module.exports = {
         return send(msg);
       }
 
-      // ── Chế độ 3: Reply đính kèm → upload lên GitHub ───────────────────────
+      // ── Chế độ 3: Reply tin nhắn có link/file ──────────────────────────────
       const quote = await global.resolveQuote({
         raw: event?.data,
         api: global.api,
@@ -273,11 +273,18 @@ module.exports = {
         event
       });
 
-      if (!quote?.mediaUrl) {
+      // Ưu tiên lấy URL từ reply: mediaUrl hoặc link text trong tin nhắn
+      const replyUrl = quote?.mediaUrl || (() => {
+        const txt = quote?.text || quote?.content || "";
+        const m = txt.match(/https?:\/\/\S+/);
+        return m ? m[0] : null;
+      })();
+
+      if (!replyUrl) {
         return send(
           "⚠️ Không tìm thấy nội dung hợp lệ. Hãy:\n" +
-          "  • Reply vào tin nhắn có ảnh/video/file, hoặc\n" +
-          "  • Nhập URL trang web: .api add <tên> <https://...>, hoặc\n" +
+          "  • Reply vào tin nhắn có ảnh/video/file/link, hoặc\n" +
+          "  • Nhập URL: .api add <tên> <https://...>, hoặc\n" +
           "  • Import JSON: .api add <tên> <file.json>"
         );
       }
@@ -286,25 +293,49 @@ module.exports = {
         return send("❌ Chưa cấu hình githubToken hoặc uploadRepo trong config.json");
       }
 
-      await send("⏳ Đang tải lên GitHub...");
+      await send(`⏳ Đang phân tích nội dung...\n🔍 ${replyUrl}`);
+
+      // Fetch URL → thử parse JSON array → nếu có link bên trong thì convert từng cái
+      const mediaLinks = await extractMediaLinks(replyUrl);
+
+      if (mediaLinks.length === 0) {
+        return send("⚠️ Không tìm thấy link video/ảnh nào trong nội dung đó.");
+      }
+
+      // Nếu chỉ có 1 link và chính là replyUrl (file media trực tiếp) → upload thẳng
+      const isDirectMedia = mediaLinks.length === 1 && mediaLinks[0] === replyUrl;
+
+      if (isDirectMedia) {
+        await send("⏳ Đang tải file lên GitHub...");
+      } else {
+        await send(`🎬 Tìm thấy ${mediaLinks.length} link bên trong, đang upload lên GitHub...`);
+      }
 
       const { dataPath, data } = loadJsonList(tipName);
+      let success = 0, failed = 0;
+      const addedUrls = [];
 
-      try {
-        const ext      = quote.ext || "bin";
-        const fileName = `${tipName}_${Date.now()}.${ext}`;
-        const ghUrl    = await uploadToGithub(quote.mediaUrl, fileName);
-        if (!ghUrl) return send("❌ Upload thành công nhưng không lấy được URL từ GitHub.");
-        data.push(ghUrl);
-        fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), "utf-8");
-        return send(
-          `✅ Đã tải lên GitHub và lưu vào listapi/${tipName}.json\n` +
-          `📦 Tổng: ${data.length} link\n` +
-          `🔗 ${ghUrl}`
-        );
-      } catch (err) {
-        return send(`❌ Upload thất bại: ${err.message}`);
+      for (const mUrl of mediaLinks) {
+        if (data.includes(mUrl)) continue;
+        try {
+          const ext      = extFromUrl(mUrl);
+          const fileName = `${tipName}_${Date.now()}.${ext}`;
+          const ghUrl    = await uploadToGithub(mUrl, fileName);
+          if (ghUrl && !data.includes(ghUrl)) {
+            data.push(ghUrl);
+            addedUrls.push(ghUrl);
+            success++;
+          }
+        } catch { failed++; }
       }
+
+      fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), "utf-8");
+
+      let msg = `✅ Đã upload ${success} link vào listapi/${tipName}.json\n📦 Tổng: ${data.length} link`;
+      if (failed > 0) msg += `\n⚠️ Upload lỗi: ${failed}`;
+      if (addedUrls.length > 0 && addedUrls.length <= 5)
+        msg += "\n\n" + addedUrls.map(u => `🔗 ${u}`).join("\n");
+      return send(msg);
     }
 
     // ══════════════════════════════════════════════════════

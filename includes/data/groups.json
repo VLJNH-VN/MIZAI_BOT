@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-20T08:16:55.894Z",
+  "generatedAt": "2026-03-20T10:05:58.585Z",
   "total": 2,
   "groups": [
     {
@@ -11,7 +11,7 @@
         "desc": "",
         "type": 1,
         "creatorId": "359867629617598110",
-        "version": "1773970985826",
+        "version": "1773999300053",
         "avt": "https://s120-ava-grp-talk.zadn.vn/3/2/6/3/14/120/678191796db41870fea587616885fb4d.jpg",
         "fullAvt": "https://ava-grp-talk.zadn.vn/3/2/6/3/14/360/678191796db41870fea587616885fb4d.jpg",
         "memberIds": [],
@@ -75,7 +75,7 @@
         "globalId": "N0BEFIC9R47B72VAQJVA5JU9VSST22O0",
         "e2ee": 0,
         "pendingApprove": {
-          "time": 1773994615827,
+          "time": 1774001158353,
           "uids": null
         },
         "extraInfo": {
@@ -106,8 +106,8 @@
       ],
       "memberCount": 20,
       "firstSeen": 1773994297925,
-      "profileAt": 1773994615891,
-      "updatedAt": 1773994615891
+      "profileAt": 1774001158582,
+      "updatedAt": 1774001158582
     },
     {
       "groupId": "2480105366650289419",
@@ -156,7 +156,7 @@
         "globalId": "CCJ2EBB4DAK5SPMH76HN5ORB7Q26RI00",
         "e2ee": 0,
         "pendingApprove": {
-          "time": 1773994615825,
+          "time": 1774001158355,
           "uids": null
         },
         "extraInfo": {
@@ -169,8 +169,8 @@
       ],
       "memberCount": 2,
       "firstSeen": 1773994297924,
-      "profileAt": 1773994615891,
-      "updatedAt": 1773994615891
+      "profileAt": 1774001158582,
+      "updatedAt": 1774001158582
     }
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-20T11:36:42.923Z",
+  "generatedAt": "2026-03-20T11:44:04.507Z",
   "total": 15,
   "users": [
     {
@@ -178,6 +178,49 @@
       "updatedAt": 1774006359767
     },
     {
+      "userId": "6024931307373526012",
+      "name": "Đặng Lịnh",
+      "profile": {
+        "userId": "6024931307373526012",
+        "username": "t_m7beb0nfzz",
+        "displayName": "Đặng Lịnh",
+        "zaloName": "Đặng Lịnh",
+        "avatar": "https://s160-ava-talk.zadn.vn/default",
+        "bgavatar": "",
+        "cover": "https://cover-talk.zadn.vn/default",
+        "gender": 0,
+        "dob": 1141491600,
+        "sdob": "05/03/2006",
+        "status": "",
+        "phoneNumber": "",
+        "isFr": 1,
+        "isBlocked": 0,
+        "lastActionTime": 1773994416849,
+        "lastUpdateTime": 1773515919,
+        "isActive": 1,
+        "key": 0,
+        "type": 0,
+        "isActivePC": 0,
+        "isActiveWeb": 1,
+        "isValid": 1,
+        "userKey": "6024931307373526012",
+        "accountStatus": 0,
+        "oaInfo": null,
+        "user_mode": 0,
+        "globalId": "NTSQPNIIJN1MGK1R1T9B54KVLJAHGSG0",
+        "bizPkg": {
+          "label": null,
+          "pkgId": 0
+        },
+        "createdTs": 1685968829,
+        "oa_status": null
+      },
+      "firstSeen": 1773993895117,
+      "msgCount": 48,
+      "profileAt": 1773994417530,
+      "updatedAt": 1774007029692
+    },
+    {
       "userId": "2817603034815564154",
       "name": "Phanh",
       "profile": {
@@ -219,49 +262,6 @@
       "msgCount": 44,
       "profileAt": 1773995359855,
       "updatedAt": 1774001411816
-    },
-    {
-      "userId": "6024931307373526012",
-      "name": "Đặng Lịnh",
-      "profile": {
-        "userId": "6024931307373526012",
-        "username": "t_m7beb0nfzz",
-        "displayName": "Đặng Lịnh",
-        "zaloName": "Đặng Lịnh",
-        "avatar": "https://s160-ava-talk.zadn.vn/default",
-        "bgavatar": "",
-        "cover": "https://cover-talk.zadn.vn/default",
-        "gender": 0,
-        "dob": 1141491600,
-        "sdob": "05/03/2006",
-        "status": "",
-        "phoneNumber": "",
-        "isFr": 1,
-        "isBlocked": 0,
-        "lastActionTime": 1773994416849,
-        "lastUpdateTime": 1773515919,
-        "isActive": 1,
-        "key": 0,
-        "type": 0,
-        "isActivePC": 0,
-        "isActiveWeb": 1,
-        "isValid": 1,
-        "userKey": "6024931307373526012",
-        "accountStatus": 0,
-        "oaInfo": null,
-        "user_mode": 0,
-        "globalId": "NTSQPNIIJN1MGK1R1T9B54KVLJAHGSG0",
-        "bizPkg": {
-          "label": null,
-          "pkgId": 0
-        },
-        "createdTs": 1685968829,
-        "oa_status": null
-      },
-      "firstSeen": 1773993895117,
-      "msgCount": 41,
-      "profileAt": 1773994417530,
-      "updatedAt": 1774006426664
     },
     {
       "userId": "8009347465992207686",
@@ -396,6 +396,52 @@
       "updatedAt": 1774001411325
     },
     {
+      "userId": "5335997498648032109",
+      "name": "Ng Văn Hưng",
+      "profile": {
+        "userId": "5335997498648032109",
+        "username": "t_m7bff0emg6",
+        "displayName": "Ng Văn Hưng",
+        "zaloName": "Ng Văn Hưng",
+        "avatar": "https://s120-25-ava-talk.zadn.vn/30/f906d4d9bc8c3aeabb7b74c68d60561e.jpg?key=UyfyRH4N8XYWqyOOJKEXWg&time=1779178945",
+        "bgavatar": "",
+        "cover": "https://cover-talk.zadn.vn/c/b/e/f/21/f906d4d9bc8c3aeabb7b74c68d60561e.jpg",
+        "gender": 0,
+        "dob": 0,
+        "sdob": "13/03",
+        "status": "𝑻𝑰𝑴𝑬 𝑾𝑶𝑹𝑲 : 𝟕:𝟎𝟎 𝑷𝑴 - 𝟏:𝟎𝟎 𝑨𝑴\nAPI DOCS : https://solarcrystal.qzz.io/docs\nPROFILE : nvhz.wuaze.com/vh",
+        "phoneNumber": "",
+        "isFr": 0,
+        "isBlocked": 0,
+        "lastActionTime": 1773994945490,
+        "lastUpdateTime": 1773201999,
+        "isActive": 1,
+        "key": 0,
+        "type": 0,
+        "isActivePC": 0,
+        "isActiveWeb": 1,
+        "isValid": 1,
+        "userKey": "5335997498648032109",
+        "accountStatus": 0,
+        "oaInfo": null,
+        "user_mode": 0,
+        "globalId": "LOVS4T2T1GPMENUT035J2DKNO7L2N080",
+        "bizPkg": {
+          "label": {
+            "VI": "Business",
+            "EN": "Business"
+          },
+          "pkgId": 1
+        },
+        "createdTs": 1596160238,
+        "oa_status": null
+      },
+      "firstSeen": 1773994945548,
+      "msgCount": 3,
+      "profileAt": 1773994946052,
+      "updatedAt": 1774007000684
+    },
+    {
       "userId": "5641826312517890347",
       "name": "Ng Văn Hưngg",
       "profile": {
@@ -480,9 +526,9 @@
         "oa_status": null
       },
       "firstSeen": 1774002293403,
-      "msgCount": 1,
+      "msgCount": 2,
       "profileAt": 1774002293924,
-      "updatedAt": 1774002293924
+      "updatedAt": 1774006938918
     },
     {
       "userId": "2032412539909151828",
@@ -572,52 +618,6 @@
       "msgCount": 1,
       "profileAt": 1773999295773,
       "updatedAt": 1773999295773
-    },
-    {
-      "userId": "5335997498648032109",
-      "name": "Ng Văn Hưng",
-      "profile": {
-        "userId": "5335997498648032109",
-        "username": "t_m7bff0emg6",
-        "displayName": "Ng Văn Hưng",
-        "zaloName": "Ng Văn Hưng",
-        "avatar": "https://s120-25-ava-talk.zadn.vn/30/f906d4d9bc8c3aeabb7b74c68d60561e.jpg?key=UyfyRH4N8XYWqyOOJKEXWg&time=1779178945",
-        "bgavatar": "",
-        "cover": "https://cover-talk.zadn.vn/c/b/e/f/21/f906d4d9bc8c3aeabb7b74c68d60561e.jpg",
-        "gender": 0,
-        "dob": 0,
-        "sdob": "13/03",
-        "status": "𝑻𝑰𝑴𝑬 𝑾𝑶𝑹𝑲 : 𝟕:𝟎𝟎 𝑷𝑴 - 𝟏:𝟎𝟎 𝑨𝑴\nAPI DOCS : https://solarcrystal.qzz.io/docs\nPROFILE : nvhz.wuaze.com/vh",
-        "phoneNumber": "",
-        "isFr": 0,
-        "isBlocked": 0,
-        "lastActionTime": 1773994945490,
-        "lastUpdateTime": 1773201999,
-        "isActive": 1,
-        "key": 0,
-        "type": 0,
-        "isActivePC": 0,
-        "isActiveWeb": 1,
-        "isValid": 1,
-        "userKey": "5335997498648032109",
-        "accountStatus": 0,
-        "oaInfo": null,
-        "user_mode": 0,
-        "globalId": "LOVS4T2T1GPMENUT035J2DKNO7L2N080",
-        "bizPkg": {
-          "label": {
-            "VI": "Business",
-            "EN": "Business"
-          },
-          "pkgId": 1
-        },
-        "createdTs": 1596160238,
-        "oa_status": null
-      },
-      "firstSeen": 1773994945548,
-      "msgCount": 1,
-      "profileAt": 1773994946052,
-      "updatedAt": 1773994946052
     },
     {
       "userId": "5577225479472062214",

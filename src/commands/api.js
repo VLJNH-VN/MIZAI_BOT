@@ -4,13 +4,74 @@ const os   = require("os");
 
 const LISTAPI_DIR = path.join(process.cwd(), "includes", "listapi");
 
-// ── Helper: Tải URL về file tạm rồi upload lên GitHub ────────────────────────
-async function uploadToGithub(url, fileName) {
-  const tmpPath = path.join(os.tmpdir(), `api_upload_${Date.now()}_${fileName}`);
+// ── Bảng content-type → extension ────────────────────────────────────────────
+const MIME_TO_EXT = {
+  "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov",
+  "video/x-msvideo": "avi", "video/x-matroska": "mkv", "video/3gpp": "3gp",
+  "video/x-flv": "flv", "video/ogg": "ogv",
+  "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/ogg": "ogg",
+  "audio/wav": "wav", "audio/aac": "aac", "audio/flac": "flac",
+  "image/jpeg": "jpg", "image/png": "png", "image/gif": "gif",
+  "image/webp": "webp", "image/bmp": "bmp", "image/svg+xml": "svg",
+};
+
+// ── Magic bytes → extension (fallback khi không có content-type) ──────────────
+function extFromMagic(buf) {
+  if (!buf || buf.length < 4) return null;
+  const b = buf;
+  // JPEG
+  if (b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) return "jpg";
+  // PNG
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47) return "png";
+  // GIF
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return "gif";
+  // WEBM / MKV
+  if (b[0] === 0x1A && b[1] === 0x45 && b[2] === 0xDF && b[3] === 0xA3) return "webm";
+  // MP3 (ID3)
+  if (b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33) return "mp3";
+  // MP3 (sync frame)
+  if (b[0] === 0xFF && (b[1] & 0xE0) === 0xE0) return "mp3";
+  if (buf.length >= 8) {
+    // MP4 / MOV (ftyp box ở byte 4-7)
+    if (b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70) return "mp4";
+  }
+  if (buf.length >= 12) {
+    // AVI (RIFF....AVI )
+    if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+        b[8] === 0x41 && b[9] === 0x56 && b[10] === 0x49) return "avi";
+    // WEBP (RIFF....WEBP)
+    if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+        b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "webp";
+  }
+  return null;
+}
+
+// ── Helper: Tải URL về file tạm, phát hiện đúng định dạng, upload lên GitHub ─
+async function uploadToGithub(url, baseName) {
+  const res = await global.axios.get(url, { responseType: "arraybuffer", timeout: 60000 });
+  const buf = Buffer.from(res.data);
+
+  // Xác định extension: content-type → magic bytes → URL → fallback mp4
+  const ct  = (res.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+  let ext   = MIME_TO_EXT[ct]
+    || extFromMagic(buf)
+    || (() => {
+         try {
+           const p = new URL(url).pathname.split("?")[0];
+           const e = path.extname(p).replace(".", "").toLowerCase();
+           return e || null;
+         } catch { return null; }
+       })()
+    || "mp4";
+
+  // Tên file sạch: bỏ đuôi cũ nếu có, gắn đuôi đúng
+  const nameNoExt = path.basename(baseName).replace(/\.[^.]+$/, "");
+  const fileName  = `${nameNoExt}.${ext}`;
+  const tmpPath   = path.join(os.tmpdir(), `api_upload_${Date.now()}_${fileName}`);
+
   try {
-    const res = await global.axios.get(url, { responseType: "arraybuffer", timeout: 30000 });
-    fs.writeFileSync(tmpPath, Buffer.from(res.data));
-    const repoPath = `listapi/${Date.now()}_${fileName}`;
+    fs.writeFileSync(tmpPath, buf);
+    const repoPath    = `listapi/${Date.now()}_${fileName}`;
     const downloadUrl = await global.githubUpload(tmpPath, repoPath);
     return downloadUrl;
   } finally {

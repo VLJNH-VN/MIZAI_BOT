@@ -215,7 +215,7 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
 
         const meta     = probeStreams(uploadPath);
         const fileSize = fs.statSync(uploadPath).size;
-        logInfo(`[AutoDown] Video: ${path.basename(uploadPath)} (${meta.width}x${meta.height}, ${meta.duration}s, ${(fileSize / 1024 / 1024).toFixed(1)}MB)`);
+        logDebug(`[AutoDown] Video: ${path.basename(uploadPath)} (${meta.width}x${meta.height}, ${meta.duration}s, ${(fileSize / 1024 / 1024).toFixed(1)}MB)`);
 
         // ── Bước 1: GitHub upload → api.sendVideo ────────────────────────────
         // GitHub raw URL vĩnh cửu, Zalo stream được ổn định
@@ -380,7 +380,7 @@ async function handleTikTokTikwm(api, url, threadId, threadType) {
 
 // ─── Handler: TikTok / Douyin / CapCut ─────────────────────────────────────────
 async function handleTikTok(api, url, threadId, threadType) {
-    logInfo(`[AutoDown] TikTok: ${url}`);
+    logDebug(`[AutoDown] TikTok: ${url}`);
 
     // Thử tikwm.com trước (nhanh hơn, có likes count, không watermark)
     try {
@@ -447,7 +447,7 @@ function buildDownloadUrl(webpageUrl, formatId) {
 }
 
 async function handleOther(api, url, threadId, threadType) {
-    logInfo(`[AutoDown] yt-dlp: ${url}`);
+    logDebug(`[AutoDown] yt-dlp: ${url}`);
     const d = await fetchMediaInfo(url);
 
     const title    = d.title?.trim() || "Media";
@@ -584,7 +584,7 @@ function startAutoDown(api) {
 
         if (!isAutoDownEnabled(threadId)) return;
 
-        logInfo(`[AutoDown] Link: ${url}`);
+        logDebug(`[AutoDown] Link: ${url}`);
 
         try {
             fs.mkdirSync(tempDir, { recursive: true });

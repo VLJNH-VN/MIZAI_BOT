@@ -26,7 +26,7 @@ async function logToConsole({ api, event }) {
     content = `[${c.type || "media"}] ${String(extra).slice(0, 80)}`.trim();
   }
 
-  logInfo(`[MSG] ${threadName} | ${senderName} [${senderId}]: ${content || "(no text)"}`);
+  logDebug(`[MSG] ${threadName} | ${senderName} [${senderId}]: ${content || "(no text)"}`);
 }
 
 module.exports = {

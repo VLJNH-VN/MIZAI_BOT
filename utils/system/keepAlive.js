@@ -11,7 +11,7 @@ function startKeepAlive() {
     for (const url of SERVERS) {
       try {
         const res = await axios.get(url, { timeout: 15000 });
-        logInfo(`[UPTIME] Ping ${url} → ${res.status}`);
+        logDebug(`[UPTIME] Ping ${url} → ${res.status}`);
       } catch (err) {
         logWarn(`[UPTIME] Ping ${url} thất bại: ${err?.message}`);
       }

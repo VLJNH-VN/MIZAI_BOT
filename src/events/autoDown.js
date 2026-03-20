@@ -3,9 +3,9 @@
  * AutoDown — tự động tải media từ link chia sẻ trong chat Zalo.
  *
  * - TikTok / Douyin / CapCut → @tobyg74/tiktok-api-dl (trực tiếp, không qua regex)
- * - Tất cả platform khác     → https://yt-dlp-hwys.onrender.com
- *     GET /api/media?url=<url>
- *     GET /api/download?url=<webpage_url>&format=<format_id>
+ * - Tất cả platform khác     → https://fown.onrender.com
+ *     GET /api/media?url=<url>       → trả về metadata + download_url (GitHub Releases)
+ *     GET /api/download?url=<url>&format=<id>  (fallback download proxy)
  */
 
 const axios          = require("axios");
@@ -18,7 +18,7 @@ const { normalizeAttachment } = require("../../includes/handlers/handleUploadAtt
 
 const tempDir       = path.join(process.cwd(), "includes", "cache");
 const SETTINGS_FILE = path.join(process.cwd(), "includes", "data", "auto.json");
-const API_BASE      = "https://yt-dlp-hwys.onrender.com";
+const API_BASE      = "https://fown.onrender.com";
 
 // ─── Danh sách platform hỗ trợ (yt-dlp) — KHÔNG bao gồm TikTok/Douyin/CapCut ─
 const SUPPORTED_LINKS = [
@@ -490,17 +490,43 @@ async function handleOther(api, url, threadId, threadType) {
     }
 
     // Video
-    if (hasVideoFmt) {
+    if (hasVideoFmt || d.download_url) {
+        // Parse width/height từ formats (lấy format có resolution cao nhất)
+        const resFmt = formats
+            .filter(f => f.resolution && f.resolution !== "audio only")
+            .sort((a, b) => {
+                const [aw, ah] = (a.resolution || "0x0").split("x").map(Number);
+                const [bw, bh] = (b.resolution || "0x0").split("x").map(Number);
+                return (bw * bh) - (aw * ah);
+            })[0];
+        let width = 0, height = 0;
+        if (resFmt?.resolution) [width, height] = resFmt.resolution.split("x").map(Number);
+
+        // ── Ưu tiên download_url từ fown API (GitHub Releases, URL vĩnh cửu) ──
+        if (d.download_url) {
+            try {
+                await api.sendVideo({
+                    videoUrl:     d.download_url,
+                    thumbnailUrl: thumbnail || "",
+                    msg:          caption,
+                    width,
+                    height,
+                    duration:     duration * 1000,
+                    ttl:          500_000,
+                }, threadId, threadType);
+                logInfo("[AutoDown] sendVideo (GitHub Releases) thành công.");
+                return;
+            } catch (ev) {
+                logWarn(`[AutoDown] sendVideo GitHub Releases thất bại: ${ev.message}`);
+            }
+        }
+
+        // ── Fallback: proxy download → local convert → GitHub upload ──────────
         const videoFmt = formats.find(f => f.format_id === "no_watermark")
             || formats.find(f => f.quality === "video+audio")
             || formats.find(f => f.vcodec && f.vcodec !== "none" && f.vcodec !== null);
         const videoUrl = buildDownloadUrl(pageUrl, videoFmt?.format_id || "bestvideo+bestaudio/best");
-        await sendVideo(api, videoUrl, {
-            thumbnail,
-            duration,
-            width:  videoFmt?.width  || 0,
-            height: videoFmt?.height || 0,
-        }, caption, threadId, threadType);
+        await sendVideo(api, videoUrl, { thumbnail, duration, width, height }, caption, threadId, threadType);
         return;
     }
 

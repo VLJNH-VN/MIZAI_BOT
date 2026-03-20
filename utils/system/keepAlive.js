@@ -1,7 +1,8 @@
 const axios = require("axios");
 
 const SERVERS = [
-  "https://yt-dlp-hwys.onrender.com/"
+  "https://fown.onrender.com/",
+  "https://yt-dlp-hwys.onrender.com/",
 ];
 
 const INTERVAL_MS = 10 * 60 * 1000; // 10 phút

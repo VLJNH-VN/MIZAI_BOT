@@ -1,5 +1,5 @@
 packages:
-  - 'artifacts/*'
+  - '.'
 
 catalog:
   '@replit/vite-plugin-cartographer': ^0.5.0

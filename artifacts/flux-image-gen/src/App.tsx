@@ -175,17 +175,16 @@ function GeneratorTab() {
 }
 
 // ─── Management Tab ───────────────────────────────────────────────────────────
-interface MeInfo { ip: string; keyReady: boolean; type: string; quota: { used: number; limit: number | string; remaining?: number } }
+interface MeInfo { ip: string; key: string | null; type: string; quota: { used: number; limit: number | string; remaining?: number } }
 interface CFCred { index: number; label: string; accountId: string; token: string; dailyUsage: number; exhausted: boolean; active: boolean }
 
 function ManagementTab() {
   const [me, setMe] = useState<MeInfo | null>(null);
-  const [myKey, setMyKey] = useState<string | null>(null);
+  const [showKey, setShowKey] = useState(false);
   const [cfAccountId, setCfAccountId] = useState("");
   const [cfToken, setCfToken] = useState("");
   const [vipKey, setVipKey] = useState("");
   const [loadingMe, setLoadingMe] = useState(false);
-  const [loadingRegister, setLoadingRegister] = useState(false);
   const [loadingVip, setLoadingVip] = useState(false);
   const [showToken, setShowToken] = useState(false);
 
@@ -202,26 +201,14 @@ function ManagementTab() {
     setLoadingMe(true);
     try {
       const res = await fetch(api("/me"));
-      const data = await res.json();
+      const data = await res.json() as MeInfo;
       setMe(data);
+      if (data.key && !vipKey) setVipKey(data.key);
     } catch { toast.error("Không thể lấy thông tin"); }
     finally { setLoadingMe(false); }
   }, []);
 
   useEffect(() => { fetchMe(); }, [fetchMe]);
-
-  const handleRegister = async () => {
-    setLoadingRegister(true);
-    try {
-      const res = await fetch(api("/key/register"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
-      const data = await res.json() as { key?: string; error?: string; note?: string };
-      if (!res.ok) { toast.error(data.error || "Lỗi đăng ký"); return; }
-      setMyKey(data.key!);
-      toast.success("Đã tạo key! " + (data.note || ""));
-      fetchMe();
-    } catch { toast.error("Lỗi kết nối"); }
-    finally { setLoadingRegister(false); }
-  };
 
   const handleUpgradeVip = async () => {
     if (!vipKey || !cfAccountId || !cfToken) { toast.error("Vui lòng điền đầy đủ thông tin"); return; }
@@ -234,7 +221,6 @@ function ManagementTab() {
       });
       const data = await res.json() as { key?: string; status?: string; error?: string; note?: string; addedToPool?: boolean };
       if (!res.ok) { toast.error(data.error || "Lỗi nâng cấp"); return; }
-      setMyKey(data.key!);
       toast.success(`${data.status} ${data.addedToPool ? "— Đã thêm vào pool!" : ""}`);
       fetchMe();
     } catch { toast.error("Lỗi kết nối"); }
@@ -325,27 +311,28 @@ function ManagementTab() {
                 <div className="bg-primary h-2 rounded-full transition-all" style={{ width: `${Math.min(100, (Number(me.quota.used) / Number(me.quota.limit)) * 100)}%` }} />
               </div>
             )}
+
+            {/* Key luôn hiển thị */}
+            {me.key && (
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-primary">🔑 Key của bạn</p>
+                  <button onClick={() => setShowKey(v => !v)} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                    {showKey ? <><EyeOff className="w-3 h-3" />Ẩn</> : <><Eye className="w-3 h-3" />Hiện</>}
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-sm bg-background rounded px-3 py-2 font-mono text-primary">
+                    {showKey ? me.key : "FLUX-••••••-••••••-••••••"}
+                  </code>
+                  <button onClick={() => { navigator.clipboard.writeText(me.key!); toast.success("Đã sao chép key!"); }} className="p-2 rounded-lg bg-primary/10 hover:bg-primary/20 transition-all">
+                    <Copy className="w-4 h-4 text-primary" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : null}
-
-        {/* Key hiển thị sau khi đăng ký */}
-        {myKey && (
-          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 space-y-2">
-            <p className="text-xs text-green-400 font-semibold">⚠️ Key của bạn — chỉ hiển thị 1 lần duy nhất!</p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 text-sm bg-background rounded px-3 py-2 font-mono text-green-300">{myKey}</code>
-              <button onClick={() => { navigator.clipboard.writeText(myKey); toast.success("Đã sao chép!"); }} className="p-2 rounded-lg bg-green-500/20 hover:bg-green-500/30 transition-all"><Copy className="w-4 h-4 text-green-400" /></button>
-            </div>
-            <p className="text-xs text-muted-foreground">Hãy lưu giữ key này cẩn thận. Bạn sẽ không thể xem lại.</p>
-          </div>
-        )}
-
-        {!me?.keyReady && (
-          <button onClick={handleRegister} disabled={loadingRegister} className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition-all">
-            {loadingRegister ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
-            {loadingRegister ? "Đang tạo..." : "Lấy Key Free của tôi"}
-          </button>
-        )}
       </div>
 
       {/* Nâng cấp VIP */}

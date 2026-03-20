@@ -442,34 +442,44 @@ app.post("/api/key/vip", async (req, res) => {
     type: "vip",
     status: "✅ Token Cloudflare hợp lệ (đang sống)",
     addedToPool: existingIdx === -1,
-    note: "⚠️ Key VIP chỉ hiển thị 1 lần duy nhất. Hãy lưu giữ cẩn thận!",
+    note: "Key VIP đã được lưu. Dùng /api/key/info để xem lại bất cứ lúc nào.",
   });
 });
 
-// GET /api/key/info — xem thông tin key (không hiển thị lại key)
+// GET /api/key/info — xem thông tin key (free & VIP, luôn hiển thị key)
+// Hỗ trợ: ?key=xxx (tra theo key) hoặc không truyền gì (tra theo IP)
 app.get("/api/key/info", (req, res) => {
-  const key = req.query.key as string;
-  if (!key) {
-    res.status(400).json({ error: "Thiếu key" });
-    return;
-  }
-
   const db = loadDB();
-  const [, user] = findUserByKey(db, key);
+  let user: UserData | null = null;
 
-  if (!user) {
-    res.status(404).json({ error: "Key không tồn tại" });
-    return;
+  const queryKey = req.query.key as string | undefined;
+  if (queryKey) {
+    const [, found] = findUserByKey(db, queryKey);
+    user = found;
+    if (!user) {
+      res.status(404).json({ error: "Key không tồn tại" });
+      return;
+    }
+  } else {
+    const ip = getClientIP(req);
+    const [ipId, found] = getOrCreateUserByIP(db, ip);
+    found.keyShown = true;
+    db.users[ipId] = found;
+    saveDB(db);
+    user = found;
   }
 
   const u = resetQuotaIfNeeded(user);
   res.json({
+    key: u.key,
     type: u.type,
     registeredAt: u.registeredAt,
-    quota: u.type === "free"
-      ? { used: u.dailyUsage, limit: FREE_DAILY_QUOTA, remaining: FREE_DAILY_QUOTA - u.dailyUsage }
-      : { used: u.dailyUsage, limit: "không giới hạn" },
-    cfStatus: u.type === "vip" ? "configured" : "using default",
+    quota: {
+      used: u.dailyUsage,
+      limit: u.type === "free" ? FREE_DAILY_QUOTA : "không giới hạn",
+      remaining: u.type === "free" ? Math.max(0, FREE_DAILY_QUOTA - u.dailyUsage) : "không giới hạn",
+    },
+    cfStatus: u.type === "vip" ? "configured" : "using pool",
   });
 });
 

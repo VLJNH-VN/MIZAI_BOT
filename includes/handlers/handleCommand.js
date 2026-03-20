@@ -165,26 +165,6 @@ async function handleCommand({ api, event, commands, prefix }) {
     const isGroup = event.type === ThreadType.Group;
     const send = buildSend(api, raw, threadID, event.type);
 
-    // ── Prefix một mình (gõ "!" hoặc "@Bot !") → hiện help ───────────────────
-    if (!withoutPrefix) {
-      if (isGroup && threadID) trackGroupForBroadcast(threadID);
-      const helpCmd = commands.get("help") || commands.get("menu");
-      if (helpCmd) {
-        await helpCmd.run({
-          api, event, args: [], send, commands, prefix: effectivePrefix,
-          commandName: "help", senderId, threadID, isGroup,
-          isBotAdmin, isGroupAdmin, registerReply, registerReaction, registerUndo
-        });
-      }
-      return;
-    }
-
-    const parts = withoutPrefix.split(/\s+/);
-    const commandName = parts.shift().toLowerCase();
-    const args = parts;
-
-    if (isGroup && threadID) trackGroupForBroadcast(threadID);
-
     // ── Kiểm tra thuê bot (chỉ trong nhóm, bỏ qua admin bot) ─────────────────
     if (isGroup && threadID && !isBotAdmin(senderId)) {
       const thuebot = readThuebot();
@@ -224,6 +204,26 @@ async function handleCommand({ api, event, commands, prefix }) {
         return;
       }
     }
+
+    // ── Prefix một mình (gõ "!" hoặc "@Bot !") → hiện help ───────────────────
+    /*if (!withoutPrefix) {
+      if (isGroup && threadID) trackGroupForBroadcast(threadID);
+      const helpCmd = commands.get("help") || commands.get("menu");
+      if (helpCmd) {
+        await helpCmd.run({
+          api, event, args: [], send, commands, prefix: effectivePrefix,
+          commandName: "help", senderId, threadID, isGroup,
+          isBotAdmin, isGroupAdmin, registerReply, registerReaction, registerUndo
+        });
+      }
+      return;
+    }*/
+
+    const parts = withoutPrefix.split(/\s+/);
+    const commandName = parts.shift().toLowerCase();
+    const args = parts;
+
+    if (isGroup && threadID) trackGroupForBroadcast(threadID);
 
     const command = commands.get(commandName);
 

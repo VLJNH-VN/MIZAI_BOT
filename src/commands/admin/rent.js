@@ -219,9 +219,6 @@ module.exports = {
 
     // ── Hướng dẫn sử dụng ────────────────────────────────────────────────────
     return send(
-      `╔══ LỆNH RENT ══╗\n` +
-      `  ${prefix}rent\n` +
-      `╚═══════════════╝\n` +
       `📋 Các lệnh con:\n` +
       `  ${prefix}rent add [ngày]   — Thêm / gia hạn (mặc định 30)\n` +
       `  ${prefix}rent del          — Xóa thuê bot nhóm này\n` +

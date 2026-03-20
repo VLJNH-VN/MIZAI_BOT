@@ -26,10 +26,76 @@ const ai = geminiBaseUrl
     })
   : null;
 
-// ── Default Cloudflare credentials ────────────────────────────────────────
-const DEFAULT_CF_ACCOUNT_ID = "dc82ef97b674ecfcea390c10298fccb0";
-const DEFAULT_CF_TOKEN = "cfut_byvmekovIfEF2eZRsmz4lmPagI1An1XGOVkufSbra47c0640";
+// ── Quota ──────────────────────────────────────────────────────────────────
 const FREE_DAILY_QUOTA = 50;
+
+// ── CF Credential pool ─────────────────────────────────────────────────────
+const CREDS_FILE = path.join(__dirname, "data", "credentials.json");
+
+interface CFAccount {
+  label: string;
+  accountId: string;
+  token: string;
+  dailyUsage: number;
+  lastReset: string;
+  exhausted: boolean;
+}
+
+interface CredsDB {
+  currentIndex: number;
+  accounts: CFAccount[];
+}
+
+function loadCreds(): CredsDB {
+  try {
+    return JSON.parse(fs.readFileSync(CREDS_FILE, "utf-8"));
+  } catch {
+    return { currentIndex: 0, accounts: [] };
+  }
+}
+
+function saveCreds(db: CredsDB): void {
+  fs.writeFileSync(CREDS_FILE, JSON.stringify(db, null, 2));
+}
+
+function resetCredIfNeeded(acc: CFAccount): CFAccount {
+  if (acc.lastReset !== new Date().toISOString().slice(0, 10)) {
+    acc.dailyUsage = 0;
+    acc.lastReset = new Date().toISOString().slice(0, 10);
+    acc.exhausted = false;
+  }
+  return acc;
+}
+
+// Lấy credential đang hoạt động, xoay vòng nếu hết quota
+function getActiveCred(): CFAccount | null {
+  const db = loadCreds();
+  if (!db.accounts.length) return null;
+
+  // Reset quota ngày mới cho tất cả accounts
+  db.accounts = db.accounts.map(resetCredIfNeeded);
+
+  // Tìm account chưa exhausted bắt đầu từ currentIndex
+  for (let i = 0; i < db.accounts.length; i++) {
+    const idx = (db.currentIndex + i) % db.accounts.length;
+    if (!db.accounts[idx].exhausted) {
+      db.currentIndex = idx;
+      saveCreds(db);
+      return db.accounts[idx];
+    }
+  }
+  return null; // Tất cả đã hết
+}
+
+// Đánh dấu credential hiện tại đã hết quota và chuyển sang cái tiếp theo
+function exhaustCurrentCred(): void {
+  const db = loadCreds();
+  if (!db.accounts.length) return;
+  db.accounts[db.currentIndex].exhausted = true;
+  // Chuyển sang cái tiếp theo
+  db.currentIndex = (db.currentIndex + 1) % db.accounts.length;
+  saveCreds(db);
+}
 
 // ── Key data store ─────────────────────────────────────────────────────────
 const KEYS_FILE = path.join(__dirname, "data", "keys.json");
@@ -133,14 +199,14 @@ async function verifyCF(accountId: string, token: string): Promise<boolean> {
   }
 }
 
-async function generateImageCF(
-  prompt: string,
+async function callCFOnce(
   accountId: string,
   token: string,
-  width = 1024,
-  height = 1024,
-  steps = 4
-): Promise<{ image: string; mimeType: string }> {
+  prompt: string,
+  width: number,
+  height: number,
+  steps: number
+): Promise<{ image: string; mimeType: string } | { quota: true }> {
   const cfRes = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-1-schnell`,
     {
@@ -150,8 +216,15 @@ async function generateImageCF(
     }
   );
 
+  // 429 hoặc lỗi quota → báo cần xoay vòng
+  if (cfRes.status === 429) return { quota: true };
+
   if (!cfRes.ok) {
     const errText = await cfRes.text();
+    // Một số lỗi quota trả về 400 với message cụ thể
+    if (errText.includes("exceeded") || errText.includes("quota") || errText.includes("limit")) {
+      return { quota: true };
+    }
     throw new Error(`Cloudflare API lỗi ${cfRes.status}: ${errText}`);
   }
 
@@ -159,11 +232,73 @@ async function generateImageCF(
   if (contentType.includes("application/json")) {
     const data = await cfRes.json() as { result?: { image?: string }; errors?: Array<{ message: string }> };
     if (data.result?.image) return { image: data.result.image, mimeType: "image/png" };
-    throw new Error(data.errors?.[0]?.message || "Không nhận được ảnh từ Cloudflare");
+    const errMsg = data.errors?.[0]?.message || "";
+    if (errMsg.includes("exceeded") || errMsg.includes("quota") || errMsg.includes("limit")) {
+      return { quota: true };
+    }
+    throw new Error(errMsg || "Không nhận được ảnh từ Cloudflare");
   }
 
   const buf = await cfRes.arrayBuffer();
   return { image: Buffer.from(buf).toString("base64"), mimeType: "image/png" };
+}
+
+// Tạo ảnh với tự động xoay vòng credentials khi hết quota
+async function generateImageCF(
+  prompt: string,
+  preferredAccountId?: string,
+  preferredToken?: string,
+  width = 1024,
+  height = 1024,
+  steps = 4
+): Promise<{ image: string; mimeType: string }> {
+  // VIP user dùng credentials riêng (không xoay vòng)
+  if (preferredAccountId && preferredToken) {
+    const result = await callCFOnce(preferredAccountId, preferredToken, prompt, width, height, steps);
+    if ("quota" in result) throw new Error("Token VIP của bạn đã hết quota hoặc không hợp lệ. Vui lòng cập nhật tại /api/key/vip");
+    return result;
+  }
+
+  // Free user → thử lần lượt từng credential trong pool
+  const db = loadCreds();
+  db.accounts = db.accounts.map(resetCredIfNeeded);
+  saveCreds(db);
+
+  const tried = new Set<number>();
+  let startIdx = db.currentIndex;
+
+  for (let i = 0; i < db.accounts.length; i++) {
+    const idx = (startIdx + i) % db.accounts.length;
+    if (tried.has(idx)) continue;
+    const acc = db.accounts[idx];
+    if (acc.exhausted) continue;
+
+    tried.add(idx);
+
+    try {
+      const result = await callCFOnce(acc.accountId, acc.token, prompt, width, height, steps);
+
+      if ("quota" in result) {
+        // Hết quota → đánh dấu và sang cái tiếp
+        console.log(`[CF Rotate] Account "${acc.label}" hết quota → chuyển sang tiếp theo`);
+        db.accounts[idx].exhausted = true;
+        db.currentIndex = (idx + 1) % db.accounts.length;
+        saveCreds(db);
+        startIdx = db.currentIndex;
+        continue;
+      }
+
+      // Thành công → tăng usage
+      db.accounts[idx].dailyUsage++;
+      db.currentIndex = idx;
+      saveCreds(db);
+      return result;
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  throw new Error("Tất cả CF accounts đã hết quota hôm nay. Vui lòng thêm account mới qua /api/admin/credentials hoặc chờ ngày mai.");
 }
 
 // ── Styles & Sizes ─────────────────────────────────────────────────────────
@@ -343,11 +478,11 @@ app.get("/api/sizes", (_req, res) => res.json({ sizes: SIZES }));
 //  GENERATE ENDPOINTS (yêu cầu key)
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Helper: resolve user from key or IP, check & increment quota
+// Helper: resolve user từ key hoặc IP, kiểm tra quota
 function resolveUser(
   req: express.Request,
   key: string | undefined
-): { ok: boolean; error?: string; cfAccountId: string; cfToken: string; db?: KeysDB; ipId?: string; user?: UserData } {
+): { ok: boolean; error?: string; vipAccountId?: string; vipToken?: string; db?: KeysDB; ipId?: string; user?: UserData } {
   const db = loadDB();
   let ipId: string;
   let user: UserData;
@@ -355,7 +490,7 @@ function resolveUser(
   if (key) {
     const [foundId, foundUser] = findUserByKey(db, key);
     if (!foundId || !foundUser) {
-      return { ok: false, error: "Key không hợp lệ. Đăng ký tại POST /api/key/register", cfAccountId: DEFAULT_CF_ACCOUNT_ID, cfToken: DEFAULT_CF_TOKEN };
+      return { ok: false, error: "Key không hợp lệ. Đăng ký tại POST /api/key/register" };
     }
     ipId = foundId;
     user = foundUser;
@@ -368,18 +503,18 @@ function resolveUser(
 
   const u = resetQuotaIfNeeded(user);
   if (u.type === "free" && u.dailyUsage >= FREE_DAILY_QUOTA) {
-    return {
-      ok: false,
-      error: `Đã dùng hết ${FREE_DAILY_QUOTA} ảnh/ngày cho IP này. Nâng cấp VIP hoặc thêm CF token của bạn.`,
-      cfAccountId: DEFAULT_CF_ACCOUNT_ID,
-      cfToken: DEFAULT_CF_TOKEN,
-    };
+    return { ok: false, error: `Đã dùng hết ${FREE_DAILY_QUOTA} ảnh/ngày. Nâng cấp VIP hoặc thêm CF token của bạn.` };
   }
 
-  const cfAccountId = u.type === "vip" && u.cfAccountId ? u.cfAccountId : DEFAULT_CF_ACCOUNT_ID;
-  const cfToken = u.type === "vip" && u.cfToken ? u.cfToken : DEFAULT_CF_TOKEN;
-
-  return { ok: true, cfAccountId, cfToken, db, ipId, user: u };
+  // VIP → trả về credentials riêng; free → undefined (pool tự xử lý)
+  return {
+    ok: true,
+    vipAccountId: u.type === "vip" && u.cfAccountId ? u.cfAccountId : undefined,
+    vipToken: u.type === "vip" && u.cfToken ? u.cfToken : undefined,
+    db,
+    ipId,
+    user: u,
+  };
 }
 
 // POST /api/generate-prompt
@@ -458,7 +593,7 @@ app.post("/api/generate-image", async (req, res) => {
   }
 
   try {
-    const result = await generateImageCF(prompt, resolved.cfAccountId, resolved.cfToken, width, height, steps);
+    const result = await generateImageCF(prompt, resolved.vipAccountId, resolved.vipToken, width, height, steps);
     res.json(result);
   } catch (err: unknown) {
     console.error("Cloudflare error:", err);
@@ -519,13 +654,100 @@ Rules:
     });
 
     const generatedPrompt = promptResponse.text?.trim() || idea;
-    const result = await generateImageCF(generatedPrompt, resolved.cfAccountId, resolved.cfToken, width, height, steps);
+    const result = await generateImageCF(generatedPrompt, resolved.vipAccountId, resolved.vipToken, width, height, steps);
 
     res.json({ prompt: generatedPrompt, ...result });
   } catch (err: unknown) {
     console.error("generate-all error:", err);
     res.status(500).json({ error: "Lỗi: " + (err as Error).message });
   }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  ADMIN ENDPOINTS — quản lý CF credentials pool
+// ══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/admin/credentials — xem danh sách (token ẩn bớt)
+app.get("/api/admin/credentials", (_req, res) => {
+  const db = loadCreds();
+  db.accounts = db.accounts.map(resetCredIfNeeded);
+  saveCreds(db);
+  res.json({
+    currentIndex: db.currentIndex,
+    total: db.accounts.length,
+    accounts: db.accounts.map((a, i) => ({
+      index: i,
+      label: a.label,
+      accountId: a.accountId,
+      token: a.token.slice(0, 8) + "****" + a.token.slice(-4),
+      dailyUsage: a.dailyUsage,
+      exhausted: a.exhausted,
+      active: i === db.currentIndex,
+    })),
+  });
+});
+
+// POST /api/admin/credentials — thêm account mới
+app.post("/api/admin/credentials", (req, res) => {
+  const { accountId, token, label } = req.body as { accountId: string; token: string; label?: string };
+  if (!accountId || !token) {
+    res.status(400).json({ error: "Thiếu accountId hoặc token" });
+    return;
+  }
+  const db = loadCreds();
+  const newAcc: CFAccount = {
+    label: label || `Account ${db.accounts.length + 1}`,
+    accountId,
+    token,
+    dailyUsage: 0,
+    lastReset: today(),
+    exhausted: false,
+  };
+  db.accounts.push(newAcc);
+  saveCreds(db);
+  res.json({
+    success: true,
+    message: `Đã thêm "${newAcc.label}" vào pool. Tổng: ${db.accounts.length} account(s).`,
+    index: db.accounts.length - 1,
+  });
+});
+
+// DELETE /api/admin/credentials/:index — xóa account
+app.delete("/api/admin/credentials/:index", (req, res) => {
+  const idx = parseInt(req.params.index);
+  const db = loadCreds();
+  if (isNaN(idx) || idx < 0 || idx >= db.accounts.length) {
+    res.status(404).json({ error: "Index không hợp lệ" });
+    return;
+  }
+  const removed = db.accounts.splice(idx, 1)[0];
+  if (db.currentIndex >= db.accounts.length) db.currentIndex = 0;
+  saveCreds(db);
+  res.json({ success: true, message: `Đã xóa "${removed.label}"` });
+});
+
+// POST /api/admin/credentials/:index/reset — reset quota của 1 account
+app.post("/api/admin/credentials/:index/reset", (req, res) => {
+  const idx = parseInt(req.params.index);
+  const db = loadCreds();
+  if (isNaN(idx) || idx < 0 || idx >= db.accounts.length) {
+    res.status(404).json({ error: "Index không hợp lệ" });
+    return;
+  }
+  db.accounts[idx].dailyUsage = 0;
+  db.accounts[idx].exhausted = false;
+  db.accounts[idx].lastReset = today();
+  saveCreds(db);
+  res.json({ success: true, message: `Đã reset quota cho "${db.accounts[idx].label}"` });
+});
+
+// POST /api/admin/credentials/reset-all — reset tất cả
+app.post("/api/admin/credentials/reset-all", (_req, res) => {
+  const db = loadCreds();
+  db.accounts = db.accounts.map(a => ({ ...a, dailyUsage: 0, exhausted: false, lastReset: today() }));
+  db.currentIndex = 0;
+  saveCreds(db);
+  res.json({ success: true, message: `Đã reset quota cho tất cả ${db.accounts.length} account(s)` });
 });
 
 app.listen(API_PORT, () => {

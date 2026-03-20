@@ -52,3 +52,4 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
+CLOUDFLARE_API_TOKEN = "cfut_vyhFLWn4n22JD5cTirGdvB7QLcfmRcA6wUNWUX5R98ccd0d6"

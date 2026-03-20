@@ -200,9 +200,13 @@ async function initSchema(db) {
   if (!userCols.includes("first_seen"))    await run(db, "ALTER TABLE users  ADD COLUMN first_seen  INTEGER DEFAULT 0").catch(() => {});
   if (!userCols.includes("msg_count"))     await run(db, "ALTER TABLE users  ADD COLUMN msg_count   INTEGER DEFAULT 0").catch(() => {});
   if (!userCols.includes("profile_at"))    await run(db, "ALTER TABLE users  ADD COLUMN profile_at  INTEGER DEFAULT 0").catch(() => {});
+  if (!userCols.includes("gender"))        await run(db, "ALTER TABLE users  ADD COLUMN gender TEXT DEFAULT 'Unknown'").catch(() => {});
   if (!groupCols.includes("member_count")) await run(db, "ALTER TABLE groups ADD COLUMN member_count INTEGER DEFAULT 0").catch(() => {});
   if (!groupCols.includes("first_seen"))   await run(db, "ALTER TABLE groups ADD COLUMN first_seen  INTEGER DEFAULT 0").catch(() => {});
   if (!groupCols.includes("profile_at"))   await run(db, "ALTER TABLE groups ADD COLUMN profile_at  INTEGER DEFAULT 0").catch(() => {});
+  if (!groupCols.includes("prefix"))       await run(db, "ALTER TABLE groups ADD COLUMN prefix TEXT DEFAULT '.'").catch(() => {});
+  if (!groupCols.includes("rankup"))       await run(db, "ALTER TABLE groups ADD COLUMN rankup INTEGER DEFAULT 0").catch(() => {});
+  if (!groupCols.includes("settings"))     await run(db, "ALTER TABLE groups ADD COLUMN settings TEXT").catch(() => {});
 
   await run(db, "CREATE INDEX IF NOT EXISTS idx_users_updated_at  ON users(updated_at);").catch(() => {});
   await run(db, "CREATE INDEX IF NOT EXISTS idx_groups_updated_at ON groups(updated_at);").catch(() => {});

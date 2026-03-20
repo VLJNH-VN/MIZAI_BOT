@@ -118,17 +118,26 @@ async function handleCommand({ api, event, commands, prefix }) {
     let body = extractBody(raw);
     if (!body) return;
 
+    // ── Lấy prefix riêng nhóm (nếu là tin nhắn nhóm) ─────────────────────────
+    const isGroupMsg = event.type === ThreadType.Group;
+    let effectivePrefix = prefix;
+    if (isGroupMsg && event.threadId && global.Threads) {
+      try {
+        effectivePrefix = await global.Threads.getPrefix(event.threadId);
+      } catch (_) {}
+    }
+
     // ── Strip leading @mention(s): "@Tên người !lệnh" → "!lệnh" ──────────────
-    if (!body.startsWith(prefix)) {
-      const idx = body.indexOf(prefix);
+    if (!body.startsWith(effectivePrefix)) {
+      const idx = body.indexOf(effectivePrefix);
       if (idx > 0 && /^@/.test(body.slice(0, idx).trim())) {
         body = body.slice(idx);
       }
     }
 
-    if (!body.startsWith(prefix)) return;
+    if (!body.startsWith(effectivePrefix)) return;
 
-    const withoutPrefix = body.slice(prefix.length).trim();
+    const withoutPrefix = body.slice(effectivePrefix.length).trim();
 
     const senderId = getSenderId(raw);
     const threadID = event.threadId;
@@ -141,7 +150,7 @@ async function handleCommand({ api, event, commands, prefix }) {
       const helpCmd = commands.get("help") || commands.get("menu");
       if (helpCmd) {
         await helpCmd.run({
-          api, event, args: [], send, commands, prefix,
+          api, event, args: [], send, commands, prefix: effectivePrefix,
           commandName: "help", senderId, threadID, isGroup,
           isBotAdmin, isGroupAdmin, registerReply, registerReaction, registerUndo
         });
@@ -171,17 +180,17 @@ async function handleCommand({ api, event, commands, prefix }) {
       const { bestMatch } = stringSimilarity.findBestMatch(commandName, mainNames);
       const suggestion =
         bestMatch.rating >= 0.3
-          ? `${prefix}${bestMatch.target}`
-          : `${prefix}help`;
+          ? `${effectivePrefix}${bestMatch.target}`
+          : `${effectivePrefix}help`;
 
       let userName = senderId;
       try { userName = await resolveSenderName({ api, userId: senderId }); } catch {}
 
       await send(
-        `❓ Không tìm thấy lệnh: ${prefix}${commandName}\n` +
+        `❓ Không tìm thấy lệnh: ${effectivePrefix}${commandName}\n` +
         `👤 ${userName}\n` +
         `💡 Ý bạn là: ${suggestion} ?\n` +
-        `📋 Gõ ${prefix}help để xem danh sách lệnh.\n` +
+        `📋 Gõ ${effectivePrefix}help để xem danh sách lệnh.\n` +
         `⏰ Uptime: ${formatUptime()}`
       );
       return;
@@ -218,7 +227,7 @@ async function handleCommand({ api, event, commands, prefix }) {
       args,
       send,
       commands,
-      prefix,
+      prefix: effectivePrefix,
       commandName: canonicalName,
       senderId,
       threadID,

@@ -12,7 +12,23 @@
  * │  global.api          │ Zalo API instance (set sau khi login)           │
  * │  global.botId        │ Zalo ID của bot (string)                        │
  * │  global.commands     │ Map<name, command> tất cả lệnh đang nạp         │
- * │  global.prefix       │ Prefix hiện tại (vd: ".")                       │
+ * │  global.prefix       │ Prefix mặc định toàn cục (vd: ".")              │
+ * ├──────────────────────┬──────────────────────────────────────────────────┤
+ * │  global.Users        │ Controller người dùng (AURABOT-style)           │
+ * │    .getData(uid, name?, gender?)  → { uid,name,gender,money,exp,... }  │
+ * │    .getInfo(uid)      → object|null                                    │
+ * │    .setGender(uid, gender)  / .getGender(uid) → string                 │
+ * │    .addMoney(uid, n)  → number  | .decreaseMoney(uid, n) → boolean     │
+ * │    .addExp(uid, n)    → number  | .getTopMoney/Exp(limit) → array      │
+ * ├──────────────────────┬──────────────────────────────────────────────────┤
+ * │  global.Threads      │ Controller nhóm (AURABOT-style)                 │
+ * │    .getPrefix(id)    → string   prefix riêng nhóm (cache 5 phút)      │
+ * │    .setPrefix(id, p)            lưu prefix và xoá cache                │
+ * │    .getRankup(id)    → boolean  | .setRankup(id, v)                    │
+ * │    .getSettings(id)  → object   | .setSettings(id, obj)                │
+ * │    .getSetting(id, key, def?) → any | .setSetting(id, key, val)        │
+ * │    .getData(id, name?) → row đầy đủ từ DB                              │
+ * │    .clearPrefixCache(id?) → void                                       │
  * ├──────────────────────┬──────────────────────────────────────────────────┤
  * │  global.axios        │ HTTP client (axios)                             │
  * ├──────────────────────┬──────────────────────────────────────────────────┤
@@ -89,6 +105,8 @@ const { processGaiData, resolveQuote }        = require("../bot/messageUtils");
 const msgCache                                = require("../../includes/database/messageCache");
 const groupLoader                             = require("../../includes/database/groupLoader");
 const dataManager                             = require("../../includes/database/dataManager");
+const userController                          = require("../../includes/database/userController");
+const groupSettings                           = require("../../includes/database/groupSettings");
 
 // ── Logger ────────────────────────────────────────────────────────────────────
 global.logInfo   = logInfo;
@@ -138,6 +156,31 @@ global.groupLoader = groupLoader;
 // global.db.saveSnapshot()
 // global.db.getStats()
 global.db = dataManager;
+
+// ── Users controller (AURABOT-style) ─────────────────────────────────────────
+// global.Users.getData(uid, name?, gender?)   → { uid, name, gender, money, exp, ... }
+// global.Users.getInfo(uid)                   → object|null
+// global.Users.setGender(uid, gender)         → void
+// global.Users.getGender(uid)                 → string  ("Male"/"Female"/"Unknown")
+// global.Users.addMoney(uid, amount)          → number  (số dư mới)
+// global.Users.decreaseMoney(uid, amount)     → boolean (false nếu không đủ)
+// global.Users.addExp(uid, amount)            → number  (exp mới)
+// global.Users.getTopMoney(limit?)            → array
+// global.Users.getTopExp(limit?)              → array
+global.Users = userController;
+
+// ── Threads controller (AURABOT-style) ───────────────────────────────────────
+// global.Threads.getPrefix(threadId)              → string  prefix riêng nhóm
+// global.Threads.setPrefix(threadId, prefix)      → void
+// global.Threads.getRankup(threadId)              → boolean
+// global.Threads.setRankup(threadId, value)       → void
+// global.Threads.getSettings(threadId)            → object  toàn bộ settings
+// global.Threads.getSetting(threadId, key, def?)  → any     một key
+// global.Threads.setSetting(threadId, key, value) → void
+// global.Threads.setSettings(threadId, obj)       → void
+// global.Threads.getData(threadId, name?)         → object  row đầy đủ
+// global.Threads.clearPrefixCache(threadId?)      → void
+global.Threads = groupSettings;
 
 // ── Xử lý video gai ──────────────────────────────────────────────────────────
 global.processGaiData = processGaiData;

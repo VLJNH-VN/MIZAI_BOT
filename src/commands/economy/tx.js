@@ -7,11 +7,11 @@
 
 const fs   = require("fs");
 const path = require("path");
-const { registerReply } = require("../../includes/handlers/handleReply");
-const { getUserMoney, updateUserMoney } = require("../../includes/database/economy");
-const { resolveSenderName }             = require("../../includes/database/infoCache");
-const { isBotAdmin, isGroupAdmin }      = require("../../utils/bot/botManager");
-const { parseMentionIds }               = require("../../utils/bot/messageUtils");
+const { registerReply } = require('../../../includes/handlers/handleReply');
+const { getUserMoney, updateUserMoney } = require('../../../includes/database/economy');
+const { resolveSenderName }             = require('../../../includes/database/infoCache');
+const { isBotAdmin, isGroupAdmin }      = require('../../../utils/bot/botManager');
+const { parseMentionIds }               = require('../../../utils/bot/messageUtils');
 
 const ROOT       = process.cwd();
 const TX_DIR     = path.join(ROOT, "includes", "data", "taixiu");

@@ -9,7 +9,7 @@
 const fs   = require("fs");
 const path = require("path");
 const { ThreadType } = require("zca-js");
-const { registerReaction } = require("../../includes/handlers/handleReaction");
+const { registerReaction } = require('../../../includes/handlers/handleReaction');
 
 const DATA_FILE   = path.join(process.cwd(), "includes", "data", "auto_xo_so.json");
 const GROUPS_FILE = path.join(process.cwd(), "includes", "database", "groupsCache.json");

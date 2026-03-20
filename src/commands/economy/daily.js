@@ -1,5 +1,5 @@
-const { claimDaily, formatMoney, formatTime, getLevel } = require("../../includes/database/economy");
-const { resolveSenderName } = require("../../includes/database/infoCache");
+const { claimDaily, formatMoney, formatTime, getLevel } = require('../../../includes/database/economy');
+const { resolveSenderName } = require('../../../includes/database/infoCache');
 
 module.exports = {
   config: {

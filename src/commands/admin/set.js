@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { ThreadType } = require("zca-js");
-const { isBotAdmin, isGroupAdmin, setGroupSetting, getGroupSetting } = require("../../utils/bot/botManager");
+const { isBotAdmin, isGroupAdmin, setGroupSetting, getGroupSetting } = require('../../../utils/bot/botManager');
 
 const CONFIG_PATH = path.join(__dirname, "../../config.json");
 

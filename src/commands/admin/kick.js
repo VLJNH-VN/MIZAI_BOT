@@ -1,5 +1,5 @@
 const { ThreadType } = require("zca-js");
-const { parseMentionIds } = require("../../utils/bot/messageUtils");
+const { parseMentionIds } = require('../../../utils/bot/messageUtils');
 
 module.exports = {
   config: {

@@ -10,6 +10,8 @@ const { loadCommands, runOnLoad, setupLifecycle } = require("./utils/system/load
 const { scheduleCacheCleanup, scheduleKeyCheck } = require("./utils/system/maintenance");
 const { startKeepAlive } = require("./utils/system/keepAlive");
 const { createZaloClient }        = require("./utils/system/client");
+const { saveLastSeen }            = require("./utils/system/lastSeen");
+const { fetchMissedMessages }     = require("./utils/system/fetchMissed");
 
 // ── Database loaders ──────────────────────────────────────────────────────────
 const { loadAllGroups }    = require("./includes/database/groupLoader");
@@ -74,10 +76,18 @@ async function main(isFirstRun = true) {
       loadAllGroups(api).catch(err =>
         logError(`[groupLoader] Lỗi load nhóm: ${err?.message}`)
       );
+
+      // Fetch tin nhắn bỏ lỡ khi bot offline (chạy nền, không block)
+      fetchMissedMessages(api, global.commands, global.prefix).catch(err =>
+        logError(`[fetchMissed] Lỗi: ${err?.message}`)
+      );
     }
   });
 
-  api.listener.on("disconnected", (code, reason) => global.restartBot(`code:${code} | ${reason}`));
+  api.listener.on("disconnected", (code, reason) => {
+    saveLastSeen();
+    global.restartBot(`code:${code} | ${reason}`);
+  });
   api.listener.on("error",        (err)        => global.restartBot(`error:${err?.message}`));
 
   api.listener.on("message",     (event)    => handleMessage({ api, event, commands: global.commands, prefix: global.prefix }).catch((err) => logError(`Lỗi handleMessage: ${err?.message || err}`)));

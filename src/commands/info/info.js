@@ -8,8 +8,8 @@
  * ⚠️ Yêu cầu: global.config.ACCESSTOKEN (Facebook Graph API token)
  */
 
-const { registerReaction } = require("../../includes/handlers/handleReaction");
-const { parseMentionIds } = require("../../utils/bot/messageUtils");
+const { registerReaction } = require('../../../includes/handlers/handleReaction');
+const { parseMentionIds } = require('../../../utils/bot/messageUtils');
 
 function fmtTime(ts) {
   const d  = new Date(ts);

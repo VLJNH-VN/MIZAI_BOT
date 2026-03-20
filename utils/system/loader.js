@@ -116,6 +116,11 @@ async function gracefulShutdown(signal) {
   _isShuttingDown = true;
   logWarn(`[BOT] Nhận tín hiệu ${signal}, đang tắt bot an toàn...`);
   try {
+    const { saveLastSeen } = require("./lastSeen");
+    saveLastSeen();
+    logInfo("[BOT] Đã lưu lastSeen timestamp.");
+  } catch {}
+  try {
     if (global.api?.listener) global.api.listener.stop();
   } catch {}
   logInfo("[BOT] Đã dừng listener. Thoát.");

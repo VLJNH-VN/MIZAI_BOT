@@ -18,7 +18,7 @@ const {
 
 const { isTracked } = require("../../includes/handlers/handleReply");
 
-const { fileHelpers } = require("../commands/file");
+const { fileHelpers } = require("../commands/utility/file");
 const {
   buildFolderListing, convertBytes, sizeFolder,
   zipToStream, catboxUpload, pastebinUpload

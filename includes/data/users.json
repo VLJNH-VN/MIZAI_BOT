@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-20T12:29:52.230Z",
+  "generatedAt": "2026-03-20T12:44:21.226Z",
   "total": 16,
   "users": [
     {
@@ -259,9 +259,9 @@
         "oa_status": null
       },
       "firstSeen": 1773993016129,
-      "msgCount": 50,
+      "msgCount": 54,
       "profileAt": 1773995359855,
-      "updatedAt": 1774008239571
+      "updatedAt": 1774010617899
     },
     {
       "userId": "8009347465992207686",
@@ -305,9 +305,9 @@
         "oa_status": null
       },
       "firstSeen": 1773994030291,
-      "msgCount": 33,
+      "msgCount": 38,
       "profileAt": 1773995359545,
-      "updatedAt": 1774007918566
+      "updatedAt": 1774010617809
     },
     {
       "userId": "1421614274573344218",
@@ -531,6 +531,49 @@
       "updatedAt": 1773999293532
     },
     {
+      "userId": "5577225479472062214",
+      "name": "Quốc Khánh",
+      "profile": {
+        "userId": "5577225479472062214",
+        "username": "t_m7c0an09ga",
+        "displayName": "Quốc Khánh",
+        "zaloName": "Quốc Khánh",
+        "avatar": "https://s120-25-ava-talk.zadn.vn/2/61441190c84adaa11d699b09ff9501db.jpg?key=tIxnD8G2yqoKKsw8IvfLgA&time=1779194534",
+        "bgavatar": "",
+        "cover": "https://cover-talk.zadn.vn/a/9/f/8/4/61441190c84adaa11d699b09ff9501db.jpg",
+        "gender": 0,
+        "dob": 964544400,
+        "sdob": "26/07/2000",
+        "status": "z",
+        "phoneNumber": "",
+        "isFr": 0,
+        "isBlocked": 0,
+        "lastActionTime": 1774010534032,
+        "lastUpdateTime": 1774010190,
+        "isActive": 1,
+        "key": 0,
+        "type": 0,
+        "isActivePC": 0,
+        "isActiveWeb": 0,
+        "isValid": 1,
+        "userKey": "5577225479472062214",
+        "accountStatus": 0,
+        "oaInfo": null,
+        "user_mode": 0,
+        "globalId": "P0N68U1QCT6G0E2FCV6A18ULSDQFCVO0",
+        "bizPkg": {
+          "label": null,
+          "pkgId": 0
+        },
+        "createdTs": 1763031098,
+        "oa_status": null
+      },
+      "firstSeen": 1774010534107,
+      "msgCount": 2,
+      "profileAt": 1774010534622,
+      "updatedAt": 1774010612018
+    },
+    {
       "userId": "2032412539909151828",
       "name": "Xuan Bach",
       "profile": {
@@ -627,49 +670,6 @@
       "msgCount": 0,
       "profileAt": 0,
       "updatedAt": 1774009252113
-    },
-    {
-      "userId": "5577225479472062214",
-      "name": "Quốc Khánh",
-      "profile": {
-        "userId": "5577225479472062214",
-        "username": "t_m7c0an09ga",
-        "displayName": "Quốc Khánh",
-        "zaloName": "Quốc Khánh",
-        "avatar": "https://s120-25-ava-talk.zadn.vn/1/61441190c84adaa11d699b09ff9501db.jpg?key=N3RhRR4YO_Y8-_S6jEQy1g&time=1779166740",
-        "bgavatar": "",
-        "cover": "https://cover-talk.zadn.vn/a/9/f/8/4/61441190c84adaa11d699b09ff9501db.jpg",
-        "gender": 0,
-        "dob": 964544400,
-        "sdob": "26/07/2000",
-        "status": "z",
-        "phoneNumber": "",
-        "isFr": 0,
-        "isBlocked": 0,
-        "lastActionTime": 1773982739837,
-        "lastUpdateTime": 1773536848,
-        "isActive": 1,
-        "key": 0,
-        "type": 0,
-        "isActivePC": 0,
-        "isActiveWeb": 0,
-        "isValid": 1,
-        "userKey": "5577225479472062214",
-        "accountStatus": 0,
-        "oaInfo": null,
-        "user_mode": 0,
-        "globalId": "P0N68U1QCT6G0E2FCV6A18ULSDQFCVO0",
-        "bizPkg": {
-          "label": null,
-          "pkgId": 0
-        },
-        "createdTs": 1763031098,
-        "oa_status": null
-      },
-      "firstSeen": 0,
-      "msgCount": 0,
-      "profileAt": 0,
-      "updatedAt": 1773982740834
     }
   ]
 }

@@ -1,6 +1,6 @@
-const { transferMoney, getUserMoney, formatMoney } = require("../../includes/database/economy");
-const { resolveSenderName } = require("../../includes/database/infoCache");
-const { parseMentionIds } = require("../../utils/bot/messageUtils");
+const { transferMoney, getUserMoney, formatMoney } = require('../../../includes/database/economy');
+const { resolveSenderName } = require('../../../includes/database/infoCache');
+const { parseMentionIds } = require('../../../utils/bot/messageUtils');
 
 module.exports = {
   config: {

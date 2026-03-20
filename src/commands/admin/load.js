@@ -8,7 +8,7 @@
 
 const fs   = require("fs");
 const path = require("path");
-const { loadCommandFromFile } = require("../../utils/system/loader");
+const { loadCommandFromFile } = require('../../../utils/system/loader');
 
 const CMD_DIR = path.join(process.cwd(), "src", "commands");
 

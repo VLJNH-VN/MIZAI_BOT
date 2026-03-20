@@ -9,7 +9,7 @@
 const fs   = require("fs");
 const path = require("path");
 const os   = require("os");
-const { registerReply } = require("../../includes/handlers/handleReply");
+const { registerReply } = require('../../../includes/handlers/handleReply');
 
 const SPT_ID     = "1530d567ec6542669896bc96efd370f3";
 const SPT_SECRET = "6e0241b124da40dfb98728b7f29cedfd";

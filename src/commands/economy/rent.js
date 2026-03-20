@@ -10,7 +10,7 @@ const {
   generateKey,
   isExpired,
   clearRentCache,
-} = require("../../includes/database/rent");
+} = require('../../../includes/database/rent');
 
 const CONFIG_PATH = path.join(__dirname, "../../config.json");
 

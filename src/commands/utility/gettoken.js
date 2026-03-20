@@ -6,7 +6,7 @@
  * Credits: Dũngkon||Vtuan — converted MiZai
  */
 
-const { registerReply } = require("../../includes/handlers/handleReply");
+const { registerReply } = require('../../../includes/handlers/handleReply');
 
 const TOKEN_TYPES = {
   "1":  "350685531728",

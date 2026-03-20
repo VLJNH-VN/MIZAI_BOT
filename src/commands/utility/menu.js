@@ -7,7 +7,7 @@
  * Reply số để xem lệnh trong nhóm → reply tiếp để xem chi tiết lệnh.
  */
 
-const { registerReply } = require("../../includes/handlers/handleReply");
+const { registerReply } = require('../../../includes/handlers/handleReply');
 
 // ─────────────────────────────────────────────────────────────────────────────
 

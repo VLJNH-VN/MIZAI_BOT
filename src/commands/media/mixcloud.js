@@ -192,7 +192,7 @@ module.exports = {
       msg += `Dùng reply + số để chọn bài hát muốn phát.`;
 
       // Gửi danh sách, đồng thời đăng ký chờ reply cho chính tin nhắn này
-      const { registerReply } = require("../../includes/handlers/handleReply");
+      const { registerReply } = require('../../../includes/handlers/handleReply');
       const sent = await send(msg);
 
       // zca-js: sendMessage() trả về { message: { msgId }, attachment: [...] }

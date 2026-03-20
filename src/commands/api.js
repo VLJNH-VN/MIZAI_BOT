@@ -31,50 +31,56 @@ function isValidUrl(str) {
   try { return /^https?:\/\/.+/.test(new URL(str).href); } catch { return false; }
 }
 
-// ── Helper: Lấy tất cả link video từ trang HTML hoặc trả về chính URL nếu là file media ──
+// ── Helper: Fetch URL → lấy danh sách link media bên trong ───────────────────
+// Ưu tiên: JSON array → file media trực tiếp → scrape HTML
 async function extractMediaLinks(url) {
   const VIDEO_EXTS = /\.(mp4|webm|mkv|avi|mov|flv|m4v|3gp|ogg|wmv)(\?.*)?$/i;
   const IMAGE_EXTS = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i;
 
-  // 1. HEAD để lấy content-type
-  let contentType = "";
+  // 1. Fetch nội dung URL
+  let body, contentType = "";
   try {
-    const head = await global.axios.head(url, { timeout: 10000 });
-    contentType = (head.headers["content-type"] || "").toLowerCase();
-  } catch { /* bỏ qua */ }
+    const res = await global.axios.get(url, {
+      timeout: 20000,
+      responseType: "text",
+      headers: { "User-Agent": "Mozilla/5.0" }
+    });
+    body = res.data || "";
+    contentType = (res.headers["content-type"] || "").toLowerCase();
+  } catch { return []; }
 
-  // Nếu là file media trực tiếp → trả về chính nó
+  // 2. Thử parse JSON trước (file .bin / .json chứa array link)
+  try {
+    const parsed = JSON.parse(body);
+    if (Array.isArray(parsed)) {
+      // Lọc ra các phần tử là string URL hợp lệ
+      const links = parsed.filter(v => typeof v === "string" && isValidUrl(v));
+      if (links.length > 0) return links;
+    }
+  } catch { /* không phải JSON */ }
+
+  // 3. Nếu là file media trực tiếp → trả về chính nó
   if (
     contentType.startsWith("video/") ||
     contentType.startsWith("image/") ||
-    VIDEO_EXTS.test(url) ||
-    IMAGE_EXTS.test(url)
+    VIDEO_EXTS.test(url.split("?")[0]) ||
+    IMAGE_EXTS.test(url.split("?")[0])
   ) {
     return [url];
   }
 
-  // 2. Fetch HTML rồi parse lấy link media
-  let html = "";
-  try {
-    const res = await global.axios.get(url, { timeout: 15000, headers: { "User-Agent": "Mozilla/5.0" } });
-    html = res.data || "";
-  } catch { return []; }
-
+  // 4. Scrape HTML tìm link media
   const found = new Set();
 
-  // Tìm trong src="...", href="..." và trong các thẻ <video>, <source>
-  const srcMatches = html.matchAll(/(?:src|href)=["']([^"']+)["']/gi);
+  const srcMatches = body.matchAll(/(?:src|href)=["']([^"']+)["']/gi);
   for (const m of srcMatches) {
     const link = m[1];
     if (VIDEO_EXTS.test(link) || IMAGE_EXTS.test(link)) {
-      try {
-        found.add(new URL(link, url).href);
-      } catch { /* skip */ }
+      try { found.add(new URL(link, url).href); } catch { /* skip */ }
     }
   }
 
-  // Tìm link mp4/webm... xuất hiện thẳng trong JS hay JSON
-  const rawMatches = html.matchAll(/https?:\/\/[^\s"'<>]+\.(?:mp4|webm|mkv|mov|m4v|flv|ogg|3gp)[^\s"'<>]*/gi);
+  const rawMatches = body.matchAll(/https?:\/\/[^\s"'<>]+\.(?:mp4|webm|mkv|mov|m4v|flv|ogg|3gp)[^\s"'<>]*/gi);
   for (const m of rawMatches) found.add(m[0]);
 
   return [...found];

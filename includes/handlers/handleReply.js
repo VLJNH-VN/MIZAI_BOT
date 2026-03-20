@@ -84,4 +84,9 @@ async function handleReply({ api, event, commands, prefix }) {
   }
 }
 
-module.exports = { handleReply, registerReply };
+function isTracked(msgId) {
+  if (!msgId) return false;
+  return !!replyStore.find(String(msgId));
+}
+
+module.exports = { handleReply, registerReply, isTracked };

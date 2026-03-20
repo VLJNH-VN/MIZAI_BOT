@@ -79,7 +79,8 @@ module.exports = {
     const body   = typeof raw.content === "string"
       ? raw.content
       : (raw.content?.text || raw.content?.msg || "");
-    const choice = parseInt(body.trim(), 10);
+    const numMatch = body.trim().replace(/@\S*/g, "").trim().match(/\d+/);
+    const choice = numMatch ? parseInt(numMatch[0], 10) : NaN;
 
     if (isNaN(choice) || choice < 1 || choice > tracks.length) {
       return send(`⚠️ Reply số từ 1 đến ${tracks.length}`);

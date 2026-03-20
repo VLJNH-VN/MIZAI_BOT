@@ -140,7 +140,8 @@ module.exports = {
 
     const raw    = event?.data || {};
     const body   = typeof raw.content === "string" ? raw.content : (raw.content?.text || "");
-    const choice = parseInt(body.trim());
+    const numMatch = body.trim().replace(/@\S*/g, "").trim().match(/\d+/);
+    const choice = numMatch ? parseInt(numMatch[0], 10) : NaN;
 
     if (isNaN(choice) || choice < 1 || choice > tracks.length) {
       return send(`⚠️ Nhập số từ 1 đến ${tracks.length}.`);

@@ -16,6 +16,8 @@ const {
   fetchImageAsBase64, extractImageUrl, extractUrls,
 } = require("../../utils/ai/goibot");
 
+const { isTracked } = require("../../includes/handlers/handleReply");
+
 const { fileHelpers } = require("../commands/file");
 const {
   buildFolderListing, convertBytes, sizeFolder,
@@ -466,6 +468,9 @@ async function handleGoibot({ api, event }) {
   const isTriggered  = TRIGGER_KEYWORDS.some(kw => bodyLower.includes(kw));
 
   if (!isTriggered && !isReplyToBot) return;
+
+  const quoteMsgId = raw?.quote?.msgId || raw?.quote?.globalMsgId || "";
+  if (quoteMsgId && isTracked(String(quoteMsgId))) return;
 
   const userKey = `${threadId}:${senderId}`;
   if (isProcessing[userKey]) return;

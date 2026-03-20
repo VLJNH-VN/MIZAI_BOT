@@ -1,5 +1,3 @@
-const path = require("path");
-const fs   = require("fs");
 const {
   getRent, getAllRent, getExpiringGroups, getStats,
   addRent, extendRent, setRentEnd, deleteRent,

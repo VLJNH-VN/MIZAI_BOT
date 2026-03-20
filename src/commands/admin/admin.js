@@ -1,19 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 const { ThreadType } = require("zca-js");
+const { readConfig, writeConfig } = require('../../../utils/helpers');
 
-const CONFIG_PATH = path.join(__dirname, "../../config.json");
-const GROUPS_CACHE_PATH = path.join(__dirname, "../../includes/database/groupsCache.json");
-
-// ── Helpers đọc/ghi config ──────────────────────────────────────────────────
-function readConfig() {
-  try { return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8")); }
-  catch { return {}; }
-}
-
-function writeConfig(cfg) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf-8");
-}
+const GROUPS_CACHE_PATH = path.join(__dirname, "../../../includes/database/groupsCache.json");
 
 // ── Cache nhóm đã biết (dùng cho broadcast) ─────────────────────────────────
 function readGroupsCache() {

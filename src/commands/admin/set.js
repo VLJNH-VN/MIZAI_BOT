@@ -1,18 +1,6 @@
-const fs = require("fs");
-const path = require("path");
 const { ThreadType } = require("zca-js");
 const { isBotAdmin, isGroupAdmin, setGroupSetting, getGroupSetting } = require('../../../utils/bot/botManager');
-
-const CONFIG_PATH = path.join(__dirname, "../../config.json");
-
-function readConfig() {
-  try { return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8")); }
-  catch { return {}; }
-}
-
-function writeConfig(cfg) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), "utf-8");
-}
+const { readConfig, writeConfig } = require('../../../utils/helpers');
 
 module.exports = {
   config: {

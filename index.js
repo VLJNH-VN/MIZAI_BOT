@@ -11,6 +11,9 @@ const { scheduleCacheCleanup, scheduleKeyCheck } = require("./utils/system/maint
 const { startKeepAlive } = require("./utils/system/keepAlive");
 const { createZaloClient }        = require("./utils/system/client");
 
+// ── Database loaders ──────────────────────────────────────────────────────────
+const { loadAllGroups }    = require("./includes/database/groupLoader");
+
 // ── Events ────────────────────────────────────────────────────────────────────
 const { handleMessage }    = require("./src/events/message");
 const { handleReaction }   = require("./includes/handlers/handleReaction");
@@ -65,6 +68,11 @@ async function main(isFirstRun = true) {
         "      ├─ AutoSend\n" +
         `      ├─ TuongTac  (${ttInfo})\n` +
         "      └─ Goibot    AI Mizai"
+      );
+
+      // Load toàn bộ data nhóm vào DB (chạy nền, không block)
+      loadAllGroups(api).catch(err =>
+        logError(`[groupLoader] Lỗi load nhóm: ${err?.message}`)
       );
     }
   });

@@ -87,6 +87,7 @@ const { logInfo, logWarn, logError, logEvent, logDebug } = require("./logger");
 const { checkGroqKey, setAutoCheck }          = require("./maintenance");
 const { processGaiData, resolveQuote }        = require("../bot/messageUtils");
 const msgCache                                = require("../../includes/database/messageCache");
+const groupLoader                             = require("../../includes/database/groupLoader");
 
 // ── Logger ────────────────────────────────────────────────────────────────────
 global.logInfo   = logInfo;
@@ -111,6 +112,15 @@ global.isGroupAdmin      = isGroupAdmin;
 // ── Key manager ───────────────────────────────────────────────────────────────
 global.checkGroqKey  = checkGroqKey;
 global.setAutoCheck  = setAutoCheck;
+
+// ── Group loader ──────────────────────────────────────────────────────────────
+// global.groupLoader.loadAllGroups(api)      — fetch tất cả nhóm từ API → DB
+// global.groupLoader.syncGroupToDb(api, id)  — fetch + lưu 1 nhóm
+// global.groupLoader.getAllGroupsFromDb()     — đọc toàn bộ nhóm từ SQLite
+// global.groupLoader.getGroupData(groupId)   — đọc 1 nhóm từ SQLite
+// global.groupLoader.getGroupIds()           — danh sách group_id từ cache
+// global.groupLoader.saveGroupsSnapshot()    — xuất JSON ra includes/data/groups.json
+global.groupLoader = groupLoader;
 
 // ── Xử lý video gai ──────────────────────────────────────────────────────────
 global.processGaiData = processGaiData;

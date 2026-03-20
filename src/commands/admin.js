@@ -170,6 +170,8 @@ module.exports = {
 
     // ── admin add ─────────────────────────────────────────────────────────
     if (sub === "add") {
+      const _raw = event?.data || {};
+      logInfo(`[ADMIN_DEBUG] mentionInfo=${JSON.stringify(_raw.mentionInfo)} | mentions=${JSON.stringify(_raw.mentions)} | content=${JSON.stringify(_raw.content)?.slice(0,200)}`);
       const uid = extractUid(args, event);
       if (!uid) {
         return send(`❌ Không tìm thấy UID hợp lệ.\n💡 Dùng: ${prefix}admin add <uid số>\nVí dụ: ${prefix}admin add 123456789\n⚠️ Tag @tên có thể không lấy được UID — hãy dùng lệnh ${prefix}id hoặc ${prefix}admin tang @tên để lấy UID trước.`);

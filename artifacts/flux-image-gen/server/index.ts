@@ -88,15 +88,8 @@ app.post("/api/generate-image", async (req, res) => {
     return;
   }
 
-  const cfAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const cfApiToken = process.env.CLOUDFLARE_API_TOKEN;
-
-  if (!cfAccountId || !cfApiToken) {
-    res.status(503).json({
-      error: "Cloudflare chưa được cấu hình. Vui lòng thêm CLOUDFLARE_ACCOUNT_ID và CLOUDFLARE_API_TOKEN.",
-    });
-    return;
-  }
+  const cfAccountId = "dc82ef97b674ecfcea390c10298fccb0";
+  const cfApiToken = "cfut_byvmekovIfEF2eZRsmz4lmPagI1An1XGOVkufSbra47c0640";
 
   try {
     const imgWidth = width || 1024;

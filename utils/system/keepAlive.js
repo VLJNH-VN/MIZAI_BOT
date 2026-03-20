@@ -20,7 +20,7 @@ function startKeepAlive() {
 
   ping();
   setInterval(ping, INTERVAL_MS);
-  logInfo(`[UPYIME] Đã khởi động, ping mỗi ${INTERVAL_MS / 60000} phút.`);
+  logInfo(`[UPTIME] Đã khởi động, ping mỗi ${INTERVAL_MS / 60000} phút.`);
 }
 
 module.exports = { startKeepAlive };

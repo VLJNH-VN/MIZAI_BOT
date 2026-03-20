@@ -431,6 +431,7 @@ async function fetchMediaInfo(url, retries = 3) {
             );
             const d = res.data;
             if (!d || typeof d !== "object") throw new Error("Dữ liệu API không hợp lệ");
+            if (d.error) throw new Error(d.details ? String(d.details).slice(0, 200) : String(d.error));
             return d;
         } catch (err) {
             lastErr = err;

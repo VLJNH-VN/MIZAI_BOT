@@ -132,7 +132,7 @@ function buildResultMsg(result) {
 // ─────────────────────────────────────────────────────────────────────────────
 module.exports = {
   config: {
-    name:            "nhandien",
+    name:            "timnhac",
     aliases:         ["songid", "audd", "nhandiennhac"],
     version:         "1.0.0",
     hasPermssion:    0,

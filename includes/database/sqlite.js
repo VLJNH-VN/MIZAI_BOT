@@ -179,6 +179,7 @@ async function initSchema(db) {
     profile_json TEXT,
     first_seen   INTEGER DEFAULT 0,
     msg_count    INTEGER DEFAULT 0,
+    profile_at   INTEGER DEFAULT 0,
     updated_at   INTEGER
   )`);
   await run(db, `CREATE TABLE IF NOT EXISTS groups (
@@ -189,16 +190,19 @@ async function initSchema(db) {
     pending_approve_json TEXT,
     member_count         INTEGER DEFAULT 0,
     first_seen           INTEGER DEFAULT 0,
+    profile_at           INTEGER DEFAULT 0,
     updated_at           INTEGER
   )`);
 
   // Migration: thêm cột mới nếu chưa có (tương thích DB cũ)
   const userCols  = (await all(db, "PRAGMA table_info(users)")).map(c => c.name);
   const groupCols = (await all(db, "PRAGMA table_info(groups)")).map(c => c.name);
-  if (!userCols.includes("first_seen"))  await run(db, "ALTER TABLE users  ADD COLUMN first_seen  INTEGER DEFAULT 0").catch(() => {});
-  if (!userCols.includes("msg_count"))   await run(db, "ALTER TABLE users  ADD COLUMN msg_count   INTEGER DEFAULT 0").catch(() => {});
+  if (!userCols.includes("first_seen"))    await run(db, "ALTER TABLE users  ADD COLUMN first_seen  INTEGER DEFAULT 0").catch(() => {});
+  if (!userCols.includes("msg_count"))     await run(db, "ALTER TABLE users  ADD COLUMN msg_count   INTEGER DEFAULT 0").catch(() => {});
+  if (!userCols.includes("profile_at"))    await run(db, "ALTER TABLE users  ADD COLUMN profile_at  INTEGER DEFAULT 0").catch(() => {});
   if (!groupCols.includes("member_count")) await run(db, "ALTER TABLE groups ADD COLUMN member_count INTEGER DEFAULT 0").catch(() => {});
   if (!groupCols.includes("first_seen"))   await run(db, "ALTER TABLE groups ADD COLUMN first_seen  INTEGER DEFAULT 0").catch(() => {});
+  if (!groupCols.includes("profile_at"))   await run(db, "ALTER TABLE groups ADD COLUMN profile_at  INTEGER DEFAULT 0").catch(() => {});
 
   await run(db, "CREATE INDEX IF NOT EXISTS idx_users_updated_at  ON users(updated_at);").catch(() => {});
   await run(db, "CREATE INDEX IF NOT EXISTS idx_groups_updated_at ON groups(updated_at);").catch(() => {});

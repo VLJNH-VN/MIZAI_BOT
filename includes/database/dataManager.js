@@ -3,46 +3,23 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * Module quản lý dữ liệu nhóm & người dùng — lưu vào SQLite.
  *
- * EXPORT:
- *   ── USER ──
- *   saveUser(userId, { name, profile })       — upsert user, tăng msg_count
- *   getUser(userId)                            — đọc 1 user
- *   getAllUsers({ limit, orderBy })            — đọc toàn bộ user
- *   searchUsers(keyword)                       — tìm theo tên
- *   getUserStats()                             — thống kê user
+ * PHÂN BIỆT 2 loại timestamp:
+ *   updated_at  — lần cuối bản ghi thay đổi bất kỳ (kể cả tăng msg_count)
+ *   profile_at  — lần cuối GỌI API để fetch profile/info (dùng để check TTL)
  *
- *   ── GROUP ──
- *   saveGroup(groupId, { name, info, memVerList, pendingApprove }) — upsert group
- *   getGroup(groupId)                          — đọc 1 group
- *   getAllGroups({ limit, orderBy })           — đọc toàn bộ group
- *   searchGroups(keyword)                      — tìm theo tên
- *   getGroupStats()                            — thống kê group
- *
- *   ── AUTO SAVE ──
- *   autoSaveFromEvent(api, event)              — lưu user + group từ 1 event
- *
- *   ── SNAPSHOT ──
- *   saveSnapshot()                             — xuất includes/data/{users,groups}.json
- *
- *   ── STATS ──
- *   getStats()                                 — thống kê tổng hợp
- *
- * GLOBAL (sau khi global.js load):
- *   global.db.saveUser(...)
- *   global.db.saveGroup(...)
- *   global.db.getUser(...)
- *   global.db.getGroup(...)
- *   global.db.getStats()
- *   ...
+ * Nhờ vậy TTL check dùng profile_at, không bị ảnh hưởng bởi msg_count.
  */
 
 const fs   = require("fs");
 const path = require("path");
 const { getDb, run, get, all } = require("./sqlite");
 
-const DATA_DIR         = path.join(__dirname, "..", "data");
-const USERS_SNAPSHOT   = path.join(DATA_DIR, "users.json");
-const GROUPS_SNAPSHOT  = path.join(DATA_DIR, "groups.json");
+const DATA_DIR        = path.join(__dirname, "..", "data");
+const USERS_SNAPSHOT  = path.join(DATA_DIR, "users.json");
+const GROUPS_SNAPSHOT = path.join(DATA_DIR, "groups.json");
+
+const USER_TTL_MS  = 7 * 24 * 60 * 60 * 1000; // 7 ngày
+const GROUP_TTL_MS = 24 * 60 * 60 * 1000;      // 1 ngày
 
 function safeJson(obj) {
   try { return JSON.stringify(obj ?? null); } catch { return "null"; }
@@ -59,36 +36,60 @@ function ensureDataDir() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Lưu / cập nhật user vào SQLite.
- * Mỗi lần gọi sẽ tăng msg_count lên 1 (trừ khi { increment: false }).
+ * Tăng msg_count, lưu name nếu có. KHÔNG thay đổi profile_at.
+ * profile_at chỉ được cập nhật khi gọi API thực sự (saveUserProfile).
  */
-async function saveUser(userId, { name, profile } = {}, { increment = true } = {}) {
+async function saveUser(userId, { name } = {}) {
   if (!userId) return;
   const db  = await getDb();
   const uid = String(userId);
   const now = Date.now();
 
-  // Kiểm tra xem user đã tồn tại chưa
-  const existing = await get(db, "SELECT msg_count, first_seen FROM users WHERE user_id = ?", [uid]);
+  const row      = await get(db, "SELECT first_seen, msg_count FROM users WHERE user_id = ?", [uid]);
+  const firstSeen = (row?.first_seen && row.first_seen > 0) ? row.first_seen : now;
+  const msgCount  = (row?.msg_count || 0) + 1;
 
-  const firstSeen  = existing?.first_seen || now;
-  const msgCount   = (existing?.msg_count || 0) + (increment ? 1 : 0);
+  await run(db,
+    `INSERT INTO users (user_id, name, first_seen, msg_count, profile_at, updated_at)
+     VALUES (?, ?, ?, ?, 0, ?)
+     ON CONFLICT(user_id) DO UPDATE SET
+       name       = COALESCE(excluded.name, name),
+       first_seen = CASE WHEN first_seen = 0 THEN excluded.first_seen ELSE first_seen END,
+       msg_count  = excluded.msg_count,
+       updated_at = excluded.updated_at`,
+    [uid, name ?? null, firstSeen, msgCount, now]
+  );
+}
 
-  await run(
-    db,
-    `INSERT INTO users (user_id, name, profile_json, first_seen, msg_count, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)
+/**
+ * Lưu profile đầy đủ từ API (name, profile_json) + cập nhật profile_at = now.
+ * Không tăng msg_count.
+ */
+async function saveUserProfile(userId, { name, profile }) {
+  if (!userId) return;
+  const db  = await getDb();
+  const uid = String(userId);
+  const now = Date.now();
+
+  const row       = await get(db, "SELECT first_seen, msg_count FROM users WHERE user_id = ?", [uid]);
+  const firstSeen = (row?.first_seen && row.first_seen > 0) ? row.first_seen : now;
+  const msgCount  = row?.msg_count || 0;
+
+  await run(db,
+    `INSERT INTO users (user_id, name, profile_json, first_seen, msg_count, profile_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET
        name         = COALESCE(excluded.name, name),
        profile_json = COALESCE(excluded.profile_json, profile_json),
        first_seen   = CASE WHEN first_seen = 0 THEN excluded.first_seen ELSE first_seen END,
        msg_count    = excluded.msg_count,
+       profile_at   = excluded.profile_at,
        updated_at   = excluded.updated_at`,
-    [uid, name ?? null, safeJson(profile), firstSeen, msgCount, now]
+    [uid, name ?? null, safeJson(profile), firstSeen, msgCount, now, now]
   );
 }
 
-/** Đọc 1 user từ SQLite */
+/** Đọc 1 user */
 async function getUser(userId) {
   const db  = await getDb();
   const row = await get(db, "SELECT * FROM users WHERE user_id = ?", [String(userId)]);
@@ -99,16 +100,12 @@ async function getUser(userId) {
     profile   : parseJson(row.profile_json),
     firstSeen : row.first_seen,
     msgCount  : row.msg_count,
+    profileAt : row.profile_at,
     updatedAt : row.updated_at
   };
 }
 
-/**
- * Đọc toàn bộ user từ SQLite.
- * @param {object} opts
- * @param {number} [opts.limit=0]           — 0 = không giới hạn
- * @param {string} [opts.orderBy='msg_count DESC']
- */
+/** Đọc tất cả user */
 async function getAllUsers({ limit = 0, orderBy = "msg_count DESC" } = {}) {
   const db   = await getDb();
   const sql  = `SELECT * FROM users ORDER BY ${orderBy}${limit > 0 ? ` LIMIT ${limit}` : ""}`;
@@ -119,11 +116,12 @@ async function getAllUsers({ limit = 0, orderBy = "msg_count DESC" } = {}) {
     profile   : parseJson(r.profile_json),
     firstSeen : r.first_seen,
     msgCount  : r.msg_count,
+    profileAt : r.profile_at,
     updatedAt : r.updated_at
   }));
 }
 
-/** Tìm user theo tên (không phân biệt hoa thường) */
+/** Tìm user theo tên */
 async function searchUsers(keyword) {
   if (!keyword) return getAllUsers();
   const db   = await getDb();
@@ -137,17 +135,9 @@ async function searchUsers(keyword) {
   }));
 }
 
-/** Thống kê user */
 async function getUserStats() {
-  const db = await getDb();
-  const row = await get(db, `
-    SELECT
-      COUNT(*)          AS total,
-      SUM(msg_count)    AS totalMessages,
-      MAX(msg_count)    AS maxMessages,
-      MIN(first_seen)   AS oldestSeen
-    FROM users
-  `);
+  const db  = await getDb();
+  const row = await get(db, "SELECT COUNT(*) AS total, SUM(msg_count) AS totalMessages, MAX(msg_count) AS maxMessages, MIN(first_seen) AS oldestSeen FROM users");
   return {
     total         : row?.total         || 0,
     totalMessages : row?.totalMessages || 0,
@@ -161,7 +151,7 @@ async function getUserStats() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Lưu / cập nhật group vào SQLite.
+ * Lưu/cập nhật group với đầy đủ info từ API. Cập nhật profile_at = now.
  */
 async function saveGroup(groupId, { name, info, memVerList, pendingApprove } = {}) {
   if (!groupId) return;
@@ -169,38 +159,45 @@ async function saveGroup(groupId, { name, info, memVerList, pendingApprove } = {
   const gid = String(groupId);
   const now = Date.now();
 
-  const existing    = await get(db, "SELECT first_seen FROM groups WHERE group_id = ?", [gid]);
-  const firstSeen   = existing?.first_seen || now;
+  const row         = await get(db, "SELECT first_seen FROM groups WHERE group_id = ?", [gid]);
+  const firstSeen   = (row?.first_seen && row.first_seen > 0) ? row.first_seen : now;
   const memberCount = Array.isArray(memVerList) ? memVerList.length
                     : (info?.totalMember || info?.memVerList?.length || 0);
 
-  await run(
-    db,
+  await run(db,
     `INSERT INTO groups
-       (group_id, name, info_json, mem_ver_list_json, pending_approve_json, member_count, first_seen, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       (group_id, name, info_json, mem_ver_list_json, pending_approve_json, member_count, first_seen, profile_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(group_id) DO UPDATE SET
        name                 = COALESCE(excluded.name, name),
        info_json            = COALESCE(excluded.info_json, info_json),
        mem_ver_list_json    = COALESCE(excluded.mem_ver_list_json, mem_ver_list_json),
        pending_approve_json = COALESCE(excluded.pending_approve_json, pending_approve_json),
-       member_count         = excluded.member_count,
+       member_count         = CASE WHEN excluded.member_count > 0 THEN excluded.member_count ELSE member_count END,
        first_seen           = CASE WHEN first_seen = 0 THEN excluded.first_seen ELSE first_seen END,
+       profile_at           = excluded.profile_at,
        updated_at           = excluded.updated_at`,
-    [
-      gid,
-      name ?? null,
-      safeJson(info),
-      safeJson(memVerList ?? null),
-      safeJson(pendingApprove ?? null),
-      memberCount,
-      firstSeen,
-      now
-    ]
+    [gid, name ?? null, safeJson(info), safeJson(memVerList ?? null), safeJson(pendingApprove ?? null), memberCount, firstSeen, now, now]
   );
 }
 
-/** Đọc 1 group từ SQLite */
+/**
+ * Đảm bảo group tồn tại trong DB (tạo mới với data rỗng nếu chưa có).
+ * Không overwrite data cũ nếu đã có.
+ */
+async function ensureGroup(groupId) {
+  if (!groupId) return;
+  const db  = await getDb();
+  const gid = String(groupId);
+  const now = Date.now();
+  await run(db,
+    `INSERT OR IGNORE INTO groups (group_id, first_seen, profile_at, updated_at)
+     VALUES (?, ?, 0, ?)`,
+    [gid, now, now]
+  );
+}
+
+/** Đọc 1 group */
 async function getGroup(groupId) {
   const db  = await getDb();
   const row = await get(db, "SELECT * FROM groups WHERE group_id = ?", [String(groupId)]);
@@ -213,16 +210,12 @@ async function getGroup(groupId) {
     pendingApprove : parseJson(row.pending_approve_json),
     memberCount    : row.member_count,
     firstSeen      : row.first_seen,
+    profileAt      : row.profile_at,
     updatedAt      : row.updated_at
   };
 }
 
-/**
- * Đọc toàn bộ group từ SQLite.
- * @param {object} opts
- * @param {number} [opts.limit=0]
- * @param {string} [opts.orderBy='member_count DESC']
- */
+/** Đọc tất cả group */
 async function getAllGroups({ limit = 0, orderBy = "member_count DESC" } = {}) {
   const db   = await getDb();
   const sql  = `SELECT * FROM groups ORDER BY ${orderBy}${limit > 0 ? ` LIMIT ${limit}` : ""}`;
@@ -234,6 +227,7 @@ async function getAllGroups({ limit = 0, orderBy = "member_count DESC" } = {}) {
     memVerList     : parseJson(r.mem_ver_list_json),
     memberCount    : r.member_count,
     firstSeen      : r.first_seen,
+    profileAt      : r.profile_at,
     updatedAt      : r.updated_at
   }));
 }
@@ -252,17 +246,9 @@ async function searchGroups(keyword) {
   }));
 }
 
-/** Thống kê group */
 async function getGroupStats() {
   const db  = await getDb();
-  const row = await get(db, `
-    SELECT
-      COUNT(*)          AS total,
-      SUM(member_count) AS totalMembers,
-      MAX(member_count) AS maxMembers,
-      MIN(first_seen)   AS oldestSeen
-    FROM groups
-  `);
+  const row = await get(db, "SELECT COUNT(*) AS total, SUM(member_count) AS totalMembers, MAX(member_count) AS maxMembers, MIN(first_seen) AS oldestSeen FROM groups");
   return {
     total        : row?.total        || 0,
     totalMembers : row?.totalMembers || 0,
@@ -271,64 +257,67 @@ async function getGroupStats() {
   };
 }
 
-// TTL: bao lâu thì gọi lại API để refresh (giống infoCache)
-const USER_TTL_MS  = 7 * 24 * 60 * 60 * 1000; // 7 ngày
-const GROUP_TTL_MS = 24 * 60 * 60 * 1000;      // 1 ngày
-
 // ══════════════════════════════════════════════════════════════════════════════
 //  AUTO SAVE FROM EVENT
-//  Thay thế hoàn toàn warmupFromEvent (infoCache.js).
-//  Gọi MỘT LẦN trong handleMessage() — chạy nền, không block pipeline.
+//  Gọi 1 lần trong handleMessage() — chạy nền, không block pipeline.
 //
-//  Làm 3 việc trên mỗi tin nhắn:
-//    1. Tăng msg_count của user
-//    2. Nếu user chưa có tên hoặc stale (>7 ngày) → gọi api.getUserInfo
-//    3. Nếu group chưa có hoặc stale (>1 ngày)    → gọi api.getGroupInfo
+//  Logic:
+//    1. Đọc existing TRƯỚC → kiểm tra profile_at (TTL) → quyết định có gọi API không
+//    2. Luôn tăng msg_count (saveUser)
+//    3. Gọi API chỉ khi profile_at stale → lưu profile đầy đủ (saveUserProfile / saveGroup)
 // ══════════════════════════════════════════════════════════════════════════════
 
 async function autoSaveFromEvent(api, event) {
   const raw      = event?.data || {};
   const userId   = raw?.uidFrom ? String(raw.uidFrom) : null;
   const threadId = event?.threadId ? String(event.threadId) : null;
-  const isGroup  = Number(event?.type) === 1; // ThreadType.Group
+  const isGroup  = Number(event?.type) === 1;
   const now      = Date.now();
 
   const tasks = [];
 
-  // ── 1. Lưu user + refresh nếu cần ─────────────────────────────────────────
+  // ── USER ───────────────────────────────────────────────────────────────────
   if (userId && userId !== String(global.botId)) {
     tasks.push((async () => {
       try {
-        // Tên lấy từ event (nhanh, không tốn API)
+        // Đọc existing TRƯỚC khi save
+        const existing  = await getUser(userId);
+        const profileAt = existing?.profileAt || 0;
+        const needApi   = !profileAt || (now - profileAt > USER_TTL_MS);
+
+        // Tên lấy từ event (nếu có)
         const eventName = raw?.dName || raw?.displayName || raw?.senderName || null;
 
-        // Lưu ngay với tên từ event, tăng msg_count
-        await saveUser(userId, { name: eventName });
+        // Luôn tăng msg_count
+        await saveUser(userId, { name: eventName || existing?.name || null });
 
-        // Kiểm tra xem có cần gọi API không
-        const existing  = await getUser(userId);
-        const hasFresh  = existing?.name && existing.updatedAt && (now - existing.updatedAt < USER_TTL_MS);
-
-        if (!hasFresh && api && typeof api.getUserInfo === "function") {
+        // Gọi API nếu profile stale
+        if (needApi && api && typeof api.getUserInfo === "function") {
           const res     = await api.getUserInfo(userId);
           const profile = res?.changed_profiles?.[userId] || null;
           const name    = profile?.displayName || profile?.zaloName || profile?.username || null;
-          if (name || profile) {
-            await saveUser(userId, { name, profile }, { increment: false });
-          }
+          await saveUserProfile(userId, { name, profile });
         }
       } catch {}
     })());
   }
 
-  // ── 2. Lưu group + refresh nếu cần ────────────────────────────────────────
+  // ── GROUP ──────────────────────────────────────────────────────────────────
   if (isGroup && threadId) {
     tasks.push((async () => {
       try {
+        // Đọc existing TRƯỚC khi save
         const existing  = await getGroup(threadId);
-        const hasFresh  = existing && existing.updatedAt && (now - existing.updatedAt < GROUP_TTL_MS);
+        const profileAt = existing?.profileAt || 0;
+        const needApi   = !profileAt || (now - profileAt > GROUP_TTL_MS);
 
-        if (!hasFresh && api && typeof api.getGroupInfo === "function") {
+        if (!existing) {
+          // Nhóm chưa có → tạo placeholder
+          await ensureGroup(threadId);
+        }
+
+        // Gọi API nếu info stale
+        if (needApi && api && typeof api.getGroupInfo === "function") {
           const res  = await api.getGroupInfo(threadId);
           const info = res?.gridInfoMap?.[threadId] || null;
           if (info) {
@@ -339,9 +328,6 @@ async function autoSaveFromEvent(api, event) {
               pendingApprove : info.pendingApprove
             });
           }
-        } else if (!existing) {
-          // Chưa có record → tạo mới với data tối thiểu
-          await saveGroup(threadId, {});
         }
       } catch {}
     })());
@@ -354,57 +340,40 @@ async function autoSaveFromEvent(api, event) {
 //  SNAPSHOT
 // ══════════════════════════════════════════════════════════════════════════════
 
-/** Xuất snapshot JSON cho cả users và groups */
 async function saveSnapshot() {
   try {
     ensureDataDir();
     const [users, groups] = await Promise.all([getAllUsers(), getAllGroups()]);
     const now = new Date().toISOString();
-
-    fs.writeFileSync(USERS_SNAPSHOT, JSON.stringify(
-      { generatedAt: now, total: users.length, users }, null, 2
-    ), "utf-8");
-
-    fs.writeFileSync(GROUPS_SNAPSHOT, JSON.stringify(
-      { generatedAt: now, total: groups.length, groups }, null, 2
-    ), "utf-8");
-
+    fs.writeFileSync(USERS_SNAPSHOT,  JSON.stringify({ generatedAt: now, total: users.length,  users  }, null, 2), "utf-8");
+    fs.writeFileSync(GROUPS_SNAPSHOT, JSON.stringify({ generatedAt: now, total: groups.length, groups }, null, 2), "utf-8");
     logInfo(`[dataManager] Snapshot: ${users.length} users | ${groups.length} groups`);
   } catch (err) {
     logError(`[dataManager] Lỗi lưu snapshot: ${err?.message}`);
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  TỔNG HỢP THỐNG KÊ
-// ══════════════════════════════════════════════════════════════════════════════
-
 async function getStats() {
   const [uStats, gStats] = await Promise.all([getUserStats(), getGroupStats()]);
-  return {
-    users  : uStats,
-    groups : gStats
-  };
+  return { users: uStats, groups: gStats };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 module.exports = {
-  // User
   saveUser,
+  saveUserProfile,
   getUser,
   getAllUsers,
   searchUsers,
   getUserStats,
-  // Group
   saveGroup,
+  ensureGroup,
   getGroup,
   getAllGroups,
   searchGroups,
   getGroupStats,
-  // Auto
   autoSaveFromEvent,
-  // Snapshot + Stats
   saveSnapshot,
   getStats
 };

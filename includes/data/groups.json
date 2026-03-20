@@ -1,71 +1,7 @@
 {
-  "generatedAt": "2026-03-20T08:04:49.274Z",
+  "generatedAt": "2026-03-20T08:11:37.927Z",
   "total": 2,
   "groups": [
-    {
-      "groupId": "2480105366650289419",
-      "name": "Đặng Lịnh, Đặng Văn Lịnh, Xuan Bach",
-      "info": {
-        "groupId": "2480105366650289419",
-        "name": "Đặng Lịnh, Đặng Văn Lịnh, Xuan Bach",
-        "desc": "",
-        "type": 1,
-        "creatorId": "6024931307373526012",
-        "version": "1773829101836",
-        "avt": "",
-        "fullAvt": "",
-        "memberIds": [],
-        "adminIds": [
-          "634881825118942127"
-        ],
-        "currentMems": [],
-        "updateMems": [],
-        "memVerList": [
-          "6024931307373526012_0",
-          "634881825118942127_0"
-        ],
-        "admins": [],
-        "hasMoreMember": 0,
-        "subType": 0,
-        "totalMember": 2,
-        "maxMember": 1000,
-        "setting": {
-          "blockName": 0,
-          "signAdminMsg": 1,
-          "addMemberOnly": 0,
-          "setTopicOnly": 0,
-          "enableMsgHistory": 1,
-          "lockCreatePost": 0,
-          "lockCreatePoll": 0,
-          "joinAppr": 0,
-          "bannFeature": 0,
-          "dirtyMedia": 0,
-          "banDuration": 0,
-          "lockSendMsg": 0,
-          "lockViewMember": 0
-        },
-        "createdTime": 1773696738225,
-        "visibility": 0,
-        "globalId": "CCJ2EBB4DAK5SPMH76HN5ORB7Q26RI00",
-        "e2ee": 0,
-        "pendingApprove": {
-          "time": 1773993639357,
-          "uids": null
-        },
-        "extraInfo": {
-          "enable_media_store": 1
-        }
-      },
-      "memVerList": [
-        "6024931307373526012_0",
-        "634881825118942127_0"
-      ],
-      "pendingApprove": {
-        "time": 1773993639357,
-        "uids": null
-      },
-      "updatedAt": 1773993639723
-    },
     {
       "groupId": "9176300605344420664",
       "name": "MMC",
@@ -139,7 +75,7 @@
         "globalId": "N0BEFIC9R47B72VAQJVA5JU9VSST22O0",
         "e2ee": 0,
         "pendingApprove": {
-          "time": 1773993639352,
+          "time": 1773994297854,
           "uids": null
         },
         "extraInfo": {
@@ -168,11 +104,73 @@
         "6215915355277074723_0",
         "2032412539909151828_0"
       ],
-      "pendingApprove": {
-        "time": 1773993639352,
-        "uids": null
+      "memberCount": 20,
+      "firstSeen": 1773994297925,
+      "profileAt": 1773994297925,
+      "updatedAt": 1773994297925
+    },
+    {
+      "groupId": "2480105366650289419",
+      "name": "Đặng Lịnh, Đặng Văn Lịnh, Xuan Bach",
+      "info": {
+        "groupId": "2480105366650289419",
+        "name": "Đặng Lịnh, Đặng Văn Lịnh, Xuan Bach",
+        "desc": "",
+        "type": 1,
+        "creatorId": "6024931307373526012",
+        "version": "1773829101836",
+        "avt": "",
+        "fullAvt": "",
+        "memberIds": [],
+        "adminIds": [
+          "634881825118942127"
+        ],
+        "currentMems": [],
+        "updateMems": [],
+        "memVerList": [
+          "6024931307373526012_0",
+          "634881825118942127_0"
+        ],
+        "admins": [],
+        "hasMoreMember": 0,
+        "subType": 0,
+        "totalMember": 2,
+        "maxMember": 1000,
+        "setting": {
+          "blockName": 0,
+          "signAdminMsg": 1,
+          "addMemberOnly": 0,
+          "setTopicOnly": 0,
+          "enableMsgHistory": 1,
+          "lockCreatePost": 0,
+          "lockCreatePoll": 0,
+          "joinAppr": 0,
+          "bannFeature": 0,
+          "dirtyMedia": 0,
+          "banDuration": 0,
+          "lockSendMsg": 0,
+          "lockViewMember": 0
+        },
+        "createdTime": 1773696738225,
+        "visibility": 0,
+        "globalId": "CCJ2EBB4DAK5SPMH76HN5ORB7Q26RI00",
+        "e2ee": 0,
+        "pendingApprove": {
+          "time": 1773994297846,
+          "uids": null
+        },
+        "extraInfo": {
+          "enable_media_store": 1
+        }
       },
-      "updatedAt": 1773993639722
+      "memVerList": [
+        "6024931307373526012_0",
+        "634881825118942127_0"
+      ],
+      "memberCount": 2,
+      "firstSeen": 1773994297924,
+      "profileAt": 1773994297924,
+      "updatedAt": 1773994297924
     }
   ]
 }

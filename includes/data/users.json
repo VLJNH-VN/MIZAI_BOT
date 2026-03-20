@@ -1,0 +1,173 @@
+{
+  "generatedAt": "2026-03-20T08:11:37.927Z",
+  "total": 11,
+  "users": [
+    {
+      "userId": "1669731236676931404",
+      "name": "A Di Đà Phật",
+      "profile": null,
+      "firstSeen": 1773992098394,
+      "msgCount": 51,
+      "profileAt": 0,
+      "updatedAt": 1773993305596
+    },
+    {
+      "userId": "359867629617598110",
+      "name": "Tie Tie",
+      "profile": null,
+      "firstSeen": 1773992152822,
+      "msgCount": 40,
+      "profileAt": 0,
+      "updatedAt": 1773994180111
+    },
+    {
+      "userId": "6215915355277074723",
+      "name": "Dang Gia Khanh",
+      "profile": null,
+      "firstSeen": 1773992090941,
+      "msgCount": 39,
+      "profileAt": 0,
+      "updatedAt": 1773994188649
+    },
+    {
+      "userId": "2817603034815564154",
+      "name": "Phanh",
+      "profile": null,
+      "firstSeen": 1773993016129,
+      "msgCount": 24,
+      "profileAt": 0,
+      "updatedAt": 1773994176786
+    },
+    {
+      "userId": "1635389426252288210",
+      "name": "Bùi Văn Đạt",
+      "profile": null,
+      "firstSeen": 1773993057052,
+      "msgCount": 19,
+      "profileAt": 0,
+      "updatedAt": 1773994195341
+    },
+    {
+      "userId": "6024931307373526012",
+      "name": "Đặng Lịnh",
+      "profile": null,
+      "firstSeen": 1773993895117,
+      "msgCount": 13,
+      "profileAt": 0,
+      "updatedAt": 1773994175902
+    },
+    {
+      "userId": "1421614274573344218",
+      "name": "Huệ",
+      "profile": null,
+      "firstSeen": 1773992102009,
+      "msgCount": 12,
+      "profileAt": 0,
+      "updatedAt": 1773993046982
+    },
+    {
+      "userId": "6826850414793381853",
+      "name": "Quốc Lord",
+      "profile": null,
+      "firstSeen": 1773992931946,
+      "msgCount": 3,
+      "profileAt": 0,
+      "updatedAt": 1773993047676
+    },
+    {
+      "userId": "8009347465992207686",
+      "name": "V Tuấn",
+      "profile": null,
+      "firstSeen": 1773994030291,
+      "msgCount": 1,
+      "profileAt": 0,
+      "updatedAt": 1773994030291
+    },
+    {
+      "userId": "5577225479472062214",
+      "name": "Quốc Khánh",
+      "profile": {
+        "userId": "5577225479472062214",
+        "username": "t_m7c0an09ga",
+        "displayName": "Quốc Khánh",
+        "zaloName": "Quốc Khánh",
+        "avatar": "https://s120-25-ava-talk.zadn.vn/1/61441190c84adaa11d699b09ff9501db.jpg?key=N3RhRR4YO_Y8-_S6jEQy1g&time=1779166740",
+        "bgavatar": "",
+        "cover": "https://cover-talk.zadn.vn/a/9/f/8/4/61441190c84adaa11d699b09ff9501db.jpg",
+        "gender": 0,
+        "dob": 964544400,
+        "sdob": "26/07/2000",
+        "status": "z",
+        "phoneNumber": "",
+        "isFr": 0,
+        "isBlocked": 0,
+        "lastActionTime": 1773982739837,
+        "lastUpdateTime": 1773536848,
+        "isActive": 1,
+        "key": 0,
+        "type": 0,
+        "isActivePC": 0,
+        "isActiveWeb": 0,
+        "isValid": 1,
+        "userKey": "5577225479472062214",
+        "accountStatus": 0,
+        "oaInfo": null,
+        "user_mode": 0,
+        "globalId": "P0N68U1QCT6G0E2FCV6A18ULSDQFCVO0",
+        "bizPkg": {
+          "label": null,
+          "pkgId": 0
+        },
+        "createdTs": 1763031098,
+        "oa_status": null
+      },
+      "firstSeen": 0,
+      "msgCount": 0,
+      "profileAt": 0,
+      "updatedAt": 1773982740834
+    },
+    {
+      "userId": "5641826312517890347",
+      "name": "Ng Văn Hưngg",
+      "profile": {
+        "userId": "5641826312517890347",
+        "username": "t_m7bfcza0e7",
+        "displayName": "Ng Văn Hưngg",
+        "zaloName": "Ng Văn Hưngg",
+        "avatar": "https://s120-25-ava-talk.zadn.vn/1/9beb42f9f944145054ba2f3ac52f4b6d.jpg?key=lZYJkMeLwQoDyJYnLwiqeg&time=1779166647",
+        "bgavatar": "",
+        "cover": "https://cover-talk.zadn.vn/default",
+        "gender": 0,
+        "dob": 1268413200,
+        "sdob": "13/03/2010",
+        "status": "",
+        "phoneNumber": "",
+        "isFr": 0,
+        "isBlocked": 0,
+        "lastActionTime": 1773982646262,
+        "lastUpdateTime": 1773201945,
+        "isActive": 1,
+        "key": 0,
+        "type": 0,
+        "isActivePC": 0,
+        "isActiveWeb": 1,
+        "isValid": 1,
+        "userKey": "5641826312517890347",
+        "accountStatus": 0,
+        "oaInfo": null,
+        "user_mode": 0,
+        "globalId": "7BP1FC4LPBLAV5PMP37JVS3F238I0D80",
+        "bizPkg": {
+          "label": null,
+          "pkgId": 0
+        },
+        "createdTs": 1773199179,
+        "oa_status": null
+      },
+      "firstSeen": 0,
+      "msgCount": 0,
+      "profileAt": 0,
+      "updatedAt": 1773982647152
+    }
+  ]
+}

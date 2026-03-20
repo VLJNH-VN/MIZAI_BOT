@@ -9,6 +9,17 @@
       "dailyUsage": 0,
       "lastReset": "2026-03-20",
       "registeredAt": "2026-03-20T17:20:53.188Z"
+    },
+    "eff8e7ca506627fe": {
+      "key": "FLUX-96FD5E-928F24-988E7A",
+      "keyShown": true,
+      "type": "free",
+      "ip": "::1",
+      "cfAccountId": "",
+      "cfToken": "",
+      "dailyUsage": 0,
+      "lastReset": "2026-03-20",
+      "registeredAt": "2026-03-20T17:24:23.819Z"
     }
   }
 }

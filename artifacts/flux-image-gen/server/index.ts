@@ -38,6 +38,7 @@ interface UserData {
   key: string;
   keyShown: boolean;
   type: "free" | "vip";
+  ip: string;
   cfAccountId: string;
   cfToken: string;
   dailyUsage: number;
@@ -46,7 +47,20 @@ interface UserData {
 }
 
 interface KeysDB {
-  users: Record<string, UserData>;
+  users: Record<string, UserData>; // key = ip hash
+}
+
+// ── IP helpers ─────────────────────────────────────────────────────────────
+function getClientIP(req: express.Request): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  const ip = (Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(",")[0])
+    || req.socket.remoteAddress
+    || "unknown";
+  return ip.trim().replace("::ffff:", "");
+}
+
+function hashIP(ip: string): string {
+  return crypto.createHash("sha256").update(ip).digest("hex").slice(0, 16);
 }
 
 function loadDB(): KeysDB {
@@ -83,6 +97,26 @@ function findUserByKey(db: KeysDB, key: string): [string | null, UserData | null
     if (u.key === key) return [id, u];
   }
   return [null, null];
+}
+
+// Lấy hoặc tạo user theo IP (tự động cấp key free lần đầu)
+function getOrCreateUserByIP(db: KeysDB, ip: string): [string, UserData, boolean] {
+  const ipId = hashIP(ip);
+  const isNew = !db.users[ipId];
+  if (isNew) {
+    db.users[ipId] = {
+      key: generateKey(),
+      keyShown: false,
+      type: "free",
+      ip,
+      cfAccountId: "",
+      cfToken: "",
+      dailyUsage: 0,
+      lastReset: today(),
+      registeredAt: new Date().toISOString(),
+    };
+  }
+  return [ipId, db.users[ipId], isNew];
 }
 
 // ── Cloudflare helpers ─────────────────────────────────────────────────────
@@ -160,53 +194,34 @@ const SIZES = [
 //  KEY ENDPOINTS
 // ══════════════════════════════════════════════════════════════════════════════
 
-// POST /api/key/register — tạo key mới (chỉ hiển thị 1 lần)
+// POST /api/key/register — tạo key free theo IP (chỉ hiển thị 1 lần)
 app.post("/api/key/register", (req, res) => {
-  const { userId } = req.body as { userId: string };
-  if (!userId) {
-    res.status(400).json({ error: "Thiếu userId" });
-    return;
-  }
-
+  const ip = getClientIP(req);
   const db = loadDB();
-  if (db.users[userId]) {
-    const u = db.users[userId];
-    if (!u.keyShown) {
-      u.keyShown = true;
-      saveDB(db);
-      res.json({
-        success: true,
-        key: u.key,
-        type: u.type,
-        note: "⚠️ Key chỉ hiển thị 1 lần duy nhất. Hãy lưu giữ cẩn thận!",
-      });
-      return;
-    }
+  const [ipId, user, isNew] = getOrCreateUserByIP(db, ip);
+
+  if (!isNew && user.keyShown) {
+    const u = resetQuotaIfNeeded(user);
     res.status(409).json({
-      error: "Bạn đã đăng ký rồi. Key không hiển thị lại vì lý do bảo mật.",
+      error: "IP này đã đăng ký rồi. Key không hiển thị lại vì lý do bảo mật.",
       type: u.type,
-      quota: u.type === "free" ? `${u.dailyUsage}/${FREE_DAILY_QUOTA} hôm nay` : "VIP — không giới hạn",
+      quota: u.type === "free"
+        ? `${u.dailyUsage}/${FREE_DAILY_QUOTA} hôm nay`
+        : "VIP — không giới hạn",
     });
     return;
   }
 
-  const key = generateKey();
-  db.users[userId] = {
-    key,
-    keyShown: true,
-    type: "free",
-    cfAccountId: "",
-    cfToken: "",
-    dailyUsage: 0,
-    lastReset: today(),
-    registeredAt: new Date().toISOString(),
-  };
+  // Lần đầu hoặc chưa hiển thị key
+  user.keyShown = true;
+  db.users[ipId] = user;
   saveDB(db);
 
   res.json({
     success: true,
-    key,
+    key: user.key,
     type: "free",
+    ip: ip,
     quota: `${FREE_DAILY_QUOTA} ảnh/ngày`,
     note: "⚠️ Key chỉ hiển thị 1 lần duy nhất. Hãy lưu giữ cẩn thận!",
   });
@@ -328,6 +343,45 @@ app.get("/api/sizes", (_req, res) => res.json({ sizes: SIZES }));
 //  GENERATE ENDPOINTS (yêu cầu key)
 // ══════════════════════════════════════════════════════════════════════════════
 
+// Helper: resolve user from key or IP, check & increment quota
+function resolveUser(
+  req: express.Request,
+  key: string | undefined
+): { ok: boolean; error?: string; cfAccountId: string; cfToken: string; db?: KeysDB; ipId?: string; user?: UserData } {
+  const db = loadDB();
+  let ipId: string;
+  let user: UserData;
+
+  if (key) {
+    const [foundId, foundUser] = findUserByKey(db, key);
+    if (!foundId || !foundUser) {
+      return { ok: false, error: "Key không hợp lệ. Đăng ký tại POST /api/key/register", cfAccountId: DEFAULT_CF_ACCOUNT_ID, cfToken: DEFAULT_CF_TOKEN };
+    }
+    ipId = foundId;
+    user = foundUser;
+  } else {
+    const ip = getClientIP(req);
+    const [id, u] = getOrCreateUserByIP(db, ip);
+    ipId = id;
+    user = u;
+  }
+
+  const u = resetQuotaIfNeeded(user);
+  if (u.type === "free" && u.dailyUsage >= FREE_DAILY_QUOTA) {
+    return {
+      ok: false,
+      error: `Đã dùng hết ${FREE_DAILY_QUOTA} ảnh/ngày cho IP này. Nâng cấp VIP hoặc thêm CF token của bạn.`,
+      cfAccountId: DEFAULT_CF_ACCOUNT_ID,
+      cfToken: DEFAULT_CF_TOKEN,
+    };
+  }
+
+  const cfAccountId = u.type === "vip" && u.cfAccountId ? u.cfAccountId : DEFAULT_CF_ACCOUNT_ID;
+  const cfToken = u.type === "vip" && u.cfToken ? u.cfToken : DEFAULT_CF_TOKEN;
+
+  return { ok: true, cfAccountId, cfToken, db, ipId, user: u };
+}
+
 // POST /api/generate-prompt
 app.post("/api/generate-prompt", async (req, res) => {
   const { idea, style, key } = req.body as { idea: string; style?: string; key?: string };
@@ -342,19 +396,11 @@ app.post("/api/generate-prompt", async (req, res) => {
     return;
   }
 
-  // Kiểm tra key & quota
-  if (key) {
-    const db = loadDB();
-    const [userId, user] = findUserByKey(db, key);
-    if (!userId || !user) {
-      res.status(403).json({ error: "Key không hợp lệ. Đăng ký tại POST /api/key/register" });
-      return;
-    }
-    const u = resetQuotaIfNeeded(user);
-    if (u.type === "free" && u.dailyUsage >= FREE_DAILY_QUOTA) {
-      res.status(429).json({ error: `Đã dùng hết quota hôm nay (${FREE_DAILY_QUOTA}/ngày). Nâng cấp VIP để không giới hạn.` });
-      return;
-    }
+  // Kiểm tra key / IP & quota
+  const resolved = resolveUser(req, key);
+  if (!resolved.ok) {
+    res.status(resolved.error?.includes("hết") ? 429 : 403).json({ error: resolved.error });
+    return;
   }
 
   try {
@@ -398,32 +444,21 @@ app.post("/api/generate-image", async (req, res) => {
     return;
   }
 
-  let cfAccountId = DEFAULT_CF_ACCOUNT_ID;
-  let cfToken = DEFAULT_CF_TOKEN;
+  const resolved = resolveUser(req, key);
+  if (!resolved.ok) {
+    res.status(resolved.error?.includes("hết") ? 429 : 403).json({ error: resolved.error });
+    return;
+  }
 
-  if (key) {
-    const db = loadDB();
-    const [userId, user] = findUserByKey(db, key);
-    if (!userId || !user) {
-      res.status(403).json({ error: "Key không hợp lệ. Đăng ký tại POST /api/key/register" });
-      return;
-    }
-    const u = resetQuotaIfNeeded(user);
-    if (u.type === "free" && u.dailyUsage >= FREE_DAILY_QUOTA) {
-      res.status(429).json({ error: `Đã dùng hết quota hôm nay (${FREE_DAILY_QUOTA}/ngày). Nâng cấp VIP để không giới hạn.` });
-      return;
-    }
-    if (u.type === "vip" && u.cfAccountId && u.cfToken) {
-      cfAccountId = u.cfAccountId;
-      cfToken = u.cfToken;
-    }
-    u.dailyUsage++;
-    db.users[userId] = u;
-    saveDB(db);
+  // Tăng quota
+  if (resolved.db && resolved.ipId && resolved.user) {
+    resolved.user.dailyUsage++;
+    resolved.db.users[resolved.ipId] = resolved.user;
+    saveDB(resolved.db);
   }
 
   try {
-    const result = await generateImageCF(prompt, cfAccountId, cfToken, width, height, steps);
+    const result = await generateImageCF(prompt, resolved.cfAccountId, resolved.cfToken, width, height, steps);
     res.json(result);
   } catch (err: unknown) {
     console.error("Cloudflare error:", err);
@@ -452,28 +487,17 @@ app.post("/api/generate-all", async (req, res) => {
     return;
   }
 
-  let cfAccountId = DEFAULT_CF_ACCOUNT_ID;
-  let cfToken = DEFAULT_CF_TOKEN;
+  const resolved = resolveUser(req, key);
+  if (!resolved.ok) {
+    res.status(resolved.error?.includes("hết") ? 429 : 403).json({ error: resolved.error });
+    return;
+  }
 
-  if (key) {
-    const db = loadDB();
-    const [userId, user] = findUserByKey(db, key);
-    if (!userId || !user) {
-      res.status(403).json({ error: "Key không hợp lệ. Đăng ký tại POST /api/key/register" });
-      return;
-    }
-    const u = resetQuotaIfNeeded(user);
-    if (u.type === "free" && u.dailyUsage >= FREE_DAILY_QUOTA) {
-      res.status(429).json({ error: `Đã dùng hết quota hôm nay (${FREE_DAILY_QUOTA}/ngày). Nâng cấp VIP để không giới hạn.` });
-      return;
-    }
-    if (u.type === "vip" && u.cfAccountId && u.cfToken) {
-      cfAccountId = u.cfAccountId;
-      cfToken = u.cfToken;
-    }
-    u.dailyUsage++;
-    db.users[userId] = u;
-    saveDB(db);
+  // Tăng quota
+  if (resolved.db && resolved.ipId && resolved.user) {
+    resolved.user.dailyUsage++;
+    resolved.db.users[resolved.ipId] = resolved.user;
+    saveDB(resolved.db);
   }
 
   try {
@@ -495,7 +519,7 @@ Rules:
     });
 
     const generatedPrompt = promptResponse.text?.trim() || idea;
-    const result = await generateImageCF(generatedPrompt, cfAccountId, cfToken, width, height, steps);
+    const result = await generateImageCF(generatedPrompt, resolved.cfAccountId, resolved.cfToken, width, height, steps);
 
     res.json({ prompt: generatedPrompt, ...result });
   } catch (err: unknown) {

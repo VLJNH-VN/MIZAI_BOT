@@ -33,32 +33,37 @@ async function hfText(prompt) {
 async function hfImage(prompt) {
   const token = getToken();
 
-  // ── Thử HuggingFace Inference API (FLUX.1-schnell) ────────────────────────
+  // ── Thử HuggingFace Inference API (tự đổi sang SDXL nếu model chính lỗi) ──
   if (token) {
-    try {
-      const res = await global.axios.post(
-        `${HF_API}/${IMG_MODEL}`,
-        { inputs: prompt, parameters: { width: 1024, height: 1024, num_inference_steps: 4 } },
-        {
-          headers: {
-            Authorization : `Bearer ${token}`,
-            "Content-Type": "application/json",
-            Accept        : "image/jpeg",
-          },
-          responseType: "arraybuffer",
-          timeout: 120_000,
+    const hfModels = [IMG_MODEL, "stabilityai/stable-diffusion-xl-base-1.0"].filter(
+      (v, i, arr) => arr.indexOf(v) === i
+    );
+    for (const hfModel of hfModels) {
+      try {
+        const res = await global.axios.post(
+          `${HF_API}/${hfModel}`,
+          { inputs: prompt, parameters: { width: 1024, height: 1024, num_inference_steps: 4 } },
+          {
+            headers: {
+              Authorization : `Bearer ${token}`,
+              "Content-Type": "application/json",
+              Accept        : "image/jpeg",
+            },
+            responseType: "arraybuffer",
+            timeout: 120_000,
+          }
+        );
+        const ct = res.headers?.["content-type"] || "";
+        if (ct.startsWith("image/") && res.data?.byteLength > 500) {
+          return Buffer.from(res.data);
         }
-      );
-      const ct = res.headers?.["content-type"] || "";
-      if (ct.startsWith("image/") && res.data?.byteLength > 500) {
-        return Buffer.from(res.data);
+        throw new Error(`HF trả về không phải ảnh (${ct})`);
+      } catch (hfErr) {
+        const st = hfErr?.response?.status;
+        const isLast = hfModels.indexOf(hfModel) === hfModels.length - 1;
+        logWarn?.(`[hf/img] HF ${hfModel} lỗi ${st || hfErr.message}${isLast ? ", thử Pollinations..." : ", thử model tiếp..."}`);
+        if (!st || st === 429 || st === 503) break;
       }
-      throw new Error(`HF trả về không phải ảnh (${ct})`);
-    } catch (hfErr) {
-      const st = hfErr?.response?.status;
-      // 503 = model đang tải, 429 = rate limit → thử fallback
-      if (st !== 503 && st !== 429 && st !== 500) throw hfErr;
-      logWarn?.(`[hf/img] HuggingFace lỗi ${st}, thử Pollinations...`);
     }
   }
 

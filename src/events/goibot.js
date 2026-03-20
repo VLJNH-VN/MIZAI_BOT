@@ -207,7 +207,7 @@ const IMG_MODELS = {
   "flux-realism": { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-realism", label: "Flux Realism", w: 768,  h: 1024 },
   "flux-anime":   { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-anime",   label: "Flux Anime",   w: 768,  h: 1024 },
   "flux-3d":      { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-3d",      label: "Flux 3D",      w: 1024, h: 1024 },
-  "flux-pro":     { hf: "black-forest-labs/FLUX.1-dev",     poll: "flux-pro",     label: "Flux Pro",     w: 1024, h: 1024 },
+  "flux-pro":     { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-pro",     label: "Flux Pro",     w: 1024, h: 1024 },
   turbo:          { hf: "black-forest-labs/FLUX.1-schnell", poll: "turbo",        label: "Turbo",        w: 512,  h: 512  },
   sana:           { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux",         label: "Flux",         w: 1024, h: 1024 },
   "any-dark":     { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-realism", label: "Flux Realism", w: 768,  h: 1024 },
@@ -223,29 +223,36 @@ async function generateImage({ prompt, modelKey = "flux", width, height }) {
 
   const hfToken = global?.config?.hfToken || process.env.HF_TOKEN || "";
 
-  // ── Thử HuggingFace trước ──────────────────────────────────────────────────
+  // ── Thử HuggingFace trước (tự đổi sang SDXL nếu model chính lỗi) ───────────
   if (hfToken) {
-    try {
-      const res = await axios.post(
-        `${HF_IMG_BASE}/${m.hf}`,
-        { inputs: prompt, parameters: { width: w, height: h, num_inference_steps: 4 } },
-        {
-          headers: {
-            Authorization : `Bearer ${hfToken}`,
-            "Content-Type": "application/json",
-            Accept        : "image/jpeg",
-          },
-          responseType: "arraybuffer",
-          timeout: IMG_TIMEOUT,
+    const hfModels = [m.hf, "stabilityai/stable-diffusion-xl-base-1.0"].filter(
+      (v, i, arr) => arr.indexOf(v) === i
+    );
+    for (const hfModel of hfModels) {
+      try {
+        const res = await axios.post(
+          `${HF_IMG_BASE}/${hfModel}`,
+          { inputs: prompt, parameters: { width: w, height: h, num_inference_steps: 4 } },
+          {
+            headers: {
+              Authorization : `Bearer ${hfToken}`,
+              "Content-Type": "application/json",
+              Accept        : "image/jpeg",
+            },
+            responseType: "arraybuffer",
+            timeout: IMG_TIMEOUT,
+          }
+        );
+        const ct = res.headers?.["content-type"] || "";
+        if (ct.startsWith("image/") && res.data?.byteLength > 500) {
+          return Buffer.from(res.data);
         }
-      );
-      const ct = res.headers?.["content-type"] || "";
-      if (ct.startsWith("image/") && res.data?.byteLength > 500) {
-        return Buffer.from(res.data);
+        throw new Error(`HF trả về không phải ảnh (${ct})`);
+      } catch (hfErr) {
+        const status = hfErr?.response?.status;
+        global.logWarn?.(`[goibot/img] HF ${hfModel} thất bại (${status || hfErr.message})${hfModels.indexOf(hfModel) < hfModels.length - 1 ? ", thử model tiếp..." : ", thử Pollinations..."}`);
+        if (!status || status < 400 || status === 429 || status === 503) break;
       }
-      throw new Error(`HF trả về không phải ảnh (${ct})`);
-    } catch (hfErr) {
-      global.logWarn?.(`[goibot/img] HuggingFace thất bại (${hfErr?.response?.status || hfErr.message}), thử Pollinations...`);
     }
   }
 
@@ -275,9 +282,6 @@ async function handleImgAction(api, imgAction, raw, threadId, type, send) {
   let   modelKey = imgAction.model || "flux";
   if (!IMG_MODELS[modelKey]) modelKey = "flux";
   if (!prompt) return send("❌ Không có mô tả ảnh để tạo.");
-
-  const label = IMG_MODELS[modelKey]?.label || modelKey;
-  await send(`🎨 Đang tạo ảnh: "${prompt}"\n🤖 Model: ${label}`);
 
   const tmpFile = path.join(os.tmpdir(), `mizai_img_${Date.now()}.jpg`);
 

@@ -76,7 +76,7 @@ async function syncGroupToDb(api, groupId) {
 
     return { groupId: String(groupId), name, memberCount };
   } catch (err) {
-    logError(`[groupLoader] Lỗi fetch nhóm ${groupId}: ${err?.message}`);
+    logError(`[DataBase] Lỗi fetch nhóm ${groupId}: ${err?.message}`);
     return null;
   }
 }
@@ -88,11 +88,11 @@ async function loadAllGroups(api) {
   const ids = getGroupIds();
 
   if (ids.length === 0) {
-    logInfo("[groupLoader] groupsCache.json trống, chưa có nhóm nào để load.");
+    logInfo("[DataBase] groupsCache.json trống, chưa có nhóm nào để load.");
     return { ok: 0, fail: 0, total: 0, groups: [] };
   }
 
-  logInfo(`[groupLoader] Bắt đầu load ${ids.length} nhóm...`);
+  logInfo(`[DataBase] Bắt đầu load ${ids.length} nhóm...`);
 
   let ok = 0, fail = 0;
   const loaded = [];
@@ -109,7 +109,7 @@ async function loadAllGroups(api) {
     if (i + BATCH_SIZE < ids.length) await sleep(RETRY_DELAY_MS);
   }
 
-  logInfo(`[groupLoader] Hoàn tất: ✅ ${ok} nhóm | ❌ ${fail} lỗi`);
+  logInfo(`[DataBase] Hoàn tất: ✅ ${ok} nhóm | ❌ ${fail} lỗi`);
   await saveGroupsSnapshot();
   return { ok, fail, total: ids.length, groups: loaded };
 }

@@ -26,6 +26,7 @@ const { isBotAdmin, isGroupAdmin } = require("../../utils/bot/botManager");
 const { getGroupAnti, recordMessage, clearSpam } = require("../../utils/bot/botManager");
 const { extractBody } = require("../../utils/bot/messageUtils");
 const { store: storeMsgCache } = require("../../includes/database/messageCache");
+const { logMessage }           = require("../../includes/database/messageLog");
 const { ThreadType } = require("zca-js");
 let _tuongTacRecord = null;
 function getTuongTacRecord() {
@@ -115,6 +116,9 @@ async function handleMessage(params) {
 
   // ── Lưu tin nhắn vào MessageCache (phục vụ resolveQuote) ──────────────────
   try { storeMsgCache(event); } catch (_) {}
+
+  // ── Lưu lịch sử tin nhắn vào SQLite (persistent) ──────────────────────────
+  logMessage(event).catch(() => {});
 
   // ── Lưu user + group vào DB, refresh tên nếu stale (chạy nền) ───────────────
   autoSaveFromEvent(api, event).catch(() => {});

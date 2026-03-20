@@ -208,6 +208,24 @@ async function initSchema(db) {
   await run(db, "CREATE INDEX IF NOT EXISTS idx_groups_updated_at ON groups(updated_at);").catch(() => {});
   await run(db, "CREATE INDEX IF NOT EXISTS idx_users_msg_count   ON users(msg_count);").catch(() => {});
 
+  // Bảng lưu lịch sử tin nhắn (persistent, tồn tại sau restart)
+  await run(db, `CREATE TABLE IF NOT EXISTS messages (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    msg_id      TEXT,
+    cli_msg_id  TEXT,
+    user_id     TEXT,
+    thread_id   TEXT,
+    is_group    INTEGER DEFAULT 0,
+    content     TEXT,
+    msg_type    TEXT,
+    attach_json TEXT,
+    ts          INTEGER,
+    saved_at    INTEGER
+  )`);
+  await run(db, "CREATE INDEX IF NOT EXISTS idx_messages_user_id   ON messages(user_id);").catch(() => {});
+  await run(db, "CREATE INDEX IF NOT EXISTS idx_messages_thread_id  ON messages(thread_id);").catch(() => {});
+  await run(db, "CREATE INDEX IF NOT EXISTS idx_messages_ts         ON messages(ts);").catch(() => {});
+
   await run(db, `CREATE TABLE IF NOT EXISTS users_money (
     user_id TEXT PRIMARY KEY, name TEXT DEFAULT '',
     money INTEGER DEFAULT 100000, exp INTEGER DEFAULT 0,

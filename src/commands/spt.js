@@ -31,12 +31,12 @@ function fmtSize(bytes) {
 async function getToken() {
   const res = await global.axios.post(
     "https://accounts.spotify.com/api/token",
-    null,
+    "grant_type=client_credentials",
     {
       headers: {
         Authorization: "Basic " + Buffer.from(`${SPT_ID}:${SPT_SECRET}`).toString("base64"),
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-      params:  { grant_type: "client_credentials" },
       timeout: 15000,
     }
   );

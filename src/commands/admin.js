@@ -43,22 +43,43 @@ function parseMentionIds(event) {
   const raw = event?.data;
   if (!raw) return [];
 
-  // Zalo gửi mentionInfo dạng JSON string: [{"uid":"123","length":8,"offset":0}]
+  // 1. raw.mentionInfo — JSON string: [{"uid":"123","length":8,"offset":0}]
   const mentionInfo = raw.mentionInfo;
   if (mentionInfo) {
     try {
       const arr = typeof mentionInfo === "string" ? JSON.parse(mentionInfo) : mentionInfo;
       if (Array.isArray(arr)) {
-        return arr.map(m => String(m.uid || "")).filter(uid => uid && uid !== "0");
+        const ids = arr.map(m => String(m.uid || m.id || "")).filter(uid => uid && uid !== "0");
+        if (ids.length) return ids;
       }
     } catch {}
   }
 
-  // Fallback: nếu có field mentions dạng object (một số version zca-js)
+  // 2. raw.mentions — object dạng { uid: name }
   const mentions = raw.mentions;
   if (mentions && typeof mentions === "object" && !Array.isArray(mentions)) {
-    return Object.keys(mentions).filter(k => k && k !== "0");
+    const ids = Object.keys(mentions).filter(k => k && k !== "0" && /^\d+$/.test(k));
+    if (ids.length) return ids;
   }
+
+  // 3. mentions nằm trong content JSON (một số phiên bản Zalo nhúng vào content)
+  try {
+    const c = raw.content;
+    const parsed = typeof c === "string" ? JSON.parse(c) : c;
+    if (parsed && typeof parsed === "object") {
+      if (Array.isArray(parsed.mentions)) {
+        const ids = parsed.mentions.map(m => String(m.uid || m.id || "")).filter(uid => uid && uid !== "0");
+        if (ids.length) return ids;
+      }
+      if (parsed.mentionInfo) {
+        const arr = typeof parsed.mentionInfo === "string" ? JSON.parse(parsed.mentionInfo) : parsed.mentionInfo;
+        if (Array.isArray(arr)) {
+          const ids = arr.map(m => String(m.uid || "")).filter(uid => uid && uid !== "0");
+          if (ids.length) return ids;
+        }
+      }
+    }
+  } catch {}
 
   return [];
 }

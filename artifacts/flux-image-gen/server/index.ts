@@ -9,21 +9,41 @@ import { GoogleGenAI } from "@google/genai";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+// Trên Render: dùng PORT (1 port duy nhất cho cả API + static)
+// Trên Replit dev: dùng API_SERVER_PORT riêng
+const API_PORT = IS_PRODUCTION
+  ? Number(process.env.PORT || 3000)
+  : Number(process.env.API_SERVER_PORT || 5001);
+
 const app = express();
-const API_PORT = Number(process.env.API_SERVER_PORT || 5001);
+
+// Tự tạo thư mục data nếu chưa có
+const DATA_DIR = path.join(__dirname, "data");
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
 
 app.use(cors());
 app.use(express.json());
 
 // ── Gemini AI ──────────────────────────────────────────────────────────────
+// Replit: dùng AI_INTEGRATIONS_GEMINI_BASE_URL + AI_INTEGRATIONS_GEMINI_API_KEY
+// Render: dùng GEMINI_API_KEY trực tiếp
 const geminiBaseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
-const geminiApiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || "dummy";
+const geminiApiKey =
+  process.env.AI_INTEGRATIONS_GEMINI_API_KEY ||
+  process.env.GEMINI_API_KEY ||
+  "dummy";
 
 const ai = geminiBaseUrl
   ? new GoogleGenAI({
       apiKey: geminiApiKey,
       httpOptions: { apiVersion: "", baseUrl: geminiBaseUrl },
     })
+  : process.env.GEMINI_API_KEY
+  ? new GoogleGenAI({ apiKey: geminiApiKey })
   : null;
 
 // ── Quota ──────────────────────────────────────────────────────────────────
@@ -820,11 +840,21 @@ app.get("/api/admin/key", requireAdmin, (_req, res) => {
   });
 });
 
+// ── Production: serve frontend static files ────────────────────────────────
+if (IS_PRODUCTION) {
+  const staticDir = path.join(__dirname, "../dist/public");
+  app.use(express.static(staticDir));
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(staticDir, "index.html"));
+  });
+}
+
 app.listen(API_PORT, () => {
   const adminKey = getAdminKey();
   const source = process.env.ADMIN_KEY ? "biến môi trường ADMIN_KEY" : "tự sinh (lưu trong file)";
   console.log(`\n${"═".repeat(60)}`);
-  console.log(`  API server running on port ${API_PORT}`);
+  console.log(`  Server running on port ${API_PORT}`);
+  console.log(`  Mode: ${IS_PRODUCTION ? "production (Render)" : "development (Replit)"}`);
   console.log(`  🔑 ADMIN KEY: ${adminKey}`);
   console.log(`  Nguồn: ${source}`);
   console.log(`${"═".repeat(60)}\n`);

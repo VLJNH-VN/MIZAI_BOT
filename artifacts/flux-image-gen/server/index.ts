@@ -11,19 +11,20 @@ app.use(express.json());
 const geminiBaseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
 const geminiApiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || "dummy";
 
-let ai: GoogleGenAI | null = null;
-if (geminiBaseUrl) {
-  ai = new GoogleGenAI({
-    apiKey: geminiApiKey,
-    httpOptions: { baseUrl: geminiBaseUrl },
-  });
-}
+const ai = geminiBaseUrl
+  ? new GoogleGenAI({
+      apiKey: geminiApiKey,
+      httpOptions: {
+        apiVersion: "",
+        baseUrl: geminiBaseUrl,
+      },
+    })
+  : null;
 
 app.post("/api/generate-prompt", async (req, res) => {
-  const { idea, style, language } = req.body as {
+  const { idea, style } = req.body as {
     idea: string;
     style?: string;
-    language?: string;
   };
 
   if (!idea) {
@@ -37,42 +38,40 @@ app.post("/api/generate-prompt", async (req, res) => {
   }
 
   try {
-    const styleHint = style ? `, phong cách: ${style}` : "";
-    const systemPrompt = `Bạn là chuyên gia tạo prompt ảnh AI chuyên nghiệp cho mô hình Flux. 
-Nhiệm vụ: Chuyển ý tưởng người dùng thành prompt tiếng Anh chi tiết, chuyên nghiệp cho Flux Image AI.
+    const styleHint = style ? `, artistic style: ${style}` : "";
+    const systemPrompt = `You are an expert AI image prompt engineer for Flux image generation models.
+Your task: Convert the user's idea into a detailed, professional English prompt for Flux Image AI.
 
-Quy tắc:
-- Viết HOÀN TOÀN bằng tiếng Anh
-- Mô tả chi tiết: ánh sáng, màu sắc, góc chụp, phong cách nghệ thuật, chất lượng
-- Thêm các từ khóa chất lượng: "highly detailed", "8K", "photorealistic", "masterpiece"
-- Chỉ trả về prompt, không có giải thích thêm
-- Độ dài 50-150 từ`;
+Rules:
+- Write ENTIRELY in English
+- Describe in detail: lighting, colors, camera angle, artistic style, quality
+- Add quality keywords: "highly detailed", "8K resolution", "masterpiece", "professional photography"
+- Return ONLY the prompt text, no explanations or commentary
+- Length: 50-150 words`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
+      config: {
+        systemInstruction: systemPrompt,
+        maxOutputTokens: 512,
+      },
       contents: [
         {
           role: "user",
           parts: [
             {
-              text: `Tạo prompt Flux cho ý tưởng: "${idea}"${styleHint}`,
+              text: `Create a Flux image prompt for this idea: "${idea}"${styleHint}`,
             },
           ],
         },
       ],
-      config: {
-        systemInstruction: systemPrompt,
-        maxOutputTokens: 500,
-      },
     });
 
     const prompt = response.text?.trim() || "";
     res.json({ prompt });
   } catch (err: unknown) {
     console.error("Gemini error:", err);
-    res
-      .status(500)
-      .json({ error: "Lỗi tạo prompt: " + (err as Error).message });
+    res.status(500).json({ error: "Lỗi tạo prompt: " + (err as Error).message });
   }
 });
 
@@ -94,8 +93,7 @@ app.post("/api/generate-image", async (req, res) => {
 
   if (!cfAccountId || !cfApiToken) {
     res.status(503).json({
-      error:
-        "Cloudflare chưa được cấu hình. Vui lòng thêm CLOUDFLARE_ACCOUNT_ID và CLOUDFLARE_API_TOKEN.",
+      error: "Cloudflare chưa được cấu hình. Vui lòng thêm CLOUDFLARE_ACCOUNT_ID và CLOUDFLARE_API_TOKEN.",
     });
     return;
   }
@@ -137,9 +135,7 @@ app.post("/api/generate-image", async (req, res) => {
       if (data.result?.image) {
         res.json({ image: data.result.image, mimeType: "image/png" });
       } else {
-        throw new Error(
-          data.errors?.[0]?.message || "Không nhận được ảnh từ Cloudflare"
-        );
+        throw new Error(data.errors?.[0]?.message || "Không nhận được ảnh từ Cloudflare");
       }
     } else {
       const arrayBuffer = await cfResponse.arrayBuffer();
@@ -148,9 +144,7 @@ app.post("/api/generate-image", async (req, res) => {
     }
   } catch (err: unknown) {
     console.error("Cloudflare error:", err);
-    res
-      .status(500)
-      .json({ error: "Lỗi tạo ảnh: " + (err as Error).message });
+    res.status(500).json({ error: "Lỗi tạo ảnh: " + (err as Error).message });
   }
 });
 

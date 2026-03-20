@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-20T11:56:26.009Z",
+  "generatedAt": "2026-03-20T12:07:00.425Z",
   "total": 15,
   "users": [
     {
@@ -127,9 +127,52 @@
         "oa_status": null
       },
       "firstSeen": 1773993057052,
-      "msgCount": 67,
+      "msgCount": 80,
       "profileAt": 1773994572480,
-      "updatedAt": 1774007296521
+      "updatedAt": 1774008239477
+    },
+    {
+      "userId": "6024931307373526012",
+      "name": "Đặng Lịnh",
+      "profile": {
+        "userId": "6024931307373526012",
+        "username": "t_m7beb0nfzz",
+        "displayName": "Đặng Lịnh",
+        "zaloName": "Đặng Lịnh",
+        "avatar": "https://s160-ava-talk.zadn.vn/default",
+        "bgavatar": "",
+        "cover": "https://cover-talk.zadn.vn/default",
+        "gender": 0,
+        "dob": 1141491600,
+        "sdob": "05/03/2006",
+        "status": "",
+        "phoneNumber": "",
+        "isFr": 1,
+        "isBlocked": 0,
+        "lastActionTime": 1773994416849,
+        "lastUpdateTime": 1773515919,
+        "isActive": 1,
+        "key": 0,
+        "type": 0,
+        "isActivePC": 0,
+        "isActiveWeb": 1,
+        "isValid": 1,
+        "userKey": "6024931307373526012",
+        "accountStatus": 0,
+        "oaInfo": null,
+        "user_mode": 0,
+        "globalId": "NTSQPNIIJN1MGK1R1T9B54KVLJAHGSG0",
+        "bizPkg": {
+          "label": null,
+          "pkgId": 0
+        },
+        "createdTs": 1685968829,
+        "oa_status": null
+      },
+      "firstSeen": 1773993895117,
+      "msgCount": 61,
+      "profileAt": 1773994417530,
+      "updatedAt": 1774008203573
     },
     {
       "userId": "1669731236676931404",
@@ -178,49 +221,6 @@
       "updatedAt": 1774007091660
     },
     {
-      "userId": "6024931307373526012",
-      "name": "Đặng Lịnh",
-      "profile": {
-        "userId": "6024931307373526012",
-        "username": "t_m7beb0nfzz",
-        "displayName": "Đặng Lịnh",
-        "zaloName": "Đặng Lịnh",
-        "avatar": "https://s160-ava-talk.zadn.vn/default",
-        "bgavatar": "",
-        "cover": "https://cover-talk.zadn.vn/default",
-        "gender": 0,
-        "dob": 1141491600,
-        "sdob": "05/03/2006",
-        "status": "",
-        "phoneNumber": "",
-        "isFr": 1,
-        "isBlocked": 0,
-        "lastActionTime": 1773994416849,
-        "lastUpdateTime": 1773515919,
-        "isActive": 1,
-        "key": 0,
-        "type": 0,
-        "isActivePC": 0,
-        "isActiveWeb": 1,
-        "isValid": 1,
-        "userKey": "6024931307373526012",
-        "accountStatus": 0,
-        "oaInfo": null,
-        "user_mode": 0,
-        "globalId": "NTSQPNIIJN1MGK1R1T9B54KVLJAHGSG0",
-        "bizPkg": {
-          "label": null,
-          "pkgId": 0
-        },
-        "createdTs": 1685968829,
-        "oa_status": null
-      },
-      "firstSeen": 1773993895117,
-      "msgCount": 55,
-      "profileAt": 1773994417530,
-      "updatedAt": 1774007454987
-    },
-    {
       "userId": "2817603034815564154",
       "name": "Phanh",
       "profile": {
@@ -259,9 +259,9 @@
         "oa_status": null
       },
       "firstSeen": 1773993016129,
-      "msgCount": 44,
+      "msgCount": 50,
       "profileAt": 1773995359855,
-      "updatedAt": 1774001411816
+      "updatedAt": 1774008239571
     },
     {
       "userId": "8009347465992207686",
@@ -305,9 +305,9 @@
         "oa_status": null
       },
       "firstSeen": 1773994030291,
-      "msgCount": 30,
+      "msgCount": 33,
       "profileAt": 1773995359545,
-      "updatedAt": 1774002311956
+      "updatedAt": 1774007918566
     },
     {
       "userId": "1421614274573344218",

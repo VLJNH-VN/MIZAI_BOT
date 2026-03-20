@@ -383,8 +383,6 @@ app.post("/api/key/vip", async (req, res) => {
     return;
   }
 
-  await res.json({ message: "⏳ Đang kiểm tra token Cloudflare..." });
-
   const alive = await verifyCF(cfAccountId, cfToken);
 
   if (!alive) {
@@ -395,6 +393,7 @@ app.post("/api/key/vip", async (req, res) => {
     return;
   }
 
+  // Lưu vào keys.json (user record)
   const newKey = generateKey();
   user.key = newKey;
   user.keyShown = true;
@@ -404,11 +403,27 @@ app.post("/api/key/vip", async (req, res) => {
   db.users[userId] = user;
   saveDB(db);
 
+  // Cũng thêm vào credentials.json pool để xoay vòng
+  const credsDb = loadCreds();
+  const existingIdx = credsDb.accounts.findIndex(a => a.accountId === cfAccountId && a.token === cfToken);
+  if (existingIdx === -1) {
+    credsDb.accounts.push({
+      label: `VIP-${userId.slice(0, 8)}`,
+      accountId: cfAccountId,
+      token: cfToken,
+      dailyUsage: 0,
+      lastReset: today(),
+      exhausted: false,
+    });
+    saveCreds(credsDb);
+  }
+
   res.json({
     success: true,
     key: newKey,
     type: "vip",
     status: "✅ Token Cloudflare hợp lệ (đang sống)",
+    addedToPool: existingIdx === -1,
     note: "⚠️ Key VIP chỉ hiển thị 1 lần duy nhất. Hãy lưu giữ cẩn thận!",
   });
 });

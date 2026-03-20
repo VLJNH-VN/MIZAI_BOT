@@ -1,0 +1,96 @@
+const { isBotAdmin } = require("../../utils/bot/botManager");
+
+module.exports = {
+  config: {
+    name: "quickmsg",
+    aliases: ["qm", "tinnhanhanhh"],
+    version: "1.0.0",
+    hasPermssion: 2,
+    credits: "MIZAI",
+    description: "Quản lý tin nhắn nhanh (quick message)",
+    commandCategory: "Admin",
+    usages: [
+      "quickmsg list               — Xem danh sách tin nhắn nhanh",
+      "quickmsg add <tắt> | <nội_dung> — Thêm tin nhắn nhanh",
+      "quickmsg remove <id>        — Xóa tin nhắn nhanh",
+      "quickmsg send <tắt>         — Gửi tin nhắn nhanh vào chat này",
+    ].join("\n"),
+    cooldowns: 5,
+  },
+
+  run: async ({ api, event, args, send, senderId, prefix, threadID }) => {
+    if (!isBotAdmin(senderId)) return send("⛔ Chỉ Admin bot mới dùng được lệnh này.");
+
+    const sub = (args[0] || "").toLowerCase();
+
+    if (!sub) {
+      return send(
+        `⚡ QUICKMSG — TIN NHẮN NHANH\n━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `${prefix}quickmsg list            Xem danh sách\n` +
+        `${prefix}quickmsg add <tắt>|<nd>  Thêm tin nhắn nhanh\n` +
+        `${prefix}quickmsg remove <id>     Xóa\n` +
+        `${prefix}quickmsg send <tắt>      Gửi vào chat\n\n` +
+        `💡 Ví dụ:\n${prefix}quickmsg add xc | Xin chào! Mình là Mizai Bot.`
+      );
+    }
+
+    try {
+      switch (sub) {
+
+        case "list": {
+          const res = await api.getQuickMessageList();
+          const items = res?.quickMessages || res?.data || res || [];
+          if (!items.length) return send("📭 Chưa có tin nhắn nhanh nào.");
+          const lines = items.map((item, i) => {
+            const shortcut = item.shortcut || item.trigger || item.id || i;
+            const msg = item.message || item.content || item.text || "";
+            return `${i + 1}. [${shortcut}] → "${msg.slice(0, 50)}..."`;
+          });
+          return send(`⚡ TIN NHẮN NHANH (${items.length}):\n${lines.join("\n")}`);
+        }
+
+        case "add": {
+          const fullText = args.slice(1).join(" ");
+          const parts = fullText.split("|");
+          if (parts.length < 2) {
+            return send(`⚠️ Ví dụ: ${prefix}quickmsg add xc | Xin chào bạn!`);
+          }
+          const shortcut = parts[0].trim();
+          const message = parts.slice(1).join("|").trim();
+          if (!shortcut || !message) return send("⚠️ Phím tắt và nội dung không được để trống.");
+
+          await api.addQuickMessage({ shortcut, message });
+          return send(`✅ Đã thêm tin nhắn nhanh:\n⚡ Phím tắt: "${shortcut}"\n💬 Nội dung: "${message}"`);
+        }
+
+        case "remove":
+        case "rm":
+        case "del": {
+          const id = args[1];
+          if (!id) return send(`⚠️ Ví dụ: ${prefix}quickmsg remove xc`);
+          await api.removeQuickMessage(id);
+          return send(`✅ Đã xóa tin nhắn nhanh: "${id}"`);
+        }
+
+        case "send":
+        case "use": {
+          const shortcut = args[1];
+          if (!shortcut) return send(`⚠️ Ví dụ: ${prefix}quickmsg send xc`);
+          const res = await api.getQuickMessageList();
+          const items = res?.quickMessages || res?.data || res || [];
+          const found = items.find(i => (i.shortcut || i.trigger || i.id) === shortcut);
+          if (!found) return send(`❌ Không tìm thấy tin nhắn nhanh: "${shortcut}"`);
+          const msg = found.message || found.content || found.text || "";
+          await api.sendMessage({ msg }, threadID, event.type);
+          break;
+        }
+
+        default:
+          return send(`❌ Lệnh không hợp lệ. Dùng: ${prefix}quickmsg để xem hướng dẫn.`);
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.error || err?.message || "Lỗi không xác định";
+      return send(`❌ Lỗi: ${msg}`);
+    }
+  },
+};

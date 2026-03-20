@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-03-20T12:20:20.187Z",
-  "total": 15,
+  "generatedAt": "2026-03-20T12:29:52.230Z",
+  "total": 16,
   "users": [
     {
       "userId": "6215915355277074723",
@@ -618,6 +618,15 @@
       "msgCount": 1,
       "profileAt": 1773999295773,
       "updatedAt": 1773999295773
+    },
+    {
+      "userId": "999TEST",
+      "name": "Minh",
+      "profile": null,
+      "firstSeen": 1774009252107,
+      "msgCount": 0,
+      "profileAt": 0,
+      "updatedAt": 1774009252113
     },
     {
       "userId": "5577225479472062214",

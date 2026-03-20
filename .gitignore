@@ -1,5 +1,3 @@
-# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
-
 # compiled output
 dist
 tmp
@@ -31,19 +29,26 @@ node_modules
 /.sass-cache
 /connect.lock
 /coverage
-/libpeerconnection.log
 npm-debug.log
 yarn-error.log
-testem.log
-/typings
 
 # System Files
 .DS_Store
 Thumbs.db
 
-.cursor/rules/nx-rules.mdc
-.github/instructions/nx.instructions.md
-
 # Replit
 .cache/
 .local/
+
+# Bot sensitive files — KHÔNG commit lên GitHub
+config.json
+cookie.json
+qr.png
+appstate.json
+
+# Backups
+backups/
+
+# SQLite runtime files
+*.sqlite-shm
+*.sqlite-wal

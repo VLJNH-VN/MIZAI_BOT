@@ -12,28 +12,65 @@ MIZAI_BOT là một chatbot Zalo đa chức năng, xây dựng bằng Node.js. B
 - **Lệnh chạy:** `node index.js` hoặc `npm start`
 - **Lệnh dev (auto-reload):** `npm run dev` (nodemon)
 
+## Cài đặt nhanh
+
+```bash
+# 1. Clone và cài dependencies
+npm install
+
+# 2. Tạo config từ mẫu
+cp config.example.json config.json
+
+# 3. Chỉnh sửa config.json (thêm cookie, imei, ownerId, ...)
+# 4. Chạy bot
+npm start
+```
+
 ## Cấu trúc thư mục
 
 ```
 MIZAI_BOT/
-├── index.js                  # Entry point, khởi tạo client Zalo, đăng ký event
-├── config.json               # Cấu hình bot (prefix, admin, API keys, ...)
-├── cookie.json               # Cookie đăng nhập Zalo
+├── index.js                    # Entry point, khởi tạo client Zalo, đăng ký event
+├── config.json                 # Cấu hình bot (KHÔNG commit lên git)
+├── config.example.json         # Mẫu config để tham khảo
+├── cookie.json                 # Cookie đăng nhập Zalo (KHÔNG commit lên git)
 ├── package.json
+│
 ├── src/
-│   ├── commands/             # Các lệnh của bot (mỗi file = 1 lệnh)
-│   └── events/               # Xử lý sự kiện nền (message, group, txLoop, ...)
+│   ├── commands/               # Lệnh của bot, phân theo danh mục
+│   │   ├── admin/              # Quản trị nhóm: admin, anti, kick, mute, set, shell...
+│   │   ├── economy/            # Kinh tế: tx, money, transfer, rank, rent, daily...
+│   │   ├── media/              # Media: 4k, timnhac, getlink, mixcloud, spt, scl...
+│   │   ├── info/               # Thông tin: ping, uptime, wiki, thoitiet, profile...
+│   │   ├── fun/                # Giải trí: poll, note, remind, carwl, forward...
+│   │   ├── ai/                 # AI: api, adc, checktt
+│   │   └── utility/            # Tiện ích: menu, key, gettoken, file, mail, undo...
+│   └── events/                 # Xử lý sự kiện nền
+│       ├── message.js          # Điều phối tin nhắn → handleCommand
+│       ├── autoDown.js         # Tự động tải media
+│       ├── autoSend.js         # Tự động gửi tin định kỳ
+│       ├── goibot.js           # AI Mizai background
+│       ├── groupEvents.js      # Sự kiện nhóm
+│       ├── tuongTac.js         # Tương tác tự động
+│       └── txLoop.js           # Vòng lặp game Tài Xỉu
+│
 ├── includes/
-│   ├── handlers/             # Xử lý lệnh, reply, reaction, undo
-│   ├── database/             # SQLite và JSON cache (economy, rent, ...)
-│   ├── data/                 # Dữ liệu tĩnh
-│   ├── listapi/              # Danh sách API tích hợp
-│   └── cache/                # Cache bộ nhớ
+│   ├── handlers/               # Xử lý lệnh, reply, reaction, undo
+│   ├── database/               # SQLite, economy, groupSettings, cache DB
+│   ├── data/                   # Dữ liệu JSON (anti, auto, taixiu, users...)
+│   ├── listapi/                # Danh sách API
+│   └── cache/                  # Cache bộ nhớ
+│
 ├── utils/
-│   ├── ai/                   # Logic AI (goibot.js, Groq, Gemini)
-│   ├── bot/                  # Tiện ích bot
-│   └── system/               # Logger, loader, githubBackup, maintenance
-└── attached_assets/          # Tài nguyên đính kèm
+│   ├── ai/goibot.js            # Logic AI (Groq, Gemini)
+│   ├── bot/                    # botManager, messageUtils
+│   └── system/                 # client, global, loader, logger, maintenance, keepAlive, githubBackup
+│
+└── scripts/                    # Script tiện ích (chạy bằng npm run ...)
+    ├── new-cmd.js              # Tạo lệnh mới
+    ├── list-cmds.js            # Liệt kê tất cả lệnh
+    ├── move-cmd.js             # Di chuyển lệnh sang danh mục khác
+    └── backup-cmds.js          # Backup lệnh ra .zip
 ```
 
 ## Tech Stack
@@ -52,77 +89,44 @@ MIZAI_BOT/
 | TikTok DL | `@tobyg74/tiktok-api-dl` |
 | Dev tool | `nodemon` |
 
-## Các lệnh chính (Commands)
-
-| Lệnh | Mô tả |
-|---|---|
-| `tx` | Game Tài Xỉu (cược tiền) |
-| `money` | Xem/quản lý số dư kinh tế |
-| `transfer` | Chuyển tiền giữa người dùng |
-| `naptien` | Nạp tiền vào hệ thống |
-| `rent` | Hệ thống thuê bot theo nhóm |
-| `admin` | Quản lý quyền admin |
-| `kick` | Đuổi thành viên khỏi nhóm |
-| `anti` | Bật/tắt lọc spam, link, NSFW |
-| `auto` | Tự động hóa (tải media, reply, ...) |
-| `rank` | Bảng xếp hạng người dùng |
-| `remind` | Hẹn giờ nhắc nhở |
-| `thoitiet` | Thời tiết |
-| `wiki` | Tìm kiếm Wikipedia |
-| `ping` | Kiểm tra bot còn sống |
-| `menu` | Danh sách lệnh |
-| `profile` | Xem thông tin cá nhân |
-| `note` | Ghi chú nhóm |
-| `poll` | Tạo poll khảo sát |
-| `shell` | Chạy lệnh shell (admin) |
-| `load` | Reload lệnh động |
-| `uptime` | Thời gian bot hoạt động |
-
-## Các sự kiện nền (Events)
-
-- `message.js` — Xử lý tin nhắn đến
-- `groupEvents.js` — Sự kiện nhóm (thêm/xóa thành viên, v.v.)
-- `txLoop.js` — Vòng lặp game Tài Xỉu đồng bộ theo phòng (60s/round)
-- `autoDown.js` — Tự động tải media từ link (TikTok, v.v.)
-- `autoSend.js` — Tự động gửi tin
-- `goibot.js` — Xử lý gọi AI chat
-- `tuongTac.js` — Xử lý tương tác người dùng
-
-## Handlers
-
-- `handleCommand.js` — Điều phối lệnh
-- `handleReply.js` — Xử lý reply tin nhắn
-- `handleReaction.js` — Xử lý reaction
-- `handleUndo.js` — Tự động thu hồi tin nhắn
-
-## Database
-
-- SQLite (`better-sqlite3`) lưu trữ: người dùng, kinh tế, rent nhóm
-- JSON cache lưu trữ dữ liệu tạm thời
-
-## Scripts tiện ích
+## Script tiện ích
 
 ```bash
-npm run new-cmd       # Tạo lệnh mới
-npm run list-cmds     # Liệt kê tất cả lệnh
-npm run move-cmd      # Di chuyển lệnh
-npm run backup-cmds   # Backup danh sách lệnh
-npm run backup        # Backup lên GitHub
+npm run new-cmd <tên> <danh-mục>   # Tạo lệnh mới
+npm run list-cmds                   # Liệt kê tất cả lệnh
+npm run move-cmd <tên> <danh-mục>  # Di chuyển lệnh
+npm run backup-cmds                 # Backup lệnh ra .zip
+npm run backup                      # Backup dữ liệu lên GitHub
 ```
 
-## Cấu hình
+## Cấu hình (config.json)
 
-File chính: `config.json`
-- Prefix lệnh
-- Danh sách admin
-- API keys (Groq, Gemini, ...)
-- Cài đặt game, kinh tế
+| Trường | Mô tả |
+|---|---|
+| `prefix` | Ký tự kích hoạt lệnh (mặc định `.`) |
+| `loginMethod` | Phương thức đăng nhập: `cookie` |
+| `cookiePath` | Đường dẫn file cookie |
+| `imei` | IMEI thiết bị Zalo |
+| `ownerId` | UID chủ bot |
+| `adminBotIds` | Danh sách UID admin bot |
+| `hfToken` | HuggingFace API token |
+| `githubToken` | GitHub token để backup |
+| `repo` | Repo GitHub để backup |
 
-File xác thực: `cookie.json`
-- Cookie phiên đăng nhập Zalo
+## Danh mục lệnh
 
-## Lưu ý kiến trúc
+| Danh mục | Số lệnh | Mô tả |
+|---|---|---|
+| admin | 11 | Quản trị nhóm, bảo mật |
+| economy | 10 | Kinh tế ảo, game |
+| media | 7 | Tải và xử lý media |
+| info | 8 | Thông tin, tra cứu |
+| fun | 5 | Giải trí, tương tác |
+| ai | 3 | Trí tuệ nhân tạo |
+| utility | 8 | Tiện ích hệ thống |
 
-- Lệnh được load động qua `utils/system/loader.js`, có thể reload không cần restart
-- Có tính năng backup tự động lên GitHub
-- AI Mizai có nhân cách "nữ tính" được định nghĩa qua system prompt trong `utils/ai/goibot.js`
+## Lưu ý bảo mật
+
+- `config.json` và `cookie.json` được thêm vào `.gitignore` — **KHÔNG commit lên GitHub**
+- Luôn dùng `config.example.json` làm mẫu khi chia sẻ project
+- Chạy `npm run backup` để backup dữ liệu lên GitHub private repo

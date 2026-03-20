@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-03-20T12:20:20.187Z",
-  "total": 2,
+  "generatedAt": "2026-03-20T12:29:52.230Z",
+  "total": 3,
   "groups": [
     {
       "groupId": "9176300605344420664",
@@ -75,7 +75,7 @@
         "globalId": "N0BEFIC9R47B72VAQJVA5JU9VSST22O0",
         "e2ee": 0,
         "pendingApprove": {
-          "time": 1774009220077,
+          "time": 1774009792158,
           "uids": null
         },
         "extraInfo": {
@@ -106,8 +106,8 @@
       ],
       "memberCount": 20,
       "firstSeen": 1773994297925,
-      "profileAt": 1774009220183,
-      "updatedAt": 1774009220183
+      "profileAt": 1774009792228,
+      "updatedAt": 1774009792228
     },
     {
       "groupId": "2480105366650289419",
@@ -156,7 +156,7 @@
         "globalId": "CCJ2EBB4DAK5SPMH76HN5ORB7Q26RI00",
         "e2ee": 0,
         "pendingApprove": {
-          "time": 1774009220069,
+          "time": 1774009792132,
           "uids": null
         },
         "extraInfo": {
@@ -169,8 +169,18 @@
       ],
       "memberCount": 2,
       "firstSeen": 1773994297924,
-      "profileAt": 1774009220183,
-      "updatedAt": 1774009220183
+      "profileAt": 1774009792219,
+      "updatedAt": 1774009792219
+    },
+    {
+      "groupId": "TEST_GROUP_123",
+      "name": "",
+      "info": null,
+      "memVerList": null,
+      "memberCount": 0,
+      "firstSeen": 1774009252096,
+      "profileAt": 0,
+      "updatedAt": 1774009252103
     }
   ]
 }

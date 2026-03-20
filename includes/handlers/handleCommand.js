@@ -66,11 +66,14 @@ function buildSend(api, raw, threadID, eventType) {
       logError("Không tìm thấy threadId để gửi tin nhắn.");
       return;
     }
-    const payload =
-      typeof message === "string"
-        ? { msg: message, quote: raw }
-        : message;
-    return api.sendMessage(payload, threadID, eventType);
+    if (typeof message === "string") {
+      try {
+        return await api.sendMessage({ msg: message, quote: raw }, threadID, eventType);
+      } catch {
+        return api.sendMessage({ msg: message }, threadID, eventType);
+      }
+    }
+    return api.sendMessage(message, threadID, eventType);
   };
 }
 

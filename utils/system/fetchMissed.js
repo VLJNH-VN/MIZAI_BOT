@@ -49,7 +49,7 @@ async function fetchMissedMessages(api) {
       ? `${Math.floor(offlineDuration / 60)}m ${offlineDuration % 60}s`
       : `${Math.floor(offlineDuration / 3600)}h ${Math.floor((offlineDuration % 3600) / 60)}m`;
 
-  logInfo(`[fetchMissed] Bot đã offline ${offlineStr}. Đang kiểm tra tin nhắn bỏ lỡ...`);
+  logInfo(`[DataBase] Bot đã offline ${offlineStr}. Đang kiểm tra tin nhắn bỏ lỡ...`);
 
   const groupIds = loadGroupIds();
   if (groupIds.length === 0) return;
@@ -77,9 +77,9 @@ async function fetchMissedMessages(api) {
   }
 
   if (totalMissed > 0) {
-    logInfo(`[fetchMissed] Bỏ qua ${totalMissed} tin nhắn trong lúc offline.`);
+    logInfo(`[DataBase] Bỏ qua ${totalMissed} tin nhắn trong lúc offline.`);
   } else {
-    logInfo(`[fetchMissed] Không có tin nhắn bỏ lỡ.`);
+    logInfo(`[DataBase] Không có tin nhắn bỏ lỡ.`);
   }
 }
 

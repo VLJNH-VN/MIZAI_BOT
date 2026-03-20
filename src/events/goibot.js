@@ -462,6 +462,12 @@ async function handleGoibot({ api, event }) {
   const body      = getBody(event);
   if (!body) return;
 
+  const prefix = global.prefix || ".";
+  const trimmedBody = body.trimStart();
+  if (trimmedBody.startsWith(prefix)) return;
+  const prefixIdx = trimmedBody.indexOf(prefix);
+  if (prefixIdx > 0 && /^@/.test(trimmedBody.slice(0, prefixIdx).trim())) return;
+
   const bodyLower    = body.toLowerCase();
   const quoteUidFrom = String(raw.quote?.ownerId || raw.quote?.uidFrom || "");
   const isReplyToBot = !!botId && quoteUidFrom === botId;

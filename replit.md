@@ -124,6 +124,5 @@ File xác thực: `cookie.json`
 ## Lưu ý kiến trúc
 
 - Lệnh được load động qua `utils/system/loader.js`, có thể reload không cần restart
-- Bot có cơ chế `keepAlive` để tự khởi động lại khi mất kết nối
 - Có tính năng backup tự động lên GitHub
 - AI Mizai có nhân cách "nữ tính" được định nghĩa qua system prompt trong `utils/ai/goibot.js`

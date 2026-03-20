@@ -15,5 +15,6 @@
   "uploadRepo": "YOUR_GITHUB_USERNAME/YOUR_UPLOAD_REPO",
   "branch": "main",
   "autoUndoOnAngry": true,
-  "undoEnabled": true
+  "undoEnabled": true,
+  "keyRent": "MiZai"
 }

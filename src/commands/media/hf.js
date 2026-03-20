@@ -2,68 +2,47 @@
 
 const fs   = require("fs");
 const path = require("path");
+const { HfInference } = require("@huggingface/inference");
 
 const getToken = () => global?.config?.hfToken || process.env.HF_TOKEN || "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";
+const getHf    = () => new HfInference(getToken());
 
 const TEXT_MODEL = "mistralai/Mistral-7B-Instruct-v0.3";
 const IMG_MODEL  = "black-forest-labs/FLUX.1-schnell";
-const HF_API     = "https://router.huggingface.co/hf-inference/models";
 
 async function hfText(prompt) {
-  const url = `${HF_API}/${TEXT_MODEL}/v1/chat/completions`;
-  const res  = await global.axios.post(
-    url,
-    {
-      model      : TEXT_MODEL,
-      messages   : [{ role: "user", content: prompt }],
-      max_tokens : 1024,
-      temperature: 0.7
-    },
-    {
-      headers: {
-        Authorization : `Bearer ${getToken()}`,
-        "Content-Type": "application/json"
-      },
-      timeout: 60_000
-    }
-  );
-  return res.data?.choices?.[0]?.message?.content?.trim() || "❌ Không có phản hồi.";
+  const hf  = getHf();
+  const res = await hf.chatCompletion({
+    model      : TEXT_MODEL,
+    messages   : [{ role: "user", content: prompt }],
+    max_tokens : 1024,
+    temperature: 0.7,
+  });
+  return res.choices?.[0]?.message?.content?.trim() || "❌ Không có phản hồi.";
 }
 
 async function hfImage(prompt) {
-  const token = getToken();
+  const hf = getHf();
 
-  // ── Thử HuggingFace Inference API (tự đổi sang SDXL nếu model chính lỗi) ──
-  if (token) {
-    const hfModels = [IMG_MODEL, "stabilityai/stable-diffusion-xl-base-1.0"].filter(
-      (v, i, arr) => arr.indexOf(v) === i
-    );
-    for (const hfModel of hfModels) {
-      try {
-        const res = await global.axios.post(
-          `${HF_API}/${hfModel}`,
-          { inputs: prompt, parameters: { width: 1024, height: 1024, num_inference_steps: 4 } },
-          {
-            headers: {
-              Authorization : `Bearer ${token}`,
-              "Content-Type": "application/json",
-              Accept        : "image/jpeg",
-            },
-            responseType: "arraybuffer",
-            timeout: 120_000,
-          }
-        );
-        const ct = res.headers?.["content-type"] || "";
-        if (ct.startsWith("image/") && res.data?.byteLength > 500) {
-          return Buffer.from(res.data);
-        }
-        throw new Error(`HF trả về không phải ảnh (${ct})`);
-      } catch (hfErr) {
-        const st = hfErr?.response?.status;
-        const isLast = hfModels.indexOf(hfModel) === hfModels.length - 1;
-        logWarn?.(`[hf/img] HF ${hfModel} lỗi ${st || hfErr.message}${isLast ? ", thử Pollinations..." : ", thử model tiếp..."}`);
-        if (!st || st === 429 || st === 503) break;
-      }
+  // ── Thử HuggingFace Inference SDK (tự đổi sang SDXL nếu model chính lỗi) ──
+  const hfModels = [IMG_MODEL, "stabilityai/stable-diffusion-xl-base-1.0"].filter(
+    (v, i, arr) => arr.indexOf(v) === i
+  );
+  for (const hfModel of hfModels) {
+    try {
+      const blob = await hf.textToImage({
+        model     : hfModel,
+        inputs    : prompt,
+        parameters: { width: 1024, height: 1024, num_inference_steps: 4 },
+      });
+      const buf = Buffer.from(await blob.arrayBuffer());
+      if (buf.byteLength > 500) return buf;
+      throw new Error("Dữ liệu ảnh rỗng");
+    } catch (hfErr) {
+      const st     = hfErr?.status ?? hfErr?.response?.status;
+      const isLast = hfModels.indexOf(hfModel) === hfModels.length - 1;
+      global.logWarn?.(`[hf/img] HF ${hfModel} lỗi ${st || hfErr.message}${isLast ? ", thử Pollinations..." : ", thử model tiếp..."}`);
+      if (!st || st === 429 || st === 503) break;
     }
   }
 

@@ -8,6 +8,7 @@ const axios  = require("axios");
 const fs     = require("fs");
 const path   = require("path");
 const os     = require("os");
+const { HfInference } = require("@huggingface/inference");
 const { Reactions } = require("zca-js");
 
 const {
@@ -213,7 +214,6 @@ const IMG_MODELS = {
   "any-dark":     { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-realism", label: "Flux Realism", w: 768,  h: 1024 },
 };
 
-const HF_IMG_BASE  = "https://router.huggingface.co/hf-inference/models";
 const IMG_TIMEOUT  = 120000;
 
 async function generateImage({ prompt, modelKey = "flux", width, height }) {
@@ -223,35 +223,27 @@ async function generateImage({ prompt, modelKey = "flux", width, height }) {
 
   const hfToken = global?.config?.hfToken || process.env.HF_TOKEN || "";
 
-  // ── Thử HuggingFace trước (tự đổi sang SDXL nếu model chính lỗi) ───────────
+  // ── Thử HuggingFace Inference SDK (tự đổi sang SDXL nếu model chính lỗi) ──
   if (hfToken) {
+    const hf = new HfInference(hfToken);
     const hfModels = [m.hf, "stabilityai/stable-diffusion-xl-base-1.0"].filter(
       (v, i, arr) => arr.indexOf(v) === i
     );
     for (const hfModel of hfModels) {
       try {
-        const res = await axios.post(
-          `${HF_IMG_BASE}/${hfModel}`,
-          { inputs: prompt, parameters: { width: w, height: h, num_inference_steps: 4 } },
-          {
-            headers: {
-              Authorization : `Bearer ${hfToken}`,
-              "Content-Type": "application/json",
-              Accept        : "image/jpeg",
-            },
-            responseType: "arraybuffer",
-            timeout: IMG_TIMEOUT,
-          }
-        );
-        const ct = res.headers?.["content-type"] || "";
-        if (ct.startsWith("image/") && res.data?.byteLength > 500) {
-          return Buffer.from(res.data);
-        }
-        throw new Error(`HF trả về không phải ảnh (${ct})`);
+        const blob = await hf.textToImage({
+          model     : hfModel,
+          inputs    : prompt,
+          parameters: { width: w, height: h, num_inference_steps: 4 },
+        });
+        const buf = Buffer.from(await blob.arrayBuffer());
+        if (buf.byteLength > 500) return buf;
+        throw new Error("Dữ liệu ảnh rỗng");
       } catch (hfErr) {
-        const status = hfErr?.response?.status;
-        global.logWarn?.(`[goibot/img] HF ${hfModel} thất bại (${status || hfErr.message})${hfModels.indexOf(hfModel) < hfModels.length - 1 ? ", thử model tiếp..." : ", thử Pollinations..."}`);
-        if (!status || status < 400 || status === 429 || status === 503) break;
+        const status = hfErr?.status ?? hfErr?.response?.status;
+        const isLast = hfModels.indexOf(hfModel) === hfModels.length - 1;
+        global.logWarn?.(`[goibot/img] HF ${hfModel} thất bại (${status || hfErr.message})${isLast ? ", thử Pollinations..." : ", thử model tiếp..."}`);
+        if (!status || status === 429 || status === 503) break;
       }
     }
   }

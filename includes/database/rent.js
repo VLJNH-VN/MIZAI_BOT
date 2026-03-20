@@ -181,7 +181,7 @@ function generateKey(prefix, days) {
     const s2 = Math.random().toString(36).substring(2, 9).toUpperCase();
     key = `${prefix}_${days}D_${s2}`;
   }
-  j.unUsed_keys.push(key);
+  jq.unUsed_keys.push(key);
   writeRentKeys(j);
   return key;
 }

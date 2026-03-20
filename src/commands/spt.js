@@ -9,7 +9,7 @@
 const fs   = require("fs");
 const path = require("path");
 const os   = require("os");
-const { fmtDurationMs: fmtDuration } = require('../../../utils/helpers');
+const { fmtDurationMs: fmtDuration } = require('../../utils/helpers');
 
 const SPT_ID     = "1530d567ec6542669896bc96efd370f3";
 const SPT_SECRET = "6e0241b124da40dfb98728b7f29cedfd";

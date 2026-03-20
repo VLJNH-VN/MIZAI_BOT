@@ -20,9 +20,9 @@ const {
   getRequestByMsgId,
   getPendingList,
   resolveRequest
-} = require('../../../includes/database/requestQueue');
-const { updateUserMoney, formatMoney } = require('../../../includes/database/economy');
-const { resolveSenderName } = require('../../../includes/database/infoCache');
+} = require('../../includes/database/requestQueue');
+const { updateUserMoney, formatMoney } = require('../../includes/database/economy');
+const { resolveSenderName } = require('../../includes/database/infoCache');
 const { ThreadType } = require("zca-js");
 
 // ── Xử lý khi yêu cầu được duyệt ─────────────────────────────────────────────
@@ -147,12 +147,12 @@ module.exports = {
     if (!senderId) return;
 
     // Kiểm tra quyền admin trong onReply
-    const { isBotAdmin } = require('../../../utils/bot/botManager');
+    const { isBotAdmin } = require('../../utils/bot/botManager');
     if (!isBotAdmin(senderId)) return;
 
     let adminName = senderId;
     try {
-      const { resolveSenderName } = require('../../../includes/database/infoCache');
+      const { resolveSenderName } = require('../../includes/database/infoCache');
       adminName = await resolveSenderName({ api, userId: senderId });
     } catch {}
 

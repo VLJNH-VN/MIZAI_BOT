@@ -1,9 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 const { ThreadType } = require("zca-js");
-const { readConfig, writeConfig } = require('../../../utils/helpers');
+const { readConfig, writeConfig } = require('../../utils/helpers');
 
-const GROUPS_CACHE_PATH = path.join(__dirname, "../../../includes/database/groupsCache.json");
+const GROUPS_CACHE_PATH = path.join(__dirname, "../../includes/database/groupsCache.json");
 
 // ── Cache nhóm đã biết (dùng cho broadcast) ─────────────────────────────────
 function readGroupsCache() {

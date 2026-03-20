@@ -138,7 +138,7 @@ module.exports = {
     // await send(res.data.result);
 
     // ── Ví dụ 8: Dùng database kinh tế ─────────────────────────────────────
-    // const { getUserData, formatMoney } = require('../../../includes/database/economy');
+    // const { getUserData, formatMoney } = require('../../includes/database/economy');
     // const userData = await getUserData(senderId);
     // await send(`Số dư: ${formatMoney(userData.money)}`);
   }

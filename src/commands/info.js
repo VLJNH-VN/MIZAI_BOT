@@ -8,8 +8,8 @@
  * ⚠️ Yêu cầu: global.config.ACCESSTOKEN (Facebook Graph API token)
  */
 
-const { parseMentionIds } = require('../../../utils/bot/messageUtils');
-const { fmtTimestamp: fmtTime } = require('../../../utils/helpers');
+const { parseMentionIds } = require('../../utils/bot/messageUtils');
+const { fmtTimestamp: fmtTime } = require('../../utils/helpers');
 
 function isValidURL(s) { try { new URL(s); return true; } catch { return false; } }
 

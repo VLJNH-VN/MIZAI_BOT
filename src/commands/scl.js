@@ -9,7 +9,7 @@
  *   Gửi: api.sendVoice({ voiceUrl: download_audio_url }) → phát inline
  */
 
-const { fmtDurationSec: fmtDuration } = require('../../../utils/helpers');
+const { fmtDurationSec: fmtDuration } = require('../../utils/helpers');
 
 const FOWN_API = "https://fown.onrender.com";
 const LIMIT    = 5;

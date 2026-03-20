@@ -173,7 +173,7 @@ module.exports = {
   onReply: async ({ api, event, data, send, threadID, registerReply }) => {
     const raw      = event?.data ?? {};
     const senderId = String(raw?.uidFrom || "");
-    const { isBotAdmin } = require('../../../utils/bot/botManager');
+    const { isBotAdmin } = require('../../utils/bot/botManager');
 
     if (!isBotAdmin(senderId)) return;
 

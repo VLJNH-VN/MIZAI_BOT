@@ -1,6 +1,6 @@
 const { ThreadType } = require("zca-js");
-const { getTopForGroup, recordMessage } = require('../../events/tuongTac');
-const { parseMentionIds } = require('../../../utils/bot/messageUtils');
+const { getTopForGroup, recordMessage } = require('../events/tuongTac');
+const { parseMentionIds } = require('../../utils/bot/messageUtils');
 
 module.exports = {
   config: {

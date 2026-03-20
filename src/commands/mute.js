@@ -1,7 +1,7 @@
 const fs   = require("fs");
 const path = require("path");
 const { ThreadType } = require("zca-js");
-const { parseMentionIds } = require('../../../utils/bot/messageUtils');
+const { parseMentionIds } = require('../../utils/bot/messageUtils');
 
 const MUTE_FILE = path.join(__dirname, "../../includes/data/muted.json");
 

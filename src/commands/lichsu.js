@@ -16,9 +16,9 @@ const {
   searchMessages,
   getTopSenders,
   getMessageStats
-} = require('../../../includes/database/messageLog');
+} = require('../../includes/database/messageLog');
 
-const { resolveSenderName } = require('../../../includes/database/infoCache');
+const { resolveSenderName } = require('../../includes/database/infoCache');
 
 module.exports = {
   config: {

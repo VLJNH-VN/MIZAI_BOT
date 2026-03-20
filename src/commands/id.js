@@ -1,5 +1,5 @@
-const { isBotAdmin } = require('../../../utils/bot/botManager');
-const { parseMentionIds } = require('../../../utils/bot/messageUtils');
+const { isBotAdmin } = require('../../utils/bot/botManager');
+const { parseMentionIds } = require('../../utils/bot/messageUtils');
 
 module.exports = {
   config: {

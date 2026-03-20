@@ -1,9 +1,9 @@
 const fs = require("fs");
 const path = require("path");
-const { readConfig, readJsonFile, writeJsonFile } = require("../../../utils/helpers");
+const { readConfig, readJsonFile, writeJsonFile } = require("../../utils/helpers");
 
-const THUEBOT_PATH = path.join(__dirname, "../../../includes/data/thuebot.json");
-const RENTKEY_PATH = path.join(__dirname, "../../../includes/data/rentKey.json");
+const THUEBOT_PATH = path.join(__dirname, "../../includes/data/thuebot.json");
+const RENTKEY_PATH = path.join(__dirname, "../../includes/data/rentKey.json");
 
 // ── Helpers ngày tháng ────────────────────────────────────────────────────────
 

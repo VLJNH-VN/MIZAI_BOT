@@ -1,6 +1,6 @@
-const { getTopUsers, getUserData, formatMoney, getLevel } = require('../../../includes/database/economy');
-const { resolveSenderName } = require('../../../includes/database/infoCache');
-const { getGroupSetting } = require('../../../utils/bot/botManager');
+const { getTopUsers, getUserData, formatMoney, getLevel } = require('../../includes/database/economy');
+const { resolveSenderName } = require('../../includes/database/infoCache');
+const { getGroupSetting } = require('../../utils/bot/botManager');
 const { ThreadType } = require("zca-js");
 
 module.exports = {

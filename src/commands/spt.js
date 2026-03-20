@@ -15,10 +15,11 @@ const SPT_ID     = "b9d2557a2dd64105a37f413fa5ffcda4";
 const SPT_SECRET = "41bdf804974e4e70bfa0515bb3097fbb";
 
 function fmtDuration(ms) {
-  const s  = Math.floor(ms / 1000);
-  const m  = Math.floor(s / 60);
-  const h  = Math.floor(m / 60);
-  return `${h}:${String(m % 60).padStart(2,"0")}:${String(s % 60).padStart(2,"0")}`;
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  if (h > 0) return `${h}:${String(m % 60).padStart(2,"0")}:${String(s % 60).padStart(2,"0")}`;
+  return `${m}:${String(s % 60).padStart(2,"0")}`;
 }
 
 function fmtSize(bytes) {
@@ -86,18 +87,6 @@ module.exports = {
 
     if (!tracks.length) return send(`❎ Không tìm thấy kết quả cho: "${keyword}"`);
 
-    // Tải thumbnail → lưu temp file → gửi kèm ảnh
-    const tmpFiles = [];
-    for (const t of tracks) {
-      if (!t.thumb) { tmpFiles.push(null); continue; }
-      try {
-        const buf     = (await global.axios.get(t.thumb, { responseType: "arraybuffer", timeout: 10000 })).data;
-        const tmpPath = path.join(os.tmpdir(), `spt_thumb_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`);
-        fs.writeFileSync(tmpPath, Buffer.from(buf));
-        tmpFiles.push(tmpPath);
-      } catch { tmpFiles.push(null); }
-    }
-
     const list = tracks.map((t, i) =>
       `\n${i + 1}. 👤 ${t.author}\n` +
       `   📜 ${t.title}\n` +
@@ -111,18 +100,8 @@ module.exports = {
       `━━━━━━━━━━━━━━━━\n` +
       `📌 Reply STT (1–${tracks.length}) để tải nhạc`;
 
-    const validTmp = tmpFiles.filter(Boolean);
-    let sent;
-    try {
-      sent = await api.sendMessage(
-        validTmp.length ? { msg: msgBody, attachments: validTmp } : { msg: msgBody },
-        threadID,
-        event.type
-      );
-    } finally {
-      for (const f of validTmp) try { fs.unlinkSync(f); } catch {}
-    }
-    const msgId = sent?.message?.msgId ?? sent?.msgId ?? sent?.data?.msgId;
+    const sent = await send(msgBody);
+    const msgId = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId ?? sent?.msgId;
     if (msgId) {
       registerReply({
         messageId:   String(msgId),

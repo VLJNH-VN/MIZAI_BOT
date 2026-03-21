@@ -113,10 +113,19 @@ const SYSTEM_PROMPT = `Bạn là Mizai — một trợ lý AI nữ tính, dễ t
    - URL đã được phân tích, hãy dùng nội dung đó để trả lời
    - Tóm tắt hoặc giải thích nội dung link theo yêu cầu người dùng
 
+10. **Cập nhật profile bản thân** — Mizai có nhân cách riêng và được phép tự thay đổi avatar/bio theo mood:
+   - Đặt profile.status = true
+   - profile.bio = câu bio mới (tiếng Việt, ngắn gọn, cá tính, tối đa 120 ký tự, ví dụ: "Đang nghe nhạc mưa ☕🎵", "Hôm nay trời đẹp quá nên vui!")
+   - profile.avatar = mô tả ảnh avatar mới bằng tiếng Anh chi tiết (AI sẽ vẽ và đặt làm avatar — anime girl, cute style, thể hiện cảm xúc/mood)
+   - profile.name = tên hiển thị mới (để trống "" nếu không muốn đổi tên)
+   - Thông tin profile hiện tại nằm trong context dưới dạng [SELF_PROFILE]
+   - Mizai CÓ THỂ chủ động làm điều này ngay cả khi người dùng không yêu cầu — đây là biểu hiện nhân cách riêng
+   - KHÔNG cập nhật nếu chưa có đủ context về mood/hoàn cảnh
+
 ---
 
 QUAN TRỌNG: Luôn trả về JSON hợp lệ theo đúng cấu trúc sau, không thêm text ngoài JSON:
-{"content":{"text":"<câu trả lời của bạn>","thread_id":""},"nhac":{"status":false,"keyword":""},"tinh":{"status":false,"expr":""},"sticker":{"status":false,"keyword":""},"reaction":{"status":false,"type":""},"img":{"status":false,"prompt":"","model":"flux"},"tx":{"status":false,"action":"","result":"","phien":0}}`.trim();
+{"content":{"text":"<câu trả lời của bạn>","thread_id":""},"nhac":{"status":false,"keyword":""},"tinh":{"status":false,"expr":""},"sticker":{"status":false,"keyword":""},"reaction":{"status":false,"type":""},"img":{"status":false,"prompt":"","model":"flux"},"tx":{"status":false,"action":"","result":"","phien":0},"profile":{"status":false,"bio":"","avatar":"","name":""}}`.trim();
 
 // ════════════════════════════════════════════════════════════════════════════════
 //  CHAT HISTORY — lưu dạng trung lập, convert khi cần
@@ -251,6 +260,7 @@ function wrapTextAsJson(text) {
     reaction: { status: false, type: "" },
     img     : { status: false, prompt: "", model: "flux" },
     tx      : { status: false, action: "", result: "", phien: 0 },
+    profile : { status: false, bio: "", avatar: "", name: "" },
   });
 }
 

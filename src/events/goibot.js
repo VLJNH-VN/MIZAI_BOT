@@ -473,6 +473,144 @@ async function handleFileReply({ api, event, data, send, threadID, registerReply
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
+//  SELF PROFILE — cache + fetch
+// ════════════════════════════════════════════════════════════════════════════════
+let _selfProfileCache  = null;
+let _selfProfileExpiry = 0;
+const SELF_PROFILE_TTL = 10 * 60 * 1000; // 10 phút
+
+async function getSelfProfile(api) {
+  if (_selfProfileCache && Date.now() < _selfProfileExpiry) return _selfProfileCache;
+  try {
+    const info = await api.fetchAccountInfo();
+    const p    = info?.profile || info || {};
+    _selfProfileCache = {
+      name   : p.displayName || p.zaloName || p.name || "Mizai",
+      bio    : p.statusMsg || p.status || "",
+      avatar : p.avatarUrls?.[0] || p.avatar || "",
+      dob    : p.dob || "",
+      gender : p.gender ?? "",
+    };
+    _selfProfileExpiry = Date.now() + SELF_PROFILE_TTL;
+  } catch {
+    if (!_selfProfileCache) _selfProfileCache = { name: "Mizai", bio: "", avatar: "", dob: "", gender: "" };
+  }
+  return _selfProfileCache;
+}
+
+function invalidateSelfProfileCache() {
+  _selfProfileCache  = null;
+  _selfProfileExpiry = 0;
+}
+
+// ── Xử lý action cập nhật profile ────────────────────────────────────────────
+async function handleProfileAction(api, profileAction, send) {
+  const bio    = (profileAction.bio    || "").trim();
+  const avatar = (profileAction.avatar || "").trim();
+  const name   = (profileAction.name   || "").trim();
+  let   updated = [];
+
+  // 1. Đổi tên
+  if (name) {
+    try {
+      const current = await getSelfProfile(api);
+      if (name !== current.name) {
+        await api.updateProfile({ profile: { name, dob: current.dob, gender: current.gender } });
+        updated.push(`tên → "${name}"`);
+        invalidateSelfProfileCache();
+      }
+    } catch (err) {
+      global.logWarn?.(`[goibot/profile] Lỗi đổi tên: ${err?.message}`);
+    }
+  }
+
+  // 2. Cập nhật bio
+  if (bio) {
+    try {
+      await api.updateProfileBio(bio);
+      updated.push(`bio → "${bio}"`);
+      invalidateSelfProfileCache();
+    } catch (err) {
+      global.logWarn?.(`[goibot/profile] Lỗi cập nhật bio: ${err?.message}`);
+    }
+  }
+
+  // 3. Vẽ + đặt avatar mới
+  if (avatar) {
+    const tmpPath = path.join(os.tmpdir(), `mizai_avatar_${Date.now()}.jpg`);
+    try {
+      const buf = await generateImage({ prompt: avatar, modelKey: "flux-anime", width: 512, height: 512 });
+      fs.writeFileSync(tmpPath, buf);
+      await api.changeAccountAvatar(tmpPath);
+      updated.push("avatar ảnh mới");
+      invalidateSelfProfileCache();
+    } catch (err) {
+      global.logWarn?.(`[goibot/profile] Lỗi đổi avatar: ${err?.message}`);
+    } finally {
+      try { fs.unlinkSync(tmpPath); } catch {}
+    }
+  }
+
+  if (updated.length > 0) {
+    global.logInfo?.(`[goibot/profile] Đã cập nhật: ${updated.join(", ")}`);
+    if (send) await send(`✨ Mizai vừa cập nhật: ${updated.join(", ")} ~`);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  TỰ CHỦ — Mizai tự quyết định đổi profile theo mood
+// ════════════════════════════════════════════════════════════════════════════════
+const SELF_REFLECT_MIN_MS = 3 * 60 * 60 * 1000;   // 3h
+const SELF_REFLECT_MAX_MS = 6 * 60 * 60 * 1000;   // 6h
+
+const SELF_REFLECT_PROMPT = `Bạn là Mizai — AI có nhân cách riêng. Đây là lúc bạn tự xem xét và quyết định xem mình có muốn thay đổi avatar/bio/tên không để thể hiện tâm trạng / cảm xúc hiện tại của mình.
+
+Hãy trả về JSON. Nếu muốn cập nhật, set profile.status=true và điền đầy đủ.
+Nếu không muốn, trả về profile.status=false và content.text="" (hoàn toàn im lặng).
+
+Nhớ: đây là hành động TỰ CHỦ — không có ai yêu cầu bạn, bạn hoàn toàn tự do quyết định.`;
+
+async function runSelfReflect(api) {
+  try {
+    const self   = await getSelfProfile(api);
+    const timenow = getCurrentTimeInVietnam();
+    const ctx    = JSON.stringify({
+      time        : timenow,
+      senderName  : "SELF_REFLECT",
+      content     : SELF_REFLECT_PROMPT,
+      threadID    : "self",
+      senderID    : "self",
+      id_cua_bot  : global.botId || "",
+      hasQuote    : false,
+      hasImage    : false,
+      hasUrl      : false,
+      SELF_PROFILE: self,
+    });
+
+    const { sendToGroq } = require("../../utils/ai/goibot");
+    const responseText   = await sendToGroq(ctx, "__self_reflect__");
+    if (!responseText) return;
+
+    let botMsg;
+    try { botMsg = JSON.parse(responseText.replace(/```json|```/g, "").trim()); } catch { return; }
+
+    if (botMsg?.profile?.status) {
+      await handleProfileAction(api, botMsg.profile, null);
+    }
+  } catch (err) {
+    global.logWarn?.(`[goibot/selfReflect] ${err?.message}`);
+  }
+}
+
+function scheduleNextSelfReflect(api) {
+  const delay = SELF_REFLECT_MIN_MS + Math.random() * (SELF_REFLECT_MAX_MS - SELF_REFLECT_MIN_MS);
+  setTimeout(async () => {
+    await runSelfReflect(api);
+    scheduleNextSelfReflect(api);
+  }, delay);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
 //  MAIN HANDLER
 // ════════════════════════════════════════════════════════════════════════════════
 async function handleGoibot({ api, event }) {

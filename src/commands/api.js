@@ -545,6 +545,16 @@ module.exports = {
       msg += `📊 Tổng đã xử lý     : ${res.total}\n`;
       msg += `📦 Tổng trong file    : ${finalList.length}`;
       if (res.failed > 0) msg += `\n⚠️ Lý do lỗi: ${[...new Set(res.failReasons)].join(", ")}`;
+
+      // Upload JSON data lên GitHub để có link xem trực tiếp
+      if (res.success > 0 && typeof global.githubUpload === "function") {
+        try {
+          const jsonLocalPath = path.join(LISTAPI_DIR, `${tipName}.json`);
+          const jsonGhUrl = await global.githubUpload(jsonLocalPath, `listapi/${tipName}.json`);
+          if (jsonGhUrl) msg += `\n🔗 Data: ${jsonGhUrl}`;
+        } catch (_) {}
+      }
+
       return send(msg);
     }
 

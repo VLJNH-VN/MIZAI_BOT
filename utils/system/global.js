@@ -302,6 +302,78 @@ function setApi(apiInstance) {
     return res.data?.content?.download_url || null;
   };
 
+  /**
+   * global.githubReleaseUpload(localFilePath, filename, options?)
+   *   Upload file lên GitHub Releases → trả về browser_download_url (objects.githubusercontent.com)
+   *   URL này Zalo server chấp nhận trong api.sendVideo (raw.githubusercontent.com bị reject).
+   */
+  global.githubReleaseUpload = async (localFilePath, filename, options = {}) => {
+    const token = global.config?.githubToken;
+    const repo  = options.repo || global.config?.uploadRepo || global.config?.repo;
+    const tag   = options.tag  || "vd-upload";
+
+    if (!token) throw new Error("[githubReleaseUpload] Thiếu githubToken trong config.json");
+    if (!repo)  throw new Error("[githubReleaseUpload] Thiếu uploadRepo trong config.json");
+
+    const headers = {
+      Authorization: `token ${token}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "MIZAI_BOT"
+    };
+
+    const [owner, repoName] = repo.split("/");
+
+    // Tìm release với tag đã tồn tại hoặc tạo mới
+    let releaseId;
+    try {
+      const existing = await axios.get(
+        `https://api.github.com/repos/${owner}/${repoName}/releases/tags/${tag}`,
+        { headers }
+      );
+      releaseId = existing.data.id;
+    } catch (_) {
+      const created = await axios.post(
+        `https://api.github.com/repos/${owner}/${repoName}/releases`,
+        { tag_name: tag, name: tag, body: "Auto-upload by MIZAI bot", draft: false, prerelease: false },
+        { headers }
+      );
+      releaseId = created.data.id;
+    }
+
+    // Xóa asset cũ cùng tên nếu tồn tại (tránh conflict)
+    try {
+      const assets = await axios.get(
+        `https://api.github.com/repos/${owner}/${repoName}/releases/${releaseId}/assets`,
+        { headers }
+      );
+      const dup = assets.data.find(a => a.name === filename);
+      if (dup) {
+        await axios.delete(
+          `https://api.github.com/repos/${owner}/${repoName}/releases/assets/${dup.id}`,
+          { headers }
+        );
+      }
+    } catch (_) {}
+
+    // Upload asset
+    const fileData = fs.readFileSync(localFilePath);
+    const uploadRes = await axios.post(
+      `https://uploads.github.com/repos/${owner}/${repoName}/releases/${releaseId}/assets?name=${encodeURIComponent(filename)}`,
+      fileData,
+      {
+        headers: {
+          ...headers,
+          "Content-Type": "application/octet-stream",
+          "Content-Length": fileData.length,
+        },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      }
+    );
+
+    return uploadRes.data?.browser_download_url || null;
+  };
+
   global.githubDownload = async (repoFilePath, localFilePath, options = {}) => {
     const token  = global.config?.githubToken;
     const repo   = options.repo   || global.config?.repo;

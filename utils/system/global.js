@@ -371,7 +371,25 @@ function setApi(apiInstance) {
       }
     );
 
-    return uploadRes.data?.browser_download_url || null;
+    const browserUrl = uploadRes.data?.browser_download_url;
+    if (!browserUrl) return null;
+
+    // browser_download_url là redirect URL (github.com/releases/download/...)
+    // Zalo không follow redirect → fileSize=0 → bị reject
+    // Cần resolve redirect để lấy URL CDN thực (objects.githubusercontent.com)
+    try {
+      const redirectRes = await axios.head(browserUrl, {
+        maxRedirects: 10,
+        validateStatus: () => true,
+      });
+      const finalUrl = redirectRes.request?.res?.responseUrl
+        || redirectRes.request?.responseURL
+        || redirectRes.config?.url
+        || browserUrl;
+      return finalUrl;
+    } catch (_) {
+      return browserUrl;
+    }
   };
 
   global.githubDownload = async (repoFilePath, localFilePath, options = {}) => {

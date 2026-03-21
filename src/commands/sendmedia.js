@@ -45,7 +45,6 @@ module.exports = {
           await api.sendLink({ url, ttl: 0 }, threadID, event.type);
           return send(`✅ Đã gửi link: ${url}`);
         }
-
         case "video": {
           await send(`⏳ Đang tải video từ:\n${url}`);
           const tmpPath = path.join(os.tmpdir(), `video_${Date.now()}.mp4`);

@@ -37,7 +37,7 @@
     "sqlite3": "^6.0.1",
     "stability-ai": "^0.7.0",
     "string-similarity": "^4.0.4",
-    "zca-js": "github:RFS-ADRENO/zca-js"
+    "zca-js": "^2.1.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

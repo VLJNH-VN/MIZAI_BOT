@@ -1,6 +1,8 @@
 const { ThreadType } = require("zca-js");
 const { handleNewUser } = require("../../utils/ai/goibot");
 const { getGroupAnti } = require("../../utils/bot/botManager");
+const { drawJoinCard, drawLeaveCard } = require("../../utils/groupCard");
+const fs = require("fs");
 
 // ── Bot detection keywords ────────────────────────────────────────────────────
 const BOT_NAME_PATTERNS = [
@@ -76,7 +78,14 @@ async function handleJoinNoti({ api, data }) {
       const msg = `👋 Chào mừng ${name} đã tham gia ${groupName}!`;
       logEvent(`joinNoti -> ${msg}`);
 
-      await api.sendMessage({ msg }, String(threadId), ThreadType.Group).catch(() => {});
+      let cardPath;
+      try { cardPath = await drawJoinCard({ name, groupName }); } catch (_) {}
+      if (cardPath) {
+        await api.sendMessage({ msg: "", attachments: [cardPath] }, String(threadId), ThreadType.Group).catch(() => {});
+        try { fs.unlinkSync(cardPath); } catch (_) {}
+      } else {
+        await api.sendMessage({ msg }, String(threadId), ThreadType.Group).catch(() => {});
+      }
 
       try {
         if (userId) await handleNewUser({ api, threadId, userId });
@@ -118,7 +127,15 @@ async function handleLeaveNoti({ api, data, reason = "unknown" }) {
     }
 
     logEvent(`leaveNoti -> ${msg}`);
-    await api.sendMessage({ msg }, String(threadId), ThreadType.Group);
+
+    let cardPath;
+    try { cardPath = await drawLeaveCard({ names, groupName, reason }); } catch (_) {}
+    if (cardPath) {
+      await api.sendMessage({ msg: "", attachments: [cardPath] }, String(threadId), ThreadType.Group);
+      try { fs.unlinkSync(cardPath); } catch (_) {}
+    } else {
+      await api.sendMessage({ msg }, String(threadId), ThreadType.Group);
+    }
   } catch (err) {
     logError(`Lỗi trong events/leaveNoti: ${err.message}`);
   }

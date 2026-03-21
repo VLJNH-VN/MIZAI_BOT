@@ -7,6 +7,9 @@
  * Reply số để xem lệnh trong nhóm → reply tiếp để xem chi tiết lệnh.
  */
 
+const fs = require("fs");
+const { drawMenuCard, drawCategoryCard, drawCommandInfoCard } = require("../../utils/menuCard");
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 function commandsGroup(cmds) {
@@ -56,7 +59,7 @@ module.exports = {
     cooldowns:       5,
   },
 
-  run: async ({ args, send, commands, prefix, registerReply }) => {
+  run: async ({ api, event, args, send, commands, prefix, registerReply, threadID }) => {
     const p    = prefix || ".";
     const cmds = commands && typeof commands.values === "function" ? commands : new Map();
     const sub  = (args[0] || "").toLowerCase().trim();
@@ -65,7 +68,17 @@ module.exports = {
     if (args.length >= 1 && sub !== "all") {
       const key = args.join(" ").toLowerCase();
       const cmd = cmds.get(key);
-      if (cmd) return send(infoCmds(cmd.config, p));
+      if (cmd) {
+        let cardPath;
+        try { cardPath = await drawCommandInfoCard({ config: cmd.config, prefix: p }); } catch (_) {}
+        if (cardPath) {
+          await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type);
+          try { fs.unlinkSync(cardPath); } catch (_) {}
+        } else {
+          await send(infoCmds(cmd.config, p));
+        }
+        return;
+      }
 
       // Gợi ý gần nhất (Levenshtein)
       const allNames = Array.from(cmds.keys());
@@ -127,21 +140,27 @@ module.exports = {
     // ── menu (nhóm lệnh → reply để xem chi tiết) ─────────────────────────────
     const data = commandsGroup(cmds);
     const uniqueCount = data.reduce((s, g) => s + g.commandsName.length, 0);
-    let txt = `╭─────────────⭓\n`, count = 0;
-    for (const { commandCategory, commandsName } of data) {
-      txt += `│ ${++count}. ${commandCategory} || có ${commandsName.length} lệnh\n`;
-    }
-    txt += (
-      `├────────⭔\n` +
-      `│ 📝 Tổng có: ${uniqueCount} lệnh\n` +
-      `│ ⏰ Reply từ 1 đến ${data.length} để chọn\n` +
-      `╰─────────────⭓`
-    );
 
-    const sent = await send(txt);
+    let cardPath;
+    try { cardPath = await drawMenuCard({ groups: data, uniqueCount, prefix: p }); } catch (_) {}
+
+    let sent;
+    if (cardPath) {
+      sent = await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type);
+      try { fs.unlinkSync(cardPath); } catch (_) {}
+    } else {
+      let txt = `╭─────────────⭓\n`;
+      let count = 0;
+      for (const { commandCategory, commandsName } of data) {
+        txt += `│ ${++count}. ${commandCategory} || có ${commandsName.length} lệnh\n`;
+      }
+      txt += `├────────⭔\n│ 📝 Tổng có: ${uniqueCount} lệnh\n│ ⏰ Reply từ 1 đến ${data.length} để chọn\n╰─────────────⭓`;
+      sent = await send(txt);
+    }
+
     const msgId =
-      sent?.msgId ??
       sent?.message?.msgId ??
+      sent?.msgId ??
       (Array.isArray(sent?.attachment) ? sent.attachment[0]?.msgId : null);
 
     if (msgId) {
@@ -160,6 +179,7 @@ module.exports = {
       ? raw.content
       : (raw.content?.text || raw.content?.msg || "");
     const num  = parseInt(body.trim(), 10);
+    const threadID = event.threadId;
 
     const { case: $case, data = [], prefix: p = "." } = replyData || {};
 
@@ -168,19 +188,30 @@ module.exports = {
       const item = data[num - 1];
       if (!item) return send(`❎ "${body.trim()}" không nằm trong số thứ tự menu`);
 
-      let txt = `╭─────────────⭓\n│ ${item.commandCategory}\n├─────⭔\n`, count = 0;
-      for (const name of item.commandsName) txt += `│ ${++count}. ${name}\n`;
-      txt += (
-        `├────────⭔\n` +
-        `│ 🔎 Reply từ 1 đến ${item.commandsName.length} để xem chi tiết\n` +
-        `│ 📝 Dùng ${p}help <tên lệnh> để xem cách dùng\n` +
-        `╰─────────────⭓`
-      );
+      let cardPath;
+      try {
+        cardPath = await drawCategoryCard({
+          category: item.commandCategory,
+          commands: item.commandsName,
+          prefix:   p,
+        });
+      } catch (_) {}
 
-      const sent = await send(txt);
+      let sent;
+      if (cardPath) {
+        sent = await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type);
+        try { fs.unlinkSync(cardPath); } catch (_) {}
+      } else {
+        let txt = `╭─────────────⭓\n│ ${item.commandCategory}\n├─────⭔\n`;
+        let count = 0;
+        for (const name of item.commandsName) txt += `│ ${++count}. ${name}\n`;
+        txt += `├────────⭔\n│ 🔎 Reply từ 1 đến ${item.commandsName.length} để xem chi tiết\n╰─────────────⭓`;
+        sent = await send(txt);
+      }
+
       const msgId =
-        sent?.msgId ??
         sent?.message?.msgId ??
+        sent?.msgId ??
         (Array.isArray(sent?.attachment) ? sent.attachment[0]?.msgId : null);
 
       if (msgId && reg) {
@@ -236,7 +267,15 @@ module.exports = {
       const cmd  = cmds?.get?.(name);
       if (!cmd) return send(`❌ Không tìm thấy lệnh "${name}"`);
 
-      return send(infoCmds(cmd.config, p));
+      let cardPath;
+      try { cardPath = await drawCommandInfoCard({ config: cmd.config, prefix: p }); } catch (_) {}
+      if (cardPath) {
+        await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type);
+        try { fs.unlinkSync(cardPath); } catch (_) {}
+      } else {
+        await send(infoCmds(cmd.config, p));
+      }
+      return;
     }
   },
 };

@@ -127,7 +127,7 @@ async function sclSearch(query) {
 module.exports = {
   config: {
     name:            "music",
-    aliases:         ["nhac", "scl", "soundcloud", "sc", "spt", "spotify", "mixcloud", "mix"],
+    aliases:         ["nhac", "scl", "soundcloud", "sc", "spt", "spotify", "mixcloud", "mix", "mx"],
     version:         "2.0.0",
     hasPermssion:    0,
     credits:         "MiZai",
@@ -142,12 +142,15 @@ module.exports = {
   },
 
   run: async ({ api, event, args, send, registerReply, commandName, threadID }) => {
-    const FLAG_MAP = { sc: "sc", soundcloud: "sc", scl: "sc", spt: "spt", spotify: "spt", mix: "mix", mixcloud: "mix", nhac: "sc", music: "sc" };
+    const FLAG_MAP = { sc: "sc", soundcloud: "sc", scl: "sc", nhac: "sc", spt: "spt", spotify: "spt", mix: "mix", mixcloud: "mix", mx: "mix" };
 
     let platform = FLAG_MAP[commandName] || null;
     let queryArgs = args;
 
-    if (!platform) {
+    if (platform) {
+      // commandName là alias platform trực tiếp (sc, nhac, spt, mix…) → args là query
+    } else {
+      // commandName là "music" hoặc tương tự → đọc arg đầu làm platform
       const sub = (args[0] || "").toLowerCase();
       if (FLAG_MAP[sub]) { platform = FLAG_MAP[sub]; queryArgs = args.slice(1); }
       else {

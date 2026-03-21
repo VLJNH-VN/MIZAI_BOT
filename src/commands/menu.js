@@ -113,12 +113,13 @@ module.exports = {
 
     const sent = await send(txt);
     const msgId =
+      sent?.msgId ??
       sent?.message?.msgId ??
       (Array.isArray(sent?.attachment) ? sent.attachment[0]?.msgId : null);
 
     if (msgId) {
       registerReply({
-        messageId:   msgId,
+        messageId:   String(msgId),
         commandName: "menu",
         payload:     { case: "infoGr", data, prefix: p },
       });
@@ -151,12 +152,13 @@ module.exports = {
 
       const sent = await send(txt);
       const msgId =
+        sent?.msgId ??
         sent?.message?.msgId ??
         (Array.isArray(sent?.attachment) ? sent.attachment[0]?.msgId : null);
 
       if (msgId && reg) {
         reg({
-          messageId:   msgId,
+          messageId:   String(msgId),
           commandName: "menu",
           payload:     { case: "infoCmds", data: item.commandsName, prefix: p },
         });

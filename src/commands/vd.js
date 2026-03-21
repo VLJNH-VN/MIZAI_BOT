@@ -7,7 +7,7 @@
  * Flow (theo chuẩn autoDown):
  *   1. Download GitHub URL về local
  *   2. Convert sang H264 (Zalo yêu cầu)
- *   3. uploadAttachment → lấy fileUrl Zalo → api.sendVideo (URL từ CDN Zalo, ổn định nhất)
+ *   3. githubReleaseUpload → resolve redirect CDN → api.sendVideo
  *   4. Fallback: sendMessage + attachments (file local)
  *
  * Cách dùng:
@@ -128,36 +128,51 @@ async function sendOneVideo(api, event, ghUrl, caption) {
 
     global.logInfo?.(`[vd] threadId=${event.threadId} | type=${event.type} | size=${(fileSize/1024).toFixed(0)}KB | w=${meta.width} h=${meta.height} dur=${meta.duration}`);
 
-    // Bước 3: uploadAttachment → lấy fileUrl Zalo → sendVideo
-    try {
-      const uploaded = await api.uploadAttachment([uploadPath], event.threadId, event.type);
-      const att      = uploaded?.[0];
-      global.logInfo?.(`[vd] uploadAttachment result: ${JSON.stringify(att)}`);
-      const fileUrl  = att?.fileUrl;
-      if (fileUrl) {
-        try {
-          await api.sendVideo({
-            videoUrl: fileUrl,
-            msg:      caption || "",
-            width:    meta.width  || 576,
-            height:   meta.height || 1024,
-            duration: Math.max(1000, meta.duration * 1000),
-            fileSize: fileSize,
-            ttl:      500_000,
-          }, event.threadId, event.type);
-          global.logInfo?.("[vd] sendVideo thành công.");
-          return;
-        } catch (e2) {
-          global.logWarn?.(`[vd] sendVideo lỗi: ${e2.message} | fileUrl=${fileUrl?.slice(0, 100)}`);
+    // Bước 3: githubReleaseUpload → resolve redirect → sendVideo (CDN URL ổn định)
+    if (typeof global.githubReleaseUpload === "function" && fileSize < 50 * 1024 * 1024) {
+      try {
+        const filename   = `vd_${id}.mp4`;
+        const releaseUrl = await global.githubReleaseUpload(uploadPath, filename);
+        global.logInfo?.(`[vd] releaseUrl: ${releaseUrl}`);
+
+        if (releaseUrl) {
+          // Resolve redirect → lấy URL CDN thật (objects.githubusercontent.com)
+          let cdnUrl = releaseUrl;
+          try {
+            const head = await axios.get(releaseUrl, {
+              maxRedirects: 5,
+              timeout: 10000,
+              headers: { "User-Agent": global.userAgent || "Mozilla/5.0" },
+              responseType: "stream",
+            });
+            cdnUrl = head.request?.res?.responseUrl || head.config?.url || releaseUrl;
+            head.data?.destroy?.();
+            global.logInfo?.(`[vd] CDN URL: ${cdnUrl}`);
+          } catch (_) {}
+
+          try {
+            await api.sendVideo({
+              videoUrl:     cdnUrl,
+              thumbnailUrl: "",
+              msg:          caption || "",
+              width:        meta.width  || 576,
+              height:       meta.height || 1024,
+              duration:     meta.duration * 1000,
+              fileSize:     fileSize,
+              ttl:          500_000,
+            }, event.threadId, event.type);
+            global.logInfo?.("[vd] sendVideo (CDN) thành công.");
+            return;
+          } catch (e2) {
+            global.logWarn?.(`[vd] sendVideo thất bại: ${e2.message} | url=${cdnUrl?.slice(0, 80)}`);
+          }
         }
-      } else {
-        global.logWarn?.("[vd] uploadAttachment không trả về fileUrl");
+      } catch (e) {
+        global.logWarn?.(`[vd] githubReleaseUpload thất bại: ${e.message}`);
       }
-    } catch (e) {
-      global.logWarn?.(`[vd] uploadAttachment thất bại: ${e.message}`);
     }
 
-    // Bước 4: Fallback cuối → sendMessage + attachments
+    // Bước 4: Fallback → sendMessage + attachments
     await api.sendMessage(
       { msg: caption || "", attachments: [uploadPath], ttl: 500_000 },
       event.threadId, event.type

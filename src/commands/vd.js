@@ -130,12 +130,14 @@ async function sendOneVideo(api, event, srcUrl, caption) {
 
     global.logInfo?.(`[vd] size=${(fileSize/1024).toFixed(0)}KB | w=${meta.width} h=${meta.height} dur=${meta.duration}s`);
 
-    // Bước 3: GitHub upload → sendVideo (URL vĩnh cửu, Zalo stream ổn định)
+    // Bước 3: GitHub Releases upload → sendVideo
+    // Lý do dùng Releases: objects.githubusercontent.com được Zalo chấp nhận,
+    // trong khi raw.githubusercontent.com bị Zalo server reject.
     let sentAsVideo = false;
-    if (typeof global.githubUpload === "function" && fileSize < 50 * 1024 * 1024) {
+    if (typeof global.githubReleaseUpload === "function" && fileSize < 50 * 1024 * 1024) {
       try {
-        const repoPath = `vd/vid_${id}.mp4`;
-        const ghUrl    = await global.githubUpload(uploadPath, repoPath);
+        const filename = `vid_${id}.mp4`;
+        const ghUrl    = await global.githubReleaseUpload(uploadPath, filename, { tag: "vd-upload" });
         if (ghUrl) {
           await api.sendVideo({
             videoUrl:     ghUrl,
@@ -144,14 +146,13 @@ async function sendOneVideo(api, event, srcUrl, caption) {
             width:        meta.width   || 576,
             height:       meta.height  || 1024,
             duration:     meta.duration * 1000,
-            fileSize:     fileSize,
             ttl:          500_000,
           }, event.threadId, event.type);
-          global.logInfo?.("[vd] sendVideo (GitHub) thành công.");
+          global.logInfo?.("[vd] sendVideo (GitHub Releases) thành công.");
           sentAsVideo = true;
         }
       } catch (e) {
-        global.logWarn?.(`[vd] GitHub upload/sendVideo thất bại: ${e.message}`);
+        global.logWarn?.(`[vd] GitHub Releases/sendVideo thất bại: ${e.message}`);
       }
     }
 

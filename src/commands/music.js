@@ -10,6 +10,7 @@ const fs    = require("fs");
 const path  = require("path");
 const os    = require("os");
 const { fmtDurationSec, fmtDurationMs } = require("../../utils/helpers");
+const { drawSearchCard, drawNowPlayingCard } = require("../../utils/musicCard");
 
 const FOWN_API = "https://fown.onrender.com";
 const SPT_ID     = "1530d567ec6542669896bc96efd370f3";
@@ -140,7 +141,7 @@ module.exports = {
     cooldowns: 5,
   },
 
-  run: async ({ args, send, registerReply, commandName }) => {
+  run: async ({ api, args, send, registerReply, commandName, threadId, type }) => {
     const FLAG_MAP = { sc: "sc", soundcloud: "sc", scl: "sc", spt: "spt", spotify: "spt", mix: "mix", mixcloud: "mix", nhac: "sc", music: "sc" };
 
     let platform = FLAG_MAP[commandName] || null;
@@ -169,34 +170,46 @@ module.exports = {
       if (platform === "sc") {
         const tracks = await sclSearch(query);
         if (!tracks.length) return send(`😔 Không tìm thấy kết quả cho "${query}"`);
-        let msg = `🎵 KẾT QUẢ SOUNDCLOUD\n🔎 "${query}"\n━━━━━━━━━━━━━━━━\n`;
-        tracks.forEach((t, i) => {
-          msg += `${i + 1}. 🎶 ${t.title}\n   👤 ${t.uploader}  ⏱ ${fmtDurationSec(t.duration)}  ▶️ ${fmtNum(t.view_count)}\n`;
-        });
-        msg += `━━━━━━━━━━━━━━━━\n💬 Reply số từ 1-${tracks.length} để tải nhạc`;
-        const sent = await send(msg);
+        tracks.forEach(t => { t._durStr = fmtDurationSec(t.duration); });
+        let cardPath;
+        try { cardPath = await drawSearchCard({ platform: "sc", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
+        const msg = `💬 Reply số từ 1-${tracks.length} để tải nhạc`;
+        const sent = cardPath
+          ? await api.sendMessage({ msg, attachments: [cardPath] }, threadId, type)
+          : await send(msg);
+        if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
         const msgId = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId;
         if (msgId) registerReply({ messageId: String(msgId), commandName: "music", payload: { platform: "sc", tracks } });
 
       } else if (platform === "spt") {
         const tracks = await sptSearch(query);
         if (!tracks.length) return send(`😔 Không tìm thấy kết quả cho "${query}"`);
-        const list = tracks.map((t, i) =>
-          `\n${i + 1}. 👤 ${t.author}\n   📜 ${t.title}\n   ⏳ ${fmtDurationMs(t.duration)}`
-        ).join("");
-        const msg = `[ SPOTIFY — KẾT QUẢ TÌM KIẾM ]\n━━━━━━━━━━━━━━━━\n📝 Từ khóa: ${query}${list}\n━━━━━━━━━━━━━━━━\n📌 Reply STT (1–${tracks.length}) để tải nhạc`;
-        const sent = await send(msg);
+        tracks.forEach(t => { t._durStr = fmtDurationMs(t.duration); });
+        let cardPath;
+        try { cardPath = await drawSearchCard({ platform: "spt", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
+        const msg = `📌 Reply STT (1–${tracks.length}) để tải nhạc`;
+        const sent = cardPath
+          ? await api.sendMessage({ msg, attachments: [cardPath] }, threadId, type)
+          : await send(msg);
+        if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
         const msgId = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId ?? sent?.msgId;
         if (msgId) registerReply({ messageId: String(msgId), commandName: "music", payload: { platform: "spt", tracks }, ttl: 10 * 60 * 1000 });
 
       } else if (platform === "mix") {
         const results = await mixSearch(query);
-        let msg = `🎵 Kết quả Mixcloud: "${query}"\n━━━━━━━━━━━━━━━━\n`;
-        results.slice(0, 5).forEach((r, i) => {
-          msg += `${i + 1}. ${r.name}\n   👤 ${r.owner.displayName}  ⏱ ${formatDuration(r.audioLength)}  ▶️ ${fmtNum(r.plays)}\n   🔗 mixcloud.com/${r.owner.username}/${r.slug}\n\n`;
-        });
-        msg += `💬 Reply số từ 1-5 để xem link`;
-        const sent = await send(msg);
+        const top5 = results.slice(0, 5);
+        const cardTracks = top5.map(r => ({
+          title:  r.name,
+          owner:  r.owner,
+          _durStr: formatDuration(r.audioLength),
+        }));
+        let cardPath;
+        try { cardPath = await drawSearchCard({ platform: "mix", query, tracks: cardTracks }); } catch (_) {}
+        const msg = `💬 Reply số từ 1-5 để xem link Mixcloud`;
+        const sent = cardPath
+          ? await api.sendMessage({ msg, attachments: [cardPath] }, threadId, type)
+          : await send(msg);
+        if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
         const sentId = sent?.message?.msgId ?? (Array.isArray(sent?.attachment) && sent.attachment[0]?.msgId);
         if (sentId) registerReply({ messageId: String(sentId), commandName: "music", payload: { platform: "mix", results } });
       }
@@ -221,7 +234,23 @@ module.exports = {
         const res = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(t.url)}`, { timeout: 120000 });
         const audioUrl = res.data?.download_audio_url || res.data?.download_url;
         if (!audioUrl) return send("❌ Không lấy được link tải. Thử bài khác.");
-        await api.sendMessage({ msg: `✅ SoundCloud\n📝 ${t.title}\n👤 ${t.uploader}\n⏳ ${fmtDurationSec(t.duration)} · ▶️ ${fmtNum(t.view_count)}` }, event.threadId, event.type);
+        let cardPath;
+        try {
+          cardPath = await drawNowPlayingCard({
+            platform: "sc",
+            title:    t.title,
+            artist:   t.uploader,
+            duration: fmtDurationSec(t.duration),
+            thumb:    t.thumbnail || t.artwork_url,
+          });
+        } catch (_) {}
+        const infoMsg = `✅ SoundCloud\n📝 ${t.title}\n👤 ${t.uploader}\n⏳ ${fmtDurationSec(t.duration)} · ▶️ ${fmtNum(t.view_count)}`;
+        if (cardPath) {
+          await api.sendMessage({ msg: infoMsg, attachments: [cardPath] }, event.threadId, event.type);
+          try { fs.unlinkSync(cardPath); } catch (_) {}
+        } else {
+          await api.sendMessage({ msg: infoMsg }, event.threadId, event.type);
+        }
         await api.sendVoice({ voiceUrl: audioUrl }, event.threadId, event.type);
       } catch (err) { return send("❌ Lỗi tải nhạc: " + err.message); }
 
@@ -238,7 +267,22 @@ module.exports = {
         const mediaRes = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(ytmUrl)}`, { timeout: 120000 });
         const audioUrl = mediaRes.data?.download_audio_url || mediaRes.data?.download_url;
         if (!audioUrl) return send("❌ Không lấy được link tải. Thử lại sau.");
-        await send(`🎵 ${track.title}\n👤 ${track.author}\n⏳ ${fmtDurationMs(track.duration)}`);
+        let cardPath;
+        try {
+          cardPath = await drawNowPlayingCard({
+            platform: "spt",
+            title:    track.title,
+            artist:   track.author,
+            duration: fmtDurationMs(track.duration),
+          });
+        } catch (_) {}
+        const infoMsg = `🎵 ${track.title}\n👤 ${track.author}\n⏳ ${fmtDurationMs(track.duration)}`;
+        if (cardPath) {
+          await api.sendMessage({ msg: infoMsg, attachments: [cardPath] }, event.threadId, event.type);
+          try { fs.unlinkSync(cardPath); } catch (_) {}
+        } else {
+          await send(infoMsg);
+        }
         await api.sendVoice({ voiceUrl: audioUrl }, event.threadId, event.type);
       } catch (err) { return send(`❌ Lỗi tải nhạc: ${err.message}`); }
 

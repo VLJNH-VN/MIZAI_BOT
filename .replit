@@ -46,7 +46,7 @@ path = "scripts/post-merge.sh"
 timeoutMs = 20000
 
 [nix]
-packages = ["unzipNLS"]
+packages = ["unzipNLS", "cairo", "pango", "libjpeg", "giflib", "librsvg", "pkg-config", "util-linux"]
 channel = "stable-25_05"
 
 [userenv]

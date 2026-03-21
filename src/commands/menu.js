@@ -189,7 +189,8 @@ module.exports = {
     const body = typeof raw.content === "string"
       ? raw.content
       : (raw.content?.text || raw.content?.msg || "");
-    const num  = parseInt(body.trim(), 10);
+    const match = body.match(/\d+/);
+    const num   = match ? parseInt(match[0], 10) : NaN;
     const threadID = event.threadId;
 
     const { case: $case, data = [], prefix: p = "." } = replyData || {};

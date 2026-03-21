@@ -488,8 +488,8 @@ module.exports = {
       const tipName = args[1];
       if (!tipName) return send(
         "⚠️ Nhập tên file lưu.\n" +
-        "Ví dụ: .api tt gai ten 50\n" +
-        "       .api tt gai @username"
+        "Ví dụ: .api tt gai ten 50    (tìm theo từ khóa, cần tiktokCookie)\n" +
+        "       .api tt gai @username  (lấy full video @user, không cần cookie)"
       );
 
       // Parse số lượng — hỗ trợ cả 2 dạng:

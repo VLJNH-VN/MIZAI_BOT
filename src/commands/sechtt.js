@@ -106,7 +106,8 @@ module.exports = {
     commandCategory: "Giải Trí",
     usages: [
       "sechtt <từ khóa>         — Tìm 8 video TikTok",
-      "sechtt <từ khóa> -n <số> — Tìm n video (tối đa 20)",
+      "sechtt <từ khóa> <số>    — Tìm n video (vd: sechtt gái mup 15)",
+      "sechtt <từ khóa> -n <số> — Tương tự, cả 2 format đều dùng được",
     ].join("\n"),
     cooldowns: 5,
   },
@@ -125,11 +126,21 @@ module.exports = {
 
     let limit = 8;
     let queryArgs = [...args];
+
+    // Dạng -n <số>
     const nIdx = queryArgs.findIndex(a => a === "-n");
     if (nIdx !== -1 && queryArgs[nIdx + 1]) {
       const parsed = parseInt(queryArgs[nIdx + 1], 10);
-      if (!isNaN(parsed) && parsed >= 1 && parsed <= 20) limit = parsed;
+      if (!isNaN(parsed) && parsed >= 1) limit = Math.min(parsed, 50);
       queryArgs.splice(nIdx, 2);
+    } else {
+      // Dạng số cuối không có -n: .sechtt gái mup 15
+      const last = queryArgs[queryArgs.length - 1];
+      const parsed = parseInt(last, 10);
+      if (!isNaN(parsed) && parsed >= 1 && String(parsed) === last) {
+        limit = Math.min(parsed, 50);
+        queryArgs = queryArgs.slice(0, -1);
+      }
     }
 
     const query = queryArgs.join(" ").trim();

@@ -314,4 +314,86 @@ async function drawCommandInfoCard({ config, prefix = "." }) {
   return outPath;
 }
 
-module.exports = { drawMenuCard, drawCategoryCard, drawCommandInfoCard };
+/**
+ * Card tất cả lệnh (menu all) — hiển thị theo trang
+ * @param {object} opts
+ * @param {Array}  opts.commands    [{name, desc}] — slice của trang hiện tại
+ * @param {number} opts.page        Trang hiện tại (bắt đầu từ 1)
+ * @param {number} opts.totalPages  Tổng số trang
+ * @param {number} opts.total       Tổng số lệnh
+ * @param {string} opts.prefix
+ */
+async function drawAllCommandsCard({ commands, page, totalPages, total, prefix = "." }) {
+  const COLS   = 2;
+  const COL_W  = 370;
+  const W      = 760;
+  const PAD    = 28;
+  const ROW_H  = 50;
+  const HEADER = 96;
+  const FOOTER = 52;
+  const rows   = Math.ceil(commands.length / COLS);
+  const H      = HEADER + rows * ROW_H + FOOTER;
+
+  const canvas = createCanvas(W, H);
+  const ctx    = canvas.getContext("2d");
+
+  drawBase(ctx, W, H);
+  drawHeader(
+    ctx, W,
+    `📋 TẤT CẢ LỆNH — Trang ${page}/${totalPages}`,
+    `Tổng: ${total} lệnh  ·  Prefix: ${prefix}`,
+    PAD
+  );
+  drawWatermark(ctx, W, H, PAD);
+
+  commands.forEach((c, i) => {
+    const col = i % COLS;
+    const row = Math.floor(i / COLS);
+    const x   = PAD + col * COL_W;
+    const y   = HEADER + row * ROW_H;
+    const idx = (page - 1) * (COLS * Math.ceil(commands.length / COLS)) + i + 1;
+
+    if (row % 2 === 0) {
+      ctx.fillStyle = "#ffffff06";
+      ctx.fillRect(col * COL_W, y, COL_W, ROW_H);
+    }
+
+    // Number
+    ctx.font = "bold 13px monospace";
+    ctx.fillStyle = THEME.color;
+    ctx.fillText(`${i + 1}.`, x + 4, y + 30);
+
+    // Command name
+    ctx.font = "bold 17px sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(prefix + truncate(c.name, 14), x + 32, y + 30);
+
+    // Desc
+    ctx.font = "12px sans-serif";
+    ctx.fillStyle = "#777799";
+    ctx.fillText(truncate(c.desc, 24), x + 32, y + 45);
+
+    // Separator
+    ctx.fillStyle = "#ffffff07";
+    ctx.fillRect(x, y + ROW_H - 1, COL_W - 8, 1);
+  });
+
+  // Footer
+  const footerY = HEADER + rows * ROW_H;
+  ctx.fillStyle = "#ffffff10";
+  ctx.fillRect(0, footerY, W, FOOTER);
+
+  ctx.font = "italic 15px sans-serif";
+  ctx.fillStyle = "#888888";
+  if (totalPages > 1 && page < totalPages) {
+    ctx.fillText(`💬  Reply số trang (${page + 1}–${totalPages}) để xem tiếp`, PAD, footerY + 34);
+  } else {
+    ctx.fillText(`✅  Đây là trang cuối (${page}/${totalPages})`, PAD, footerY + 34);
+  }
+
+  const outPath = path.join(os.tmpdir(), `all_cmds_card_${Date.now()}.png`);
+  fs.writeFileSync(outPath, canvas.toBuffer("image/png"));
+  return outPath;
+}
+
+module.exports = { drawMenuCard, drawCategoryCard, drawCommandInfoCard, drawAllCommandsCard };

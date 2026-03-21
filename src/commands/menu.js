@@ -8,7 +8,7 @@
  */
 
 const fs = require("fs");
-const { drawMenuCard, drawCategoryCard, drawCommandInfoCard } = require("../../utils/menuCard");
+const { drawMenuCard, drawCategoryCard, drawCommandInfoCard, drawAllCommandsCard } = require("../../utils/menuCard");
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -115,16 +115,27 @@ module.exports = {
       const page = 1;
       const slice = allCmds.slice(0, PAGE_SIZE);
 
-      let txt = `╭─────────────⭓\n│ 📋 Tất cả lệnh — Trang ${page}/${totalPages}\n├─────⭔\n`;
-      slice.forEach((c, i) => { txt += `│ ${i + 1}. ${c.name} | ${c.desc}\n`; });
-      txt += `├────────⭔\n│ 📝 Tổng: ${allCmds.length} lệnh\n`;
-      if (totalPages > 1) txt += `│ ⏰ Reply số trang (2–${totalPages}) để xem tiếp\n`;
-      txt += `╰─────────────⭓`;
+      let cardPath;
+      try {
+        cardPath = await drawAllCommandsCard({ commands: slice, page, totalPages, total: allCmds.length, prefix: p });
+      } catch (_) {}
 
-      const sent = await send(txt);
+      let sent;
+      if (cardPath) {
+        sent = await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type);
+        try { fs.unlinkSync(cardPath); } catch (_) {}
+      } else {
+        let txt = `╭─────────────⭓\n│ 📋 Tất cả lệnh — Trang ${page}/${totalPages}\n├─────⭔\n`;
+        slice.forEach((c, i) => { txt += `│ ${i + 1}. ${c.name} | ${c.desc}\n`; });
+        txt += `├────────⭔\n│ 📝 Tổng: ${allCmds.length} lệnh\n`;
+        if (totalPages > 1) txt += `│ ⏰ Reply số trang (2–${totalPages}) để xem tiếp\n`;
+        txt += `╰─────────────⭓`;
+        sent = await send(txt);
+      }
+
       const msgId =
-        sent?.msgId ??
         sent?.message?.msgId ??
+        sent?.msgId ??
         (Array.isArray(sent?.attachment) ? sent.attachment[0]?.msgId : null);
 
       if (msgId && totalPages > 1) {
@@ -234,18 +245,27 @@ module.exports = {
       const PAGE_SIZE = 20;
       const slice = allCmds.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-      let txt = `╭─────────────⭓\n│ 📋 Tất cả lệnh — Trang ${page}/${totalPages}\n├─────⭔\n`;
-      slice.forEach((c, i) => {
-        txt += `│ ${(page - 1) * PAGE_SIZE + i + 1}. ${c.name} | ${c.desc}\n`;
-      });
-      txt += `├────────⭔\n│ 📝 Tổng: ${allCmds.length} lệnh\n`;
-      if (page < totalPages) txt += `│ ⏰ Reply số trang (${page + 1}–${totalPages}) để xem tiếp\n`;
-      txt += `╰─────────────⭓`;
+      let cardPath;
+      try {
+        cardPath = await drawAllCommandsCard({ commands: slice, page, totalPages, total: allCmds.length, prefix: p });
+      } catch (_) {}
 
-      const sent = await send(txt);
+      let sent;
+      if (cardPath) {
+        sent = await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type);
+        try { fs.unlinkSync(cardPath); } catch (_) {}
+      } else {
+        let txt = `╭─────────────⭓\n│ 📋 Tất cả lệnh — Trang ${page}/${totalPages}\n├─────⭔\n`;
+        slice.forEach((c, i) => { txt += `│ ${(page - 1) * PAGE_SIZE + i + 1}. ${c.name} | ${c.desc}\n`; });
+        txt += `├────────⭔\n│ 📝 Tổng: ${allCmds.length} lệnh\n`;
+        if (page < totalPages) txt += `│ ⏰ Reply số trang (${page + 1}–${totalPages}) để xem tiếp\n`;
+        txt += `╰─────────────⭓`;
+        sent = await send(txt);
+      }
+
       const msgId =
-        sent?.msgId ??
         sent?.message?.msgId ??
+        sent?.msgId ??
         (Array.isArray(sent?.attachment) ? sent.attachment[0]?.msgId : null);
 
       if (msgId && page < totalPages && reg) {

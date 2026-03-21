@@ -1,7 +1,7 @@
 const axios = require("axios");
 
 const SERVERS = [
-  "https://fown.onrender.com/",
+  "https://fown.onrender.com/api/healthz",
 ];
 
 const INTERVAL_MS = 10 * 60 * 1000; // 10 phút

@@ -109,7 +109,7 @@ function formatDuration(seconds) {
 // ── Spotify (via fown API / yt-dlp spsearch) ──────────────────────────────────
 async function sptSearch(keyword) {
   const res = await global.axios.get(
-    `${FOWN_API}/api/search?spsearch=${encodeURIComponent(keyword)}&svl=6`,
+    `${FOWN_API}/api/search?q=${encodeURIComponent(keyword)}&platform=yt&svl=6`,
     { timeout: 30000 }
   );
   return (res.data?.results || []).map(item => ({
@@ -342,7 +342,7 @@ module.exports = {
 
         if (!audioUrl) {
           const keyword   = `${track.title} ${track.author}`;
-          const searchRes = await global.axios.get(`${FOWN_API}/api/search?ytmsearch=${encodeURIComponent(keyword)}&svl=1`, { timeout: 30000 });
+          const searchRes = await global.axios.get(`${FOWN_API}/api/search?q=${encodeURIComponent(keyword)}&platform=yt&svl=1`, { timeout: 30000 });
           const ytmUrl    = searchRes.data?.results?.[0]?.url;
           if (!ytmUrl) return send("❌ Không tìm thấy nhạc. Thử bài khác.");
           const mediaRes2 = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(ytmUrl)}`, { timeout: 120000 });

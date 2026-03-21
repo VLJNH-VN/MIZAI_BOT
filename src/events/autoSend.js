@@ -87,12 +87,38 @@ function startAutoSend(api) {
 
       for (const threadId of targets) {
         try {
-          await api.sendMessage(
-            { msg: cfg.content, ttl: 600_000 },
-            threadId,
-            ThreadType.Group
-          );
+          // ── Gửi text ─────────────────────────────────────────────────────
+          if (cfg.content) {
+            await api.sendMessage(
+              { msg: cfg.content, ttl: 600_000 },
+              threadId,
+              ThreadType.Group
+            );
+          }
 
+          // ── Ưu tiên 1: Video từ listapi (GitHub raw URL) ─────────────────
+          // Config ví dụ: { "listapi": "gaixinh" }
+          if (cfg.listapi && global.cawr?.tt) {
+            const ghUrl = global.cawr.tt.pickRandom(cfg.listapi);
+            if (ghUrl) {
+              try {
+                await api.sendVideo({
+                  videoUrl:     ghUrl,
+                  thumbnailUrl: "",
+                  msg:          "",
+                  width:        576,
+                  height:       1024,
+                  duration:     10000,
+                  ttl:          500_000,
+                }, threadId, ThreadType.Group);
+                continue; // đã gửi video → bỏ qua local video
+              } catch (vErr) {
+                global.logWarn?.(`[AutoSend] Gửi listapi video thất bại: ${vErr?.message}`);
+              }
+            }
+          }
+
+          // ── Ưu tiên 2: Video local từ cache/videos ────────────────────────
           const videoPath = pickRandomVideo();
           if (videoPath) {
             const meta     = getVideoMeta(videoPath);
@@ -111,7 +137,7 @@ function startAutoSend(api) {
             }
           }
         } catch (err) {
-          logWarn(`[AutoSend] Gửi thất bại tới ${threadId}: ${err?.message}`);
+          global.logWarn?.(`[AutoSend] Gửi thất bại tới ${threadId}: ${err?.message}`);
         }
       }
     }

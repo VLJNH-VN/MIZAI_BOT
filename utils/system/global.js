@@ -102,6 +102,7 @@ const { getBotAdminIds, isBotAdmin, isGroupAdmin } = require("../bot/botManager"
 const { logInfo, logWarn, logError, logEvent, logDebug } = require("./logger");
 const { checkGroqKey, setAutoCheck }          = require("./maintenance");
 const { processGaiData, resolveQuote }        = require("../bot/messageUtils");
+const cawr                                    = require("../bot/cawr");
 const msgCache                                = require("../../includes/database/messageCache");
 const groupLoader                             = require("../../includes/database/groupLoader");
 const dataManager                             = require("../../includes/database/dataManager");
@@ -184,6 +185,17 @@ global.Threads = groupSettings;
 
 // ── Xử lý video gai ──────────────────────────────────────────────────────────
 global.processGaiData = processGaiData;
+
+// ── CAWR — Thư viện tiện ích dùng chung ──────────────────────────────────────
+// global.cawr.tt.search(query, limit)           → Promise<Array>
+// global.cawr.tt.getVideo(tiktokUrl)            → Promise<{ videoUrl, ... }>
+// global.cawr.tt.uploadVideo(url, tipName, uid) → Promise<string|null>
+// global.cawr.tt.isDuplicate(list, ghUrl)       → boolean
+// global.cawr.tt.loadList(name)                 → string[]
+// global.cawr.tt.saveList(name, data)           → void
+// global.cawr.tt.pickRandom(name)               → string|null
+// global.cawr.tt.bulkAdd(name, query, limit)    → Promise<{ success, skipped, failed, ... }>
+global.cawr = cawr;
 
 // ── Message Cache + resolveQuote ──────────────────────────────────────────────
 /**

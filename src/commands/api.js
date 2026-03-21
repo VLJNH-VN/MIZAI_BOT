@@ -232,10 +232,11 @@ async function checkAndConvertFile(filePath, fileName, send) {
   return summary;
 }
 
+
 module.exports = {
   config: {
     name: "api",
-    version: "2.2.0",
+    version: "2.3.0",
     hasPermssion: 2,
     credits: "DongDev (converted by MiZai)",
     description: "Quản lý link media trong listapi (GitHub / link trực tiếp / JSON khác)",
@@ -245,7 +246,9 @@ module.exports = {
       ".api add <tên> <url>        — Lấy video trong URL rồi upload lên GitHub",
       ".api add <tên> <file_json>  — Import link từ file JSON khác trong listapi",
       ".api check                  — Kiểm tra & convert TẤT CẢ file lên GitHub",
-      ".api check <tên>            — Kiểm tra & convert 1 file cụ thể lên GitHub"
+      ".api check <tên>            — Kiểm tra & convert 1 file cụ thể lên GitHub",
+      ".api tt <tên> <từ khóa>     — Tìm TikTok, tải video, upload GitHub",
+      ".api tt <tên> <từ khóa> -n <số> — Tìm n video (tối đa 20)"
     ].join("\n"),
     cooldowns: 5
   },
@@ -254,15 +257,17 @@ module.exports = {
     if (!args[0]) {
       return send(
         "📝 Cách dùng:\n" +
-        "  .api add <tên>              — Reply ảnh/video để upload lên GitHub\n" +
-        "  .api add <tên> <url>        — Lấy video trong URL rồi upload lên GitHub\n" +
-        "  .api add <tên> <file_json>  — Import từ file JSON khác trong listapi\n" +
-        "  .api check                  — Kiểm tra & convert tất cả file lên GitHub\n" +
-        "  .api check <tên>            — Kiểm tra & convert 1 file cụ thể"
+        "  .api add <tên>                   — Reply ảnh/video để upload lên GitHub\n" +
+        "  .api add <tên> <url>             — Lấy video trong URL rồi upload lên GitHub\n" +
+        "  .api add <tên> <file_json>       — Import từ file JSON khác trong listapi\n" +
+        "  .api check                        — Kiểm tra & convert tất cả file lên GitHub\n" +
+        "  .api check <tên>                 — Kiểm tra & convert 1 file cụ thể\n" +
+        "  .api tt <tên> <từ khóa>          — Tìm TikTok, tải video, upload GitHub\n" +
+        "  .api tt <tên> <từ khóa> -n <số>  — Tìm n video TikTok (tối đa 20)"
       );
     }
 
-    const FLAG_MAP = { "-a": "add", "-c": "check" };
+    const FLAG_MAP = { "-a": "add", "-c": "check", "-t": "tt" };
     const sub = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase();
 
     // ══════════════════════════════════════════════════════
@@ -470,8 +475,55 @@ module.exports = {
     }
 
     // ══════════════════════════════════════════════════════
+    //  TT — Tìm TikTok → Tải video → Upload GitHub → Lưu vào listapi
+    //  .api tt <tên> <từ khóa> [-n <số>]
+    // ══════════════════════════════════════════════════════
+    if (sub === "tt") {
+      if (!global.config?.githubToken || !global.config?.uploadRepo) {
+        return send("❌ Chưa cấu hình githubToken hoặc uploadRepo trong config.json");
+      }
+
+      const tipName = args[1];
+      if (!tipName) return send("⚠️ Nhập tên file lưu.\nVí dụ: .api tt gaixinh gái mup -n 10");
+
+      // Parse -n flag
+      let limit = 8;
+      let queryArgs = args.slice(2);
+      const nIdx = queryArgs.findIndex(a => a === "-n");
+      if (nIdx !== -1 && queryArgs[nIdx + 1]) {
+        const parsed = parseInt(queryArgs[nIdx + 1], 10);
+        if (!isNaN(parsed) && parsed >= 1 && parsed <= 20) limit = parsed;
+        queryArgs.splice(nIdx, 2);
+      }
+
+      const query = queryArgs.join(" ").trim();
+      if (!query) return send("⚠️ Nhập từ khóa tìm kiếm.\nVí dụ: .api tt gaixinh gái mup -n 10");
+
+      await send(`🔍 Đang tìm TikTok: "${query}" (${limit} video)...\n⏳ Sẽ tải & upload lần lượt lên GitHub.`);
+
+      let res;
+      try {
+        res = await global.cawr.tt.bulkAdd(tipName, query, limit);
+      } catch (err) {
+        return send(`❌ Lỗi: ${err?.message || "Không xác định"}`);
+      }
+
+      if (res.total === 0) return send(`😔 Không tìm thấy video TikTok cho "${query}"`);
+
+      const finalList = global.cawr.tt.loadList(tipName);
+      let msg  = `🎬 KẾT QUẢ — TikTok → listapi/${tipName}.json\n`;
+      msg += `━━━━━━━━━━━━━━━━\n`;
+      msg += `✅ Upload thành công : ${res.success}\n`;
+      msg += `⏭ Bỏ qua (trùng/ảnh): ${res.skipped}\n`;
+      msg += `❌ Thất bại           : ${res.failed}\n`;
+      msg += `📦 Tổng trong file    : ${finalList.length}`;
+      if (res.failed > 0) msg += `\n⚠️ Lý do lỗi: ${[...new Set(res.failReasons)].join(", ")}`;
+      return send(msg);
+    }
+
+    // ══════════════════════════════════════════════════════
     //  Lệnh con không hợp lệ
     // ══════════════════════════════════════════════════════
-    return send("❓ Lệnh con không hợp lệ. Dùng: .api add <tên> | .api check [tên]");
+    return send("❓ Lệnh con không hợp lệ. Dùng: .api add <tên> | .api check [tên] | .api tt <tên> <từ khóa>");
   }
 };

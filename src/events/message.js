@@ -5,6 +5,7 @@ const { handleReply } = require("../../includes/handlers/handleReply");
 const { handleUploadAttachments } = require("../../includes/handlers/handleUploadAttachments");
 
 const AUTOREPLY_PATH = path.join(__dirname, "../../includes/data/autoreply.json");
+const { TRIGGER_KEYWORDS } = require("../../utils/ai/goibot");
 
 function loadAutoReplyRules() {
   try { return JSON.parse(fs.readFileSync(AUTOREPLY_PATH, "utf-8")); }
@@ -16,6 +17,10 @@ async function handleAutoReply({ api, event }) {
     const raw  = event?.data ?? {};
     const body = (typeof raw.content === "string" ? raw.content : (raw.content?.text || raw.content?.msg || "")).trim().toLowerCase();
     if (!body) return;
+
+    // Nếu tin nhắn chứa trigger keyword của goibot → nhường cho goibot xử lý
+    if (TRIGGER_KEYWORDS.some(kw => body.includes(kw.toLowerCase()))) return;
+
     const rules = loadAutoReplyRules();
     const match = rules.find(r => body.includes(String(r.keyword).toLowerCase()));
     if (!match) return;

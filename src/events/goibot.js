@@ -64,6 +64,19 @@ const AUTO_REPLY_COOLDOWN_MS = 8 * 60 * 1000;  // 8 phút giữa 2 lần tự nh
 const AUTO_REPLY_CHANCE      = 0.18;             // 18% xác suất xem xét
 const AUTO_REPLY_MIN_LEN     = 8;                // tin nhắn ít nhất 8 ký tự mới xét
 
+// Load autoreply rules để tránh xung đột
+const AUTOREPLY_DATA_PATH = path.join(process.cwd(), "includes", "data", "autoreply.json");
+function loadAutoReplyKeywords() {
+  try {
+    const rules = JSON.parse(fs.readFileSync(AUTOREPLY_DATA_PATH, "utf-8"));
+    return Array.isArray(rules) ? rules.map(r => String(r.keyword).toLowerCase()) : [];
+  } catch { return []; }
+}
+function isAutoReplied(bodyLower) {
+  const keywords = loadAutoReplyKeywords();
+  return keywords.some(kw => bodyLower.includes(kw));
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 //  TX — CONTEXT & ACTION
 // ════════════════════════════════════════════════════════════════════════════════
@@ -707,6 +720,8 @@ async function handleGoibot({ api, event }) {
   // ── Chế độ tự giám sát (watch mode) ────────────────────────────────────────
   let isWatchMode = false;
   if (!isTriggered && !isReplyToBot) {
+    // Nếu tin đã được autoreply xử lý → nhường, không chen vào
+    if (isAutoReplied(bodyLower)) return;
     // Chỉ xét nếu: tin đủ dài + chưa cooldown + may mắn qua xác suất
     const lastAuto = lastAutoReply[threadId] || 0;
     const passChance = Math.random() < AUTO_REPLY_CHANCE;

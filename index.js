@@ -10,6 +10,7 @@ const { loadCommands, runOnLoad, setupLifecycle } = require("./utils/system/load
 const { scheduleCacheCleanup, scheduleKeyCheck } = require("./utils/system/maintenance");
 const { startKeepAlive } = require("./utils/system/keepAlive");
 const { createZaloClient }        = require("./utils/system/client");
+const { autoLoginAndSave }        = require("./utils/system/tiktokLogin");
 const { saveLastSeen }            = require("./utils/system/lastSeen");
 const { fetchMissedMessages }     = require("./utils/system/fetchMissed");
 
@@ -47,6 +48,7 @@ async function main(isFirstRun = true) {
     scheduleCacheCleanup();
     scheduleKeyCheck();
     startKeepAlive();
+    await autoLoginAndSave();
   }
 
   const api = await createZaloClient();

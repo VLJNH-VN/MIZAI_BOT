@@ -52,6 +52,7 @@ const LISTAPI_DIR  = path.join(process.cwd(), "includes", "listapi");
 const TEMP_DIR     = path.join(process.cwd(), "includes", "cache");
 const DATA_DIR     = path.join(process.cwd(), "includes", "data");
 const HISTORY_FILE = path.join(DATA_DIR, "tt_history.json");
+const FOWN_API     = "https://fown.onrender.com";
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Helpers thư mục
@@ -180,43 +181,59 @@ async function search(query, limit = 8) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Lấy toàn bộ video từ @username trực tiếp qua tiktok-api-dl.
+ * Lấy danh sách video từ @username qua fown.onrender.com (search API).
+ * Không cần cookie, không cần secUid.
  * @param {string} username  có thể có hoặc không có @ phía trước
- * @returns {Promise<Array<{ id, videoUrl, tiktokUrl, title, author }>>}
+ * @param {number} limit     Số video tối đa (mặc định 50)
+ * @returns {Promise<Array<{ id, videoUrl, tiktokUrl, title, author, _useFown }>>}
  */
-async function getUserVideos(username) {
+async function getUserVideos(username, limit = 50) {
   const uid = username.replace(/^@/, "");
+  const safeLimit = Math.max(1, Math.min(limit, 200));
 
   let res;
   try {
-    res = await TikTok.GetUserPosts(uid, {});
+    res = await axios.get(`${FOWN_API}/api/search`, {
+      params: { ttsearch: `@${uid}`, svl: safeLimit },
+      timeout: 25000,
+    });
   } catch (e) {
-    throw new Error(`GetUserPosts lỗi: ${e.message}`);
+    throw new Error(`Fown search lỗi: ${e.message}`);
   }
 
-  if (res.status !== "success" || !Array.isArray(res.result)) {
-    const msg = res.message || "Không lấy được video từ profile";
-    global.logWarn?.(`[cawr.tt] GetUserPosts thất bại: ${msg}`);
+  const videos = res.data?.results;
+  if (!Array.isArray(videos) || videos.length === 0) {
+    const msg = `Không tìm thấy video nào của @${uid} (fown trả về rỗng)`;
+    global.logWarn?.(`[cawr.tt] getUserVideos: ${msg}`);
     throw new Error(msg);
   }
 
-  const results = [];
-  for (const v of res.result) {
-    // Bỏ qua slideshow ảnh (imagePost)
-    if (!v.video) continue;
-    const videoUrl = v.video.downloadAddr || v.video.playAddr || null;
-    if (!videoUrl) continue;
-    const id = String(v.id || v.video?.id || `${Date.now()}_${Math.random().toString(36).slice(2,6)}`);
-    results.push({
-      id,
-      videoUrl,
-      tiktokUrl: `https://www.tiktok.com/@${uid}/video/${id}`,
-      title:     v.desc   || "",
-      author:    uid,
-    });
-  }
+  return videos.map(v => ({
+    id:        String(v.id || `${Date.now()}_${Math.random().toString(36).slice(2,6)}`),
+    videoUrl:  null,                 // Không có direct URL; dùng fown download
+    tiktokUrl: v.url || `https://www.tiktok.com/@${uid}/video/${v.id}`,
+    title:     v.title || "",
+    author:    uid,
+    _useFown:  true,                 // Báo hiệu bulkAdd dùng fown để lấy raw_url
+  }));
+}
 
-  return results;
+/**
+ * Dùng fown.onrender.com để lấy raw_url (GitHub CDN) từ một TikTok video URL.
+ * @param {string} tiktokUrl
+ * @returns {Promise<string|null>}  raw_url hoặc null nếu thất bại
+ */
+async function fownGetRawUrl(tiktokUrl) {
+  try {
+    const res = await axios.get(`${FOWN_API}/api/download`, {
+      params:  { url: tiktokUrl },
+      timeout: 40000,
+    });
+    return res.data?.raw_url || null;
+  } catch (e) {
+    global.logWarn?.(`[cawr.tt] fownGetRawUrl lỗi (${tiktokUrl.slice(-30)}): ${e.message}`);
+    return null;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -319,33 +336,47 @@ async function bulkAdd(tipName, query, limit = 8, onProgress = null) {
     }
 
     try {
-      if (!item.videoUrl) {
-        skipped++;
-        addHistory(item.id);
-        onProgress?.(i + 1, results.length, "skip_image");
-        continue;
+      let finalUrl = null;
+
+      if (item._useFown) {
+        // Lấy raw_url từ fown (GitHub CDN) — không cần tải về local
+        global.logInfo?.(`[cawr.tt] Fown download ${i + 1}/${results.length}: ${item.id}`);
+        finalUrl = await fownGetRawUrl(item.tiktokUrl);
+        if (!finalUrl) {
+          failed++;
+          failReasons.push(`Fown không trả về URL: ${item.id}`);
+          onProgress?.(i + 1, results.length, "fail");
+          continue;
+        }
+      } else {
+        // Tải về local rồi upload GitHub (flow cũ cho search keyword)
+        if (!item.videoUrl) {
+          skipped++;
+          addHistory(item.id);
+          onProgress?.(i + 1, results.length, "skip_image");
+          continue;
+        }
+        finalUrl = await uploadVideo(item.videoUrl, tipName, uid);
+        if (!finalUrl) {
+          failed++;
+          failReasons.push("Không lấy được URL GitHub");
+          onProgress?.(i + 1, results.length, "fail");
+          continue;
+        }
       }
 
-      const ghUrl = await uploadVideo(item.videoUrl, tipName, uid);
-      if (!ghUrl) {
-        failed++;
-        failReasons.push("Không lấy được URL GitHub");
-        onProgress?.(i + 1, results.length, "fail");
-        continue;
-      }
-
-      if (isDuplicate(data, ghUrl)) {
+      if (isDuplicate(data, finalUrl)) {
         skipped++;
         addHistory(item.id);
-        global.logInfo?.(`[cawr.tt] Bỏ qua trùng listapi: ${ghUrl}`);
+        global.logInfo?.(`[cawr.tt] Bỏ qua trùng listapi: ${finalUrl}`);
         onProgress?.(i + 1, results.length, "duplicate");
         continue;
       }
 
-      data.push(ghUrl);
+      data.push(finalUrl);
       addHistory(item.id);
       success++;
-      global.logInfo?.(`[cawr.tt] ✅ ${i + 1}/${results.length}: ${ghUrl}`);
+      global.logInfo?.(`[cawr.tt] ✅ ${i + 1}/${results.length}: ${finalUrl}`);
       onProgress?.(i + 1, results.length, "ok");
     } catch (e) {
       failed++;
@@ -367,6 +398,7 @@ module.exports = {
   tt: {
     search,
     getUserVideos,
+    fownGetRawUrl,
     uploadVideo,
     isDuplicate,
     loadList,

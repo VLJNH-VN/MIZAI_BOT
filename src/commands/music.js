@@ -249,11 +249,11 @@ module.exports = {
             thumb:    t.thumbnail || t.artwork_url,
           });
         } catch (_) {}
-        const infoMsg = `✅ SoundCloud\n📝 ${t.title}\n👤 ${t.uploader}\n⏳ ${fmtDurationSec(t.duration)} · ▶️ ${fmtNum(t.view_count)}`;
         if (cardPath) {
-          await api.sendMessage({ msg: infoMsg, attachments: [cardPath] }, event.threadId, event.type);
+          await api.sendMessage({ msg: "", attachments: [cardPath] }, event.threadId, event.type);
           try { fs.unlinkSync(cardPath); } catch (_) {}
         } else {
+          const infoMsg = `✅ SoundCloud\n📝 ${t.title}\n👤 ${t.uploader}\n⏳ ${fmtDurationSec(t.duration)} · ▶️ ${fmtNum(t.view_count)}`;
           await api.sendMessage({ msg: infoMsg }, event.threadId, event.type);
         }
         await api.sendVoice({ voiceUrl: audioUrl }, event.threadId, event.type);
@@ -286,11 +286,11 @@ module.exports = {
             duration: fmtDurationMs(track.duration),
           });
         } catch (_) {}
-        const infoMsg = `🎵 ${track.title}\n👤 ${track.author}\n⏳ ${fmtDurationMs(track.duration)}`;
         if (cardPath) {
-          await api.sendMessage({ msg: infoMsg, attachments: [cardPath] }, event.threadId, event.type);
+          await api.sendMessage({ msg: "", attachments: [cardPath] }, event.threadId, event.type);
           try { fs.unlinkSync(cardPath); } catch (_) {}
         } else {
+          const infoMsg = `🎵 ${track.title}\n👤 ${track.author}\n⏳ ${fmtDurationMs(track.duration)}`;
           await send(infoMsg);
         }
         await api.sendVoice({ voiceUrl: audioUrl }, event.threadId, event.type);

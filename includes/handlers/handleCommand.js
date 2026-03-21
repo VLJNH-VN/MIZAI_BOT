@@ -297,7 +297,7 @@ async function handleCommand({ api, event, commands, prefix }) {
       send,
       commands,
       prefix: effectivePrefix,
-      commandName: canonicalName,
+      commandName,
       senderId,
       threadID,
       isGroup,

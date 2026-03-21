@@ -344,7 +344,7 @@ async function bulkAdd(tipName, query, limit = 8, onProgress = null) {
 
       if (item._useFown) {
         // Lấy raw_url từ fown (GitHub CDN) — không cần tải về local
-        global.logInfo?.(`[cawr.tt] Fown download ${i + 1}/${results.length}: ${item.id}`);
+       // global.logInfo?.(`[cawr.tt] Fown download ${i + 1}/${results.length}: ${item.id}`);
         finalUrl = await fownGetRawUrl(item.tiktokUrl);
         if (!finalUrl) {
           failed++;

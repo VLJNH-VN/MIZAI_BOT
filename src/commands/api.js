@@ -242,14 +242,9 @@ module.exports = {
     description: "Quản lý link media trong listapi (GitHub / link trực tiếp / JSON khác)",
     commandCategory: "Quản Trị",
     usages: [
-      ".api add <tên>              — Reply ảnh/video để upload lên GitHub",
-      ".api add <tên> <url>        — Lấy video trong URL rồi upload lên GitHub",
-      ".api add <tên> <file_json>  — Import link từ file JSON khác trong listapi",
-      ".api check                  — Kiểm tra & convert TẤT CẢ file lên GitHub",
-      ".api check <tên>            — Kiểm tra & convert 1 file cụ thể lên GitHub",
-      ".api tt <tên> <từ khóa> [số]     — Tìm video TikTok (max 50), tải & upload GitHub",
-      ".api tt <tên> @username           — Lấy TOÀN BỘ video từ @user, tải & upload GitHub",
-      ".api tt <tên> <từ khóa> -n <số>  — Tương tự, cả 2 format đều dùng được"
+      ".api add <tên> [reply|<url>|<file.json>]      — Upload/import media lên GitHub",
+      ".api check [tên]                               — Kiểm tra & convert file (bỏ trống = tất cả)",
+      ".api tt <tên> <từ khóa|@user> [-n <số>]       — Tìm/lấy video TikTok → upload GitHub"
     ].join("\n"),
     cooldowns: 5
   },
@@ -258,14 +253,9 @@ module.exports = {
     if (!args[0]) {
       return send(
         "📝 Cách dùng:\n" +
-        "  .api add <tên>                   — Reply ảnh/video để upload lên GitHub\n" +
-        "  .api add <tên> <url>             — Lấy video trong URL rồi upload lên GitHub\n" +
-        "  .api add <tên> <file_json>       — Import từ file JSON khác trong listapi\n" +
-        "  .api check                        — Kiểm tra & convert tất cả file lên GitHub\n" +
-        "  .api check <tên>                 — Kiểm tra & convert 1 file cụ thể\n" +
-        "  .api tt <tên> <từ khóa> [số]     — Tìm video TikTok (max 50), tải & upload GitHub\n" +
-        "  .api tt <tên> @username            — Lấy TOÀN BỘ video từ @user, tải & upload GitHub\n" +
-        "  .api tt <tên> <từ khóa> -n <số>   — Tương tự, cả 2 format đều dùng được"
+        "  add <tên> [reply|<url>|<file.json>]    — Upload/import media lên GitHub\n" +
+        "  check [tên]                             — Kiểm tra & convert (bỏ trống = tất cả)\n" +
+        "  tt <tên> <từ khóa|@user> [-n <số>]     — Tìm/lấy video TikTok → upload GitHub"
       );
     }
 

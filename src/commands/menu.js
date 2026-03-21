@@ -198,7 +198,12 @@ module.exports = {
     // ── Chọn nhóm → xem danh sách lệnh trong nhóm ────────────────────────────
     if ($case === "infoGr") {
       const item = data[num - 1];
-      if (!item) return send(`❎ "${body.trim()}" không nằm trong số thứ tự menu`);
+      if (!item) {
+        const sent2 = await send(`❎ "${body.trim()}" không nằm trong số thứ tự menu (1–${data.length})`);
+        const mid2 = sent2?.message?.msgId ?? sent2?.msgId ?? (Array.isArray(sent2?.attachment) ? sent2.attachment[0]?.msgId : null);
+        if (mid2 && reg) reg({ messageId: String(mid2), commandName: "menu", payload: replyData });
+        return;
+      }
 
       let cardPath;
       try {
@@ -241,7 +246,10 @@ module.exports = {
       const { allCmds = [], totalPages = 1 } = replyData;
       const page = num;
       if (!page || page < 1 || page > totalPages) {
-        return send(`⚠️ Trang không hợp lệ. Nhập số từ 1 đến ${totalPages}.`);
+        const sent2 = await send(`⚠️ Trang không hợp lệ. Nhập số từ 1 đến ${totalPages}.`);
+        const mid2 = sent2?.message?.msgId ?? sent2?.msgId ?? (Array.isArray(sent2?.attachment) ? sent2.attachment[0]?.msgId : null);
+        if (mid2 && reg) reg({ messageId: String(mid2), commandName: "menu", payload: replyData });
+        return;
       }
       const PAGE_SIZE = 20;
       const slice = allCmds.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -282,7 +290,12 @@ module.exports = {
     // ── Chọn lệnh → xem chi tiết ─────────────────────────────────────────────
     if ($case === "infoCmds") {
       const name = data[num - 1];
-      if (!name) return send(`⚠️ "${body.trim()}" không nằm trong số thứ tự`);
+      if (!name) {
+        const sent2 = await send(`⚠️ "${body.trim()}" không nằm trong số thứ tự (1–${data.length})`);
+        const mid2 = sent2?.message?.msgId ?? sent2?.msgId ?? (Array.isArray(sent2?.attachment) ? sent2.attachment[0]?.msgId : null);
+        if (mid2 && reg) reg({ messageId: String(mid2), commandName: "menu", payload: replyData });
+        return;
+      }
 
       const cmds = global.commands;
       const cmd  = cmds?.get?.(name);

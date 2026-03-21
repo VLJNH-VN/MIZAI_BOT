@@ -68,6 +68,7 @@ function formatStatus(data) {
 module.exports = {
   config: {
     name           : "fown",
+    aliases        : ["fownapi", "ytadmin"],
     version        : "1.0.0",
     hasPermssion   : 1,
     credits        : "MIZAI",

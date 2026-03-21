@@ -15,6 +15,8 @@ const {
   sendToGroq, isEnabled, getBody,
   getCurrentTimeInVietnam, TRIGGER_KEYWORDS, CACHE_DIR, handleNewUser,
   fetchImageAsBase64, extractImageUrl, extractUrls,
+  buildMemoryContext, saveUserNote, saveDiaryEntry, saveGlobalNote,
+  getMoodContext, updateMoodState, decayEnergy, loadState,
 } = require("../../utils/ai/goibot");
 
 const { isTracked } = require("../../includes/handlers/handleReply");
@@ -572,9 +574,13 @@ Nhớ: đây là hành động TỰ CHỦ — không có ai yêu cầu bạn, b�
 
 async function runSelfReflect(api) {
   try {
-    const self   = await getSelfProfile(api);
+    decayEnergy();
+    const self    = await getSelfProfile(api);
     const timenow = getCurrentTimeInVietnam();
-    const ctx    = JSON.stringify({
+    const moodCtx = getMoodContext();
+    const memCtx  = buildMemoryContext("__self__");
+
+    const ctx = JSON.stringify({
       time        : timenow,
       senderName  : "SELF_REFLECT",
       content     : SELF_REFLECT_PROMPT,
@@ -585,7 +591,7 @@ async function runSelfReflect(api) {
       hasImage    : false,
       hasUrl      : false,
       SELF_PROFILE: self,
-    });
+    }) + "\n" + moodCtx + (memCtx ? "\n" + memCtx : "");
 
     const { sendToGroq } = require("../../utils/ai/goibot");
     const responseText   = await sendToGroq(ctx, "__self_reflect__");
@@ -596,6 +602,18 @@ async function runSelfReflect(api) {
 
     if (botMsg?.profile?.status) {
       await handleProfileAction(api, botMsg.profile, null);
+    }
+    if (botMsg?.emotion?.status) {
+      updateMoodState({
+        mood      : botMsg.emotion.mood,
+        energy    : botMsg.emotion.energy,
+        moodScore : botMsg.emotion.moodScore,
+        episode   : botMsg.emotion.episode,
+      });
+      global.logInfo?.(`[goibot/selfReflect] emotion updated: ${botMsg.emotion.mood}`);
+    }
+    if (botMsg?.memory?.diary) {
+      saveDiaryEntry(botMsg.memory.diary);
     }
   } catch (err) {
     global.logWarn?.(`[goibot/selfReflect] ${err?.message}`);
@@ -668,6 +686,9 @@ async function handleGoibot({ api, event }) {
   };
 
   try {
+    // Cập nhật energy tự nhiên theo thời gian
+    decayEnergy();
+
     const timenow  = getCurrentTimeInVietnam();
     const nameUser = await api.getUserInfo(senderId)
       .then(info => info?.changed_profiles?.[senderId]?.displayName || senderId)
@@ -709,11 +730,22 @@ async function handleGoibot({ api, event }) {
     const hasImage = imageParts.length > 0;
     const hasUrl   = urls.length > 0;
 
+    // ── Lấy self profile ───────────────────────────────────────────────────────
+    const selfProfile = await getSelfProfile(api);
+
+    // ── Lấy mood & memory context ──────────────────────────────────────────────
+    const moodCtx   = getMoodContext();
+    const memoryCtx = buildMemoryContext(senderId);
+
+    // Cập nhật lastSeen cho user (không lưu note — chỉ update thời gian)
+    saveUserNote(senderId, nameUser, null);
+
     const userMessage = JSON.stringify({
       time: timenow, senderName: nameUser, content: body,
       threadID: threadId, senderID: senderId,
       id_cua_bot: botId, hasQuote, hasImage, hasUrl,
-    }) + (isAdmin ? `\n${getTxContext(true)}` : "");
+      SELF_PROFILE: selfProfile,
+    }) + "\n" + moodCtx + (memoryCtx ? "\n" + memoryCtx : "") + (isAdmin ? `\n${getTxContext(true)}` : "");
 
     const responseText = await sendToGroq(userMessage, threadId, {
       imageParts,
@@ -731,7 +763,42 @@ async function handleGoibot({ api, event }) {
       return send(responseText.trim() || "❌ Không có phản hồi.");
     }
 
+    // ── Từ chối — xử lý trước, nếu từ chối thì dừng mọi action khác ──────────
+    if (botMsg?.refuse?.status) {
+      const reason = (botMsg.refuse.reason || "").trim();
+      if (reason) await send(reason);
+      // Vẫn cập nhật cảm xúc nếu có
+      if (botMsg?.emotion?.status) {
+        updateMoodState({
+          mood      : botMsg.emotion.mood,
+          energy    : botMsg.emotion.energy,
+          moodScore : botMsg.emotion.moodScore,
+          episode   : botMsg.emotion.episode,
+        });
+      }
+      return;
+    }
+
     if (botMsg?.content?.text) await send(botMsg.content.text);
+
+    // ── Cảm xúc — cập nhật trạng thái tâm lý ─────────────────────────────────
+    if (botMsg?.emotion?.status) {
+      updateMoodState({
+        mood      : botMsg.emotion.mood,
+        energy    : botMsg.emotion.energy,
+        moodScore : botMsg.emotion.moodScore,
+        episode   : botMsg.emotion.episode,
+      });
+      global.logInfo?.(`[goibot/emotion] mood=${botMsg.emotion.mood}, energy=${botMsg.emotion.energy}, note=${botMsg.emotion.note}`);
+    }
+
+    // ── Bộ nhớ — lưu ký ức ───────────────────────────────────────────────────
+    if (botMsg?.memory?.status) {
+      if (botMsg.memory.userNote) saveUserNote(senderId, nameUser, botMsg.memory.userNote);
+      if (botMsg.memory.diary)    saveDiaryEntry(botMsg.memory.diary);
+      if (botMsg.memory.globalNote) saveGlobalNote(botMsg.memory.globalNote);
+      global.logInfo?.("[goibot/memory] Đã lưu ký ức mới.");
+    }
 
     // ── Nhạc ──────────────────────────────────────────────────────────────────
     if (botMsg?.nhac?.status) {

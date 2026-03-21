@@ -131,22 +131,30 @@ async function sendOneVideo(api, event, ghUrl, caption) {
     // Bước 3: uploadAttachment → lấy fileUrl Zalo → sendVideo
     try {
       const uploaded = await api.uploadAttachment([uploadPath], event.threadId, event.type);
-      const fileUrl  = uploaded?.[0]?.fileUrl;
+      const att      = uploaded?.[0];
+      global.logInfo?.(`[vd] uploadAttachment result: ${JSON.stringify(att)}`);
+      const fileUrl  = att?.fileUrl;
       if (fileUrl) {
-        await api.sendVideo({
-          videoUrl:     fileUrl,
-          thumbnailUrl: "",
-          msg:          caption || "",
-          width:        meta.width,
-          height:       meta.height,
-          duration:     Math.max(1000, meta.duration * 1000),
-          ttl:          500_000,
-        }, event.threadId, event.type);
-        global.logInfo?.("[vd] sendVideo (uploadAttachment) thành công.");
-        return;
+        try {
+          await api.sendVideo({
+            videoUrl: fileUrl,
+            msg:      caption || "",
+            width:    meta.width  || 576,
+            height:   meta.height || 1024,
+            duration: Math.max(1000, meta.duration * 1000),
+            fileSize: fileSize,
+            ttl:      500_000,
+          }, event.threadId, event.type);
+          global.logInfo?.("[vd] sendVideo thành công.");
+          return;
+        } catch (e2) {
+          global.logWarn?.(`[vd] sendVideo lỗi: ${e2.message} | fileUrl=${fileUrl?.slice(0, 100)}`);
+        }
+      } else {
+        global.logWarn?.("[vd] uploadAttachment không trả về fileUrl");
       }
     } catch (e) {
-      global.logWarn?.(`[vd] uploadAttachment/sendVideo thất bại: ${e.message}`);
+      global.logWarn?.(`[vd] uploadAttachment thất bại: ${e.message}`);
     }
 
     // Bước 4: Fallback cuối → sendMessage + attachments

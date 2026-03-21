@@ -9,7 +9,7 @@ module.exports = {
     hasPermssion: 2,
     credits: "Ljzi",
     description: "Share / tải / tạo command mọi lệnh qua GitHub Gist, reload ngay",
-    commandCategory: "Admin",
+    commandCategory: "Quản Trị",
     usages: ".adc <tenlenh> [link] hoặc reply code",
     cooldowns: 0
   },

@@ -7,7 +7,7 @@ module.exports = {
     hasPermssion: 2,
     credits: "Lizi",
     description: "Chạy lệnh terminal",
-    commandCategory: "Admin",
+    commandCategory: "Quản Trị",
     usages: ".shell <command>",
     cooldowns: 5
   },

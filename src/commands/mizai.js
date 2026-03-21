@@ -12,7 +12,7 @@ module.exports = {
     hasPermssion: 2,
     credits: "MIZAI",
     description: "Quản lý profile và cài đặt bot",
-    commandCategory: "Admin",
+    commandCategory: "Quản Trị",
     usages: [
       "botprofile name <tên_mới>    — Đổi tên bot",
       "botprofile bio <nội_dung>    — Cập nhật bio bot",

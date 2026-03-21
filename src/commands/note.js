@@ -42,7 +42,7 @@ module.exports = {
     hasPermssion: 2,
     credits: "Ljzi",
     description: "Export & import code lệnh qua GitHub",
-    commandCategory: "Admin",
+    commandCategory: "Quản Trị",
     usages: ".note <file.js> [url]",
     cooldowns: 3
   },

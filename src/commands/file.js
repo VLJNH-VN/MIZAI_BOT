@@ -131,7 +131,7 @@ module.exports = {
     hasPermssion: 2,
     credits: "Niio-team (DC-Nam) — converted by Bot",
     description: "Xem, mở, xóa, tải, nén file/folder trên máy chủ",
-    commandCategory: "Admin",
+    commandCategory: "Quản Trị",
     usages: ".file [đường dẫn]",
     cooldowns: 0
   },

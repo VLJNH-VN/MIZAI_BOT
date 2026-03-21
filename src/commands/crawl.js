@@ -9,7 +9,7 @@ module.exports = {
     hasPermssion: 2,
     credits: "L.V.Bằng | Fix by Lizi",
     description: "Crawl dữ liệu từ API",
-    commandCategory: "Admin",
+    commandCategory: "Quản Trị",
     usages: ".crawl <url> <amount> <field>",
     cooldowns: 5
   },

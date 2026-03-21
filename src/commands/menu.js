@@ -11,9 +11,11 @@
 
 function commandsGroup(cmds) {
   const array = [];
+  const seen  = new Set();
   for (const cmd of cmds.values()) {
     const { name, commandCategory } = cmd.config || {};
-    if (!name) continue;
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
     const cat   = commandCategory || "Khác";
     const found = array.find(i => i.commandCategory === cat);
     if (!found) array.push({ commandCategory: cat, commandsName: [name] });
@@ -100,13 +102,14 @@ module.exports = {
 
     // ── menu (nhóm lệnh → reply để xem chi tiết) ─────────────────────────────
     const data = commandsGroup(cmds);
+    const uniqueCount = data.reduce((s, g) => s + g.commandsName.length, 0);
     let txt = `╭─────────────⭓\n`, count = 0;
     for (const { commandCategory, commandsName } of data) {
       txt += `│ ${++count}. ${commandCategory} || có ${commandsName.length} lệnh\n`;
     }
     txt += (
       `├────────⭔\n` +
-      `│ 📝 Tổng có: ${cmds.size} lệnh\n` +
+      `│ 📝 Tổng có: ${uniqueCount} lệnh\n` +
       `│ ⏰ Reply từ 1 đến ${data.length} để chọn\n` +
       `╰─────────────⭓`
     );

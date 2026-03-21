@@ -112,7 +112,7 @@ module.exports = {
     hasPermssion: 2,
     credits: "Bot",
     description: "Quản lý Gemini key (AIza...) và Groq key (gsk_...)",
-    commandCategory: "Admin",
+    commandCategory: "Quản Trị",
     usages: [
       ".key add <key>         — Thêm key (Gemini hoặc Groq)",
       ".key del <key|số>      — Xoá key Gemini (g1, g2...) hoặc Groq (1, 2...)",

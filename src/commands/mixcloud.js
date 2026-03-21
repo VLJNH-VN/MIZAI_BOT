@@ -154,7 +154,7 @@ module.exports = {
     hasPermssion: 0,
     credits: "MiZai",
     description: "Tìm kiếm và phát nhạc từ Mixcloud",
-    commandCategory: "Giải trí",
+    commandCategory: "Giải Trí",
     usages: "mixcloud <tên bài hát>",
     cooldowns: 5
   },

@@ -25,7 +25,7 @@ module.exports = {
 
     description: "Mô tả ngắn về chức năng lệnh",
 
-    commandCategory: "Tiện ích", // Nhóm lệnh hiển thị trong .menu
+    commandCategory: "Tiện Ích", // Nhóm lệnh hiển thị trong .menu
                                  // Ví dụ: "Kinh Tế", "Giải Trí", "Admin", "System"
 
     usages: ".example <đối số>", // Cú pháp hướng dẫn người dùng

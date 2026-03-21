@@ -5,7 +5,7 @@ module.exports = {
     hasPermssion: 2,
     credits: "Lizi",
     description: "Khởi động lại bot an toàn",
-    commandCategory: "Admin",
+    commandCategory: "Quản Trị",
     usages: ".restart",
     cooldowns: 5
   },

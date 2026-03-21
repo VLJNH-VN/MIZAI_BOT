@@ -67,7 +67,7 @@ module.exports = {
     hasPermssion   : 0,
     credits        : "MIZAI",
     description    : "Làm nét ảnh bằng Sharp hoặc AI super-resolution (HuggingFace)",
-    commandCategory: "Utility",
+    commandCategory: "Tiện Ích",
     usages         : "!lamet [nhe|normal|manh|ai] — reply vào ảnh",
     cooldowns      : 8
   },

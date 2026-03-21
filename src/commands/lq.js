@@ -14,7 +14,7 @@ module.exports = {
 
     description: "Lấy 10 tài khoản Liên Quân",
 
-    commandCategory: "Utility",
+    commandCategory: "Tiện Ích",
 
     usages: ".lq",
 

@@ -8,7 +8,7 @@ module.exports = {
     hasPermssion: 0,
     credits: "MiZai",
     description: "Xem Zalo ID của bạn hoặc của người được tag",
-    commandCategory: "System",
+    commandCategory: "Hệ Thống",
     usages: ".id | .id @mention",
     cooldowns: 3
   },

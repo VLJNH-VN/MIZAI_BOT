@@ -239,7 +239,7 @@ module.exports = {
     hasPermssion: 2,
     credits: "DongDev (converted by MiZai)",
     description: "Quản lý link media trong listapi (GitHub / link trực tiếp / JSON khác)",
-    commandCategory: "Admin",
+    commandCategory: "Quản Trị",
     usages: [
       ".api add <tên>              — Reply ảnh/video để upload lên GitHub",
       ".api add <tên> <url>        — Lấy video trong URL rồi upload lên GitHub",

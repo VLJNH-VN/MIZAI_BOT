@@ -19,7 +19,7 @@ module.exports = {
     hasPermssion:    2,
     credits:         "Niio-team (Vtuan) — converted MiZai",
     description:     "Load / unload / reload lệnh",
-    commandCategory: "Admin",
+    commandCategory: "Quản Trị",
     usages: [
       "load <tên>         — Reload 1 lệnh",
       "load all           — Reload tất cả lệnh",

@@ -27,7 +27,7 @@ module.exports = {
     hasPermssion   : 0,
     credits        : "Mizai",
     description    : "Xem lịch sử tin nhắn của user trong nhóm",
-    commandCategory: "Tiện ích",
+    commandCategory: "Tiện Ích",
     usages         : ".lichsu | .lichsu @mention | .lichsu top | .lichsu tim <từ khoá>",
     cooldowns      : 5
   },

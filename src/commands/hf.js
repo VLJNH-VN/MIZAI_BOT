@@ -75,7 +75,7 @@ module.exports = {
     hasPermssion   : 0,
     credits        : "MIZAI",
     description    : "Dùng HuggingFace AI để chat hoặc tạo ảnh từ văn bản",
-    commandCategory: "Utility",
+    commandCategory: "Tiện Ích",
     usages         : "!hf <câu hỏi> | !hf img <mô tả ảnh>",
     cooldowns      : 10
   },

@@ -36,7 +36,7 @@ module.exports = {
     hasPermssion: 2,
     credits: "MiZai",
     description: "Log thông tin tin nhắn nhận được ra console",
-    commandCategory: "System",
+    commandCategory: "Hệ Thống",
     usages: "console",
     cooldowns: 1
   },

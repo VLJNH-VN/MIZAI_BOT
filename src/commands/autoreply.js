@@ -8,7 +8,7 @@ module.exports = {
     hasPermssion: 2,
     credits: "MIZAI",
     description: "Quản lý tin nhắn tự động trả lời (vắng mặt)",
-    commandCategory: "Admin",
+    commandCategory: "Quản Trị",
     usages: [
       "autoreply list                     — Xem danh sách auto reply",
       "autoreply add <từ_khóa> | <trả lời> — Thêm auto reply",

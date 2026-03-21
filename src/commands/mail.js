@@ -69,7 +69,7 @@ module.exports = {
     hasPermssion: 0,
     credits: "Ljzi",
     description: "Tạo & quản lý email tạm thời (temp-mail.org)",
-    commandCategory: "Tiện ích",
+    commandCategory: "Tiện Ích",
     usages: ".tempmail | .tempmail check | .tempmail read <số> | .tempmail del",
     cooldowns: 5,
   },

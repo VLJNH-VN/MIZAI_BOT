@@ -103,15 +103,17 @@ function convertToH264(inputPath, outputPath) {
   );
 }
 
-// ── Gửi 1 video: download → H264 → uploadAttachment → sendVideo(fileUrl) ─────
-async function sendOneVideo(api, event, ghUrl, caption) {
+// ── Gửi 1 video: download → H264 → GitHub upload → sendVideo(ghUrl) ──────────
+// Lý do dùng GitHub URL: raw.githubusercontent.com ổn định, Zalo stream được.
+// Zalo CDN URL (fg40.dlfl.vn) từ uploadAttachment sẽ bị reject bởi sendVideo.
+async function sendOneVideo(api, event, srcUrl, caption) {
   const id       = uid();
   const rawPath  = path.join(TEMP_DIR, `vd_raw_${id}.mp4`);
   const h264Path = path.join(TEMP_DIR, `vd_h264_${id}.mp4`);
 
   try {
     // Bước 1: Tải về local
-    await downloadFile(ghUrl, rawPath);
+    await downloadFile(srcUrl, rawPath);
 
     // Bước 2: Convert H264 (Zalo yêu cầu codec này)
     let uploadPath = rawPath;
@@ -126,33 +128,31 @@ async function sendOneVideo(api, event, ghUrl, caption) {
     const meta     = probeStreams(uploadPath);
     const fileSize = fs.statSync(uploadPath).size;
 
-    global.logInfo?.(`[vd] threadId=${event.threadId} | type=${event.type} | size=${(fileSize/1024).toFixed(0)}KB | w=${meta.width} h=${meta.height} dur=${meta.duration}`);
+    global.logInfo?.(`[vd] size=${(fileSize/1024).toFixed(0)}KB | w=${meta.width} h=${meta.height} dur=${meta.duration}s`);
 
-    // Bước 3: Upload lên Zalo CDN → lấy fileUrl → gửi inline video
+    // Bước 3: GitHub upload → sendVideo (URL vĩnh cửu, Zalo stream ổn định)
     let sentAsVideo = false;
-    try {
-      const uploaded = await api.uploadAttachment([uploadPath], event.threadId, event.type);
-      const videoData = uploaded?.[0];
-      const cdnUrl = videoData?.fileUrl;
-
-      global.logInfo?.(`[vd] uploadAttachment xong | fileUrl=${cdnUrl?.slice(0, 80)}`);
-
-      if (cdnUrl) {
-        await api.sendVideo({
-          videoUrl:     cdnUrl,
-          thumbnailUrl: "",
-          msg:          caption || "",
-          width:        meta.width   || 576,
-          height:       meta.height  || 1024,
-          duration:     meta.duration * 1000,
-          fileSize:     fileSize,
-          ttl:          500_000,
-        }, event.threadId, event.type);
-        global.logInfo?.("[vd] sendVideo CDN thành công.");
-        sentAsVideo = true;
+    if (typeof global.githubUpload === "function" && fileSize < 50 * 1024 * 1024) {
+      try {
+        const repoPath = `vd/vid_${id}.mp4`;
+        const ghUrl    = await global.githubUpload(uploadPath, repoPath);
+        if (ghUrl) {
+          await api.sendVideo({
+            videoUrl:     ghUrl,
+            thumbnailUrl: "",
+            msg:          caption || "",
+            width:        meta.width   || 576,
+            height:       meta.height  || 1024,
+            duration:     meta.duration * 1000,
+            fileSize:     fileSize,
+            ttl:          500_000,
+          }, event.threadId, event.type);
+          global.logInfo?.("[vd] sendVideo (GitHub) thành công.");
+          sentAsVideo = true;
+        }
+      } catch (e) {
+        global.logWarn?.(`[vd] GitHub upload/sendVideo thất bại: ${e.message}`);
       }
-    } catch (e) {
-      global.logWarn?.(`[vd] sendVideo CDN thất bại: ${e.message}`);
     }
 
     // Bước 4: Fallback → sendMessage + attachments (file local)

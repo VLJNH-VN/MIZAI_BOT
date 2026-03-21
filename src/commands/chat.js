@@ -1,11 +1,11 @@
 const { ThreadType } = require("zca-js");
 
-function parseDurationToSeconds(str) {
+function parseDurationToMs(str) {
   const match = str?.match(/^(\d+)(s|m|h|d)$/i);
   if (!match) return null;
   const n = parseInt(match[1]);
   const unit = match[2].toLowerCase();
-  const map = { s: 1, m: 60, h: 3600, d: 86400 };
+  const map = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
   return n * (map[unit] || 0);
 }
 
@@ -13,7 +13,7 @@ module.exports = {
   config: {
     name: "chat",
     aliases: ["chatset", "cs", "undo"],
-    version: "1.1.0",
+    version: "1.2.0",
     hasPermssion: 0,
     credits: "MIZAI",
     description: "Quản lý cài đặt cuộc trò chuyện và thu hồi tin nhắn bot",
@@ -33,7 +33,6 @@ module.exports = {
   },
 
   run: async ({ api, event, args, send, threadID, prefix, commandName }) => {
-    // ── Khi gọi bằng alias .undo không có args → chuyển về sub undo ─────────
     let sub = (args[0] || "").toLowerCase();
     if (commandName === "undo" && !sub) sub = "undo";
 
@@ -58,22 +57,22 @@ module.exports = {
       switch (sub) {
 
         case "pin": {
-          await api.setPinnedConversations([{ threadId: threadID, type }], true);
+          await api.setPinnedConversations(true, threadID, type);
           return send("📌 Đã ghim cuộc trò chuyện này.");
         }
 
         case "unpin": {
-          await api.setPinnedConversations([{ threadId: threadID, type }], false);
+          await api.setPinnedConversations(false, threadID, type);
           return send("📌 Đã bỏ ghim cuộc trò chuyện này.");
         }
 
         case "hide": {
-          await api.setHiddenConversations([{ threadId: threadID, type }], true);
+          await api.setHiddenConversations(true, threadID, type);
           return send("👁️ Đã ẩn cuộc trò chuyện này.");
         }
 
         case "unhide": {
-          await api.setHiddenConversations([{ threadId: threadID, type }], false);
+          await api.setHiddenConversations(false, threadID, type);
           return send("👁️ Đã bỏ ẩn cuộc trò chuyện này.");
         }
 
@@ -99,12 +98,12 @@ module.exports = {
             );
           }
           if (param === "off") {
-            await api.updateAutoDeleteChat({ threadId: threadID, type, duration: 0 });
+            await api.updateAutoDeleteChat(0, threadID, type);
             return send("✅ Đã tắt tự động xóa tin nhắn.");
           }
-          const secs = parseDurationToSeconds(param);
-          if (!secs) return send("❌ Định dạng không hợp lệ. Dùng: 10m, 1h, 1d, hoặc off");
-          await api.updateAutoDeleteChat({ threadId: threadID, type, duration: secs });
+          const ms = parseDurationToMs(param);
+          if (!ms) return send("❌ Định dạng không hợp lệ. Dùng: 10m, 1h, 1d, hoặc off");
+          await api.updateAutoDeleteChat(ms, threadID, type);
           return send(`✅ Đã bật tự động xóa tin nhắn sau ${param}.`);
         }
 
@@ -119,7 +118,6 @@ module.exports = {
           return send("🗑️ Đã xóa cuộc trò chuyện này.");
         }
 
-        // ── Thu hồi tin nhắn bot ─────────────────────────────────────────────
         case "undo": {
           if (global.config?.["🔄 undoEnabled"] === false) {
             return send("⛔ Tính năng thu hồi tin nhắn hiện đang bị tắt.");

@@ -155,10 +155,7 @@ module.exports = {
         `  ${prefix}admin remove <uid>\n` +
         `  ${prefix}admin setprefix <ký tự>\n` +
         `  ${prefix}admin bc <nội dung>\n` +
-        `  ${prefix}admin kick <uid/@mention>\n` +
-        `  ${prefix}admin setname <tên bot>\n` +
-        `  ${prefix}admin info\n` +
-        `  ${prefix}admin tang <@mention>`
+        `  ${prefix}admin info`
       );
     }
 
@@ -284,49 +281,6 @@ module.exports = {
       );
     }
 
-    // ── admin kick ────────────────────────────────────────────────────────
-    if (sub === "kick") {
-      if (event.type !== ThreadType.Group) {
-        return send("⛔ Lệnh kick chỉ dùng được trong nhóm.");
-      }
-
-      const uid = extractUid(args, event);
-      if (!uid) {
-        return send(`❌ Thiếu UID.\nDùng: ${prefix}admin kick <uid> hoặc tag người dùng.`);
-      }
-
-      const cfg = readConfig();
-      if (String(uid) === String(cfg.ownerId)) {
-        return send("⛔ Không thể kick Owner.");
-      }
-
-      try {
-        await api.removeUserFromGroup(uid, threadID);
-        return send(`✅ Đã kick UID ${uid} khỏi nhóm.`);
-      } catch (err) {
-        return send(`❌ Không thể kick UID ${uid}.\nLý do: ${err?.message || "Không rõ"}`);
-      }
-    }
-
-    // ── admin setname ─────────────────────────────────────────────────────
-    if (sub === "setname") {
-      if (event.type !== ThreadType.Group) {
-        return send("⛔ Lệnh setname chỉ dùng được trong nhóm.");
-      }
-
-      const newName = args.slice(1).join(" ").trim();
-      if (!newName) {
-        return send(`❌ Thiếu tên.\nDùng: ${prefix}admin setname <tên mới>`);
-      }
-
-      try {
-        await api.changeGroupName(newName, threadID);
-        return send(`✅ Đã đổi tên nhóm thành: ${newName}`);
-      } catch (err) {
-        return send(`❌ Không thể đổi tên nhóm.\nLý do: ${err?.message || "Không rõ"}`);
-      }
-    }
-
     // ── admin info ─────────────────────────────────────────────────────────
     if (sub === "info") {
       const cfg = readConfig();
@@ -353,22 +307,6 @@ module.exports = {
         `💾 RAM: ${memMb} MB\n` +
         `🔧 Node.js: ${process.version}`
       );
-    }
-
-    // ── admin tang ────────────────────────────────────────────────────────
-    if (sub === "tang") {
-      const mentionIds = parseMentionIds(event);
-      if (mentionIds.length > 0) {
-        const lines = mentionIds.map(uid => `🆔 UID: ${uid}`).join("\n");
-        return send(`${lines}`);
-      }
-
-      const uid = args[1] ? String(args[1]).trim() : null;
-      if (uid) {
-        return send(`🆔 UID: ${uid}`);
-      }
-
-      return send(`❌ Thiếu người dùng.\nDùng: ${prefix}admin tang @mention hoặc ${prefix}admin tang <uid>`);
     }
 
     // ── Sub-command không hợp lệ ──────────────────────────────────────────

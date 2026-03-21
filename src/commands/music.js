@@ -173,7 +173,7 @@ module.exports = {
         tracks.forEach(t => { t._durStr = fmtDurationSec(t.duration); });
         let cardPath;
         try { cardPath = await drawSearchCard({ platform: "sc", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
-        const msg = `💬 Reply số từ 1-${tracks.length} để tải nhạc`;
+        //const msg = `💬 Reply số từ 1-${tracks.length} để tải nhạc`;
         const sent = cardPath
           ? await api.sendMessage({ msg, attachments: [cardPath] }, threadID, event.type)
           : await send(msg);
@@ -187,7 +187,7 @@ module.exports = {
         tracks.forEach(t => { t._durStr = fmtDurationMs(t.duration); });
         let cardPath;
         try { cardPath = await drawSearchCard({ platform: "spt", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
-        const msg = `📌 Reply STT (1–${tracks.length}) để tải nhạc`;
+        //const msg = `📌 Reply STT (1–${tracks.length}) để tải nhạc`;
         const sent = cardPath
           ? await api.sendMessage({ msg, attachments: [cardPath] }, threadID, event.type)
           : await send(msg);
@@ -205,7 +205,7 @@ module.exports = {
         }));
         let cardPath;
         try { cardPath = await drawSearchCard({ platform: "mix", query, tracks: cardTracks }); } catch (_) {}
-        const msg = `💬 Reply số từ 1-5 để xem link Mixcloud`;
+        //const msg = `💬 Reply số từ 1-5 để xem link Mixcloud`;
         const sent = cardPath
           ? await api.sendMessage({ msg, attachments: [cardPath] }, threadID, event.type)
           : await send(msg);
@@ -234,7 +234,7 @@ module.exports = {
         await api.sendMessage({ msg: "", attachments: [loadCard] }, event.threadId, event.type);
         try { fs.unlinkSync(loadCard); } catch (_) {}
       } catch (_) {
-        await send(`⏳ Đang tải: ${t.title}`);
+        try { await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: event.data }); } catch (_r) {}
       }
       try {
         const res = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(t.url)}`, { timeout: 120000 });
@@ -269,7 +269,7 @@ module.exports = {
         await api.sendMessage({ msg: "", attachments: [loadCard] }, event.threadId, event.type);
         try { fs.unlinkSync(loadCard); } catch (_) {}
       } catch (_) {
-        await send(`⏳ Đang tải: ${track.title}`);
+        try { await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: event.data }); } catch (_r) {}
       }
       try {
         const keyword   = `${track.title} ${track.author}`;

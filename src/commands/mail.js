@@ -74,7 +74,7 @@ module.exports = {
     cooldowns: 5,
   },
 
-  run: async ({ args, send, senderId }) => {
+  run: async ({ api, event, args, send, senderId }) => {
     const FLAG_MAP = { "-n": "new", "-c": "check", "-r": "read", "-d": "del" };
     const sub = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase();
 
@@ -155,7 +155,7 @@ module.exports = {
         return send('❓ Cú pháp: .tempmail read <số>\nVD: .tempmail read 1');
       }
 
-      await send("⏳ Đang tải nội dung thư...");
+      try { await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: event.data }); } catch (_r) {}
       try {
         const messages = await getMessages(session.email);
         if (!messages.length) {

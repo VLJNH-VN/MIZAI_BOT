@@ -84,7 +84,7 @@ module.exports = {
         }
 
         case "video": {
-          await send(`⏳ Đang tải video từ:\n${url}`);
+          try { await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: event.data }); } catch (_r) {}
           const tmpPath = path.join(os.tmpdir(), `video_${Date.now()}.mp4`);
           const res = await axios.get(url, { responseType: "arraybuffer", timeout: 120000, headers: { "User-Agent": "Mozilla/5.0" } });
           fs.writeFileSync(tmpPath, Buffer.from(res.data));

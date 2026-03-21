@@ -250,7 +250,7 @@ module.exports = {
     cooldowns: 5
   },
 
-  run: async ({ event, args, send }) => {
+  run: async ({ api, event, args, send }) => {
     if (!args[0]) {
       return send(
         "📝 Cách dùng:\n" +
@@ -390,7 +390,7 @@ module.exports = {
       const isDirectMedia = mediaLinks.length === 1 && mediaLinks[0] === replyUrl;
 
       if (isDirectMedia) {
-        await send("⏳ Đang tải file lên GitHub...");
+        try { await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: event.data }); } catch (_r) {}
       } else {
         await send(`🎬 Tìm thấy ${mediaLinks.length} link bên trong, đang upload lên GitHub...`);
       }

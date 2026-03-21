@@ -130,29 +130,47 @@ async function sendOneVideo(api, event, srcUrl, caption) {
 
     global.logInfo?.(`[vd] size=${(fileSize/1024).toFixed(0)}KB | w=${meta.width} h=${meta.height} dur=${meta.duration}s`);
 
-    // Bước 3: GitHub Releases upload → sendVideo
-    // Lý do dùng Releases: objects.githubusercontent.com được Zalo chấp nhận,
-    // trong khi raw.githubusercontent.com bị Zalo server reject.
+    // Bước 3: GitHub upload → sendVideo inline
     let sentAsVideo = false;
+
+    // Helper: resolve redirect URL (GitHub Releases redirect → objects.githubusercontent.com CDN)
+    const resolveRedirect = async (url) => {
+      try {
+        const fetchFn = globalThis.fetch || (await import("node-fetch")).default;
+        const res = await fetchFn(url, { method: "HEAD", redirect: "follow" });
+        return (res.url && res.url !== url) ? res.url : url;
+      } catch { return url; }
+    };
+
     if (typeof global.githubReleaseUpload === "function" && fileSize < 50 * 1024 * 1024) {
+      let ghUrl = null;
       try {
         const filename = `vid_${id}.mp4`;
-        const ghUrl    = await global.githubReleaseUpload(uploadPath, filename, { tag: "vd-upload" });
-        if (ghUrl) {
+        ghUrl = await global.githubReleaseUpload(uploadPath, filename, { tag: "vd-upload" });
+        global.logInfo?.(`[vd] GitHub Releases upload OK: ${ghUrl}`);
+      } catch (e) {
+        global.logWarn?.(`[vd] GitHub Releases upload thất bại: ${e.message}`);
+      }
+      if (ghUrl) {
+        try {
+          // Resolve redirect → CDN URL thực sự (Zalo server không follow redirect tốt)
+          const videoUrl = await resolveRedirect(ghUrl);
+          global.logInfo?.(`[vd] videoUrl sau resolve: ${videoUrl}`);
           await api.sendVideo({
-            videoUrl:     ghUrl,
+            videoUrl,
             thumbnailUrl: "",
             msg:          caption || "",
             width:        meta.width   || 576,
             height:       meta.height  || 1024,
             duration:     meta.duration * 1000,
+            fileSize,     // truyền thẳng → bỏ qua HEAD request trong sendVideo
             ttl:          500_000,
           }, event.threadId, event.type);
-          global.logInfo?.("[vd] sendVideo (GitHub Releases) thành công.");
+          global.logInfo?.("[vd] sendVideo thành công.");
           sentAsVideo = true;
+        } catch (e) {
+          global.logWarn?.(`[vd] sendVideo thất bại: ${e.message}`);
         }
-      } catch (e) {
-        global.logWarn?.(`[vd] GitHub Releases/sendVideo thất bại: ${e.message}`);
       }
     }
 

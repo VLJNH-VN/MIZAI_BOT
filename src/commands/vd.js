@@ -7,7 +7,7 @@
  * Flow (theo chuẩn autoDown):
  *   1. Download GitHub URL về local
  *   2. Convert sang H264 (Zalo yêu cầu)
- *   3. Upload 0x0.st → URL video/mp4 → api.sendVideo
+ *   3. Serve local → Replit public URL (video/mp4) → api.sendVideo
  *   4. Fallback: sendMessage + attachments (file local)
  *
  * Cách dùng:
@@ -128,29 +128,14 @@ async function sendOneVideo(api, event, ghUrl, caption) {
 
     global.logInfo?.(`[vd] threadId=${event.threadId} | type=${event.type} | size=${(fileSize/1024).toFixed(0)}KB | w=${meta.width} h=${meta.height} dur=${meta.duration}`);
 
-    // Bước 3: Upload 0x0.st → URL video/mp4 → sendVideo
-    try {
-      const FormData = require("form-data");
-      const form = new FormData();
-      form.append("file", fs.createReadStream(uploadPath), {
-        filename:    `vd_${id}.mp4`,
-        contentType: "video/mp4",
-        knownLength: fileSize,
-      });
-
-      const uploadRes = await axios.post("https://0x0.st", form, {
-        headers: { ...form.getHeaders() },
-        timeout: 120000,
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity,
-      });
-      const hostUrl = (uploadRes.data || "").trim();
-      global.logInfo?.(`[vd] 0x0.st URL: ${hostUrl}`);
-
-      if (hostUrl.startsWith("https://")) {
+    // Bước 3: Serve local qua Replit HTTP server → video/mp4 URL → sendVideo
+    if (typeof global.serveVideoFile === "function") {
+      try {
+        const serveUrl = global.serveVideoFile(uploadPath);
+        global.logInfo?.(`[vd] serveUrl: ${serveUrl}`);
         try {
           await api.sendVideo({
-            videoUrl:     hostUrl,
+            videoUrl:     serveUrl,
             thumbnailUrl: "",
             msg:          caption || "",
             width:        meta.width  || 576,
@@ -159,14 +144,14 @@ async function sendOneVideo(api, event, ghUrl, caption) {
             fileSize:     fileSize,
             ttl:          500_000,
           }, event.threadId, event.type);
-          global.logInfo?.("[vd] sendVideo (0x0.st) thành công.");
+          global.logInfo?.("[vd] sendVideo (Replit serve) thành công.");
           return;
         } catch (e2) {
-          global.logWarn?.(`[vd] sendVideo thất bại: ${e2.message} | url=${hostUrl?.slice(0, 80)}`);
+          global.logWarn?.(`[vd] sendVideo thất bại: ${e2.message} | url=${serveUrl?.slice(0, 100)}`);
         }
+      } catch (e) {
+        global.logWarn?.(`[vd] serveVideoFile thất bại: ${e.message}`);
       }
-    } catch (e) {
-      global.logWarn?.(`[vd] 0x0.st thất bại: ${e.message}`);
     }
 
     // Bước 4: Fallback → sendMessage + attachments

@@ -262,7 +262,8 @@ module.exports = {
       );
     }
 
-    const sub = args[0].toLowerCase();
+    const FLAG_MAP = { "-a": "add", "-c": "check" };
+    const sub = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase();
 
     // ══════════════════════════════════════════════════════
     //  ADD — 3 chế độ: reply đính kèm / link trực tiếp / import JSON

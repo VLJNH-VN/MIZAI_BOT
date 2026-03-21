@@ -130,7 +130,11 @@ module.exports = {
       return send("❌ Chỉ admin bot mới dùng được lệnh này.");
     }
 
-    const sub = (args[0] || "").toLowerCase();
+    const FLAG_MAP = {
+      "-a": "add", "-d": "del", "-l": "list",
+      "-c": "check", "-r": "alive", "-ac": "autocheck",
+    };
+    const sub = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase();
 
     // ── Thêm key ────────────────────────────────────────────────────────────────
     if (sub === "add") {

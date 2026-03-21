@@ -59,7 +59,8 @@ module.exports = {
     }
 
     const mentionIds = parseMentionIds(event);
-    const sub        = (args[0] || "").toLowerCase();
+    const FLAG_MAP = { "-l": "list", "-f": "off" };
+    const sub        = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase();
 
     if (sub === "list") {
       const data = readMuted();

@@ -131,7 +131,12 @@ module.exports = {
   },
 
   run: async ({ api, event, args, send, prefix, threadID, senderId }) => {
-    const sub = (args[0] || "").toLowerCase().trim();
+    const FLAG_MAP = {
+      "-l": "list", "-a": "add", "-r": "remove",
+      "-p": "setprefix", "-bc": "broadcast", "-k": "kick",
+      "-sn": "setname", "-i": "info", "-t": "tang",
+    };
+    const sub = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase().trim();
 
     // Ghi nhận nhóm đang dùng (phục vụ broadcast)
     if (event.type === ThreadType.Group && threadID) {

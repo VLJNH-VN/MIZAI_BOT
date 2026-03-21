@@ -91,7 +91,11 @@ module.exports = {
   },
 
   run: async ({ api, event, args, send, prefix, threadID, senderId, registerReply }) => {
-    const sub = (args[0] || "").toLowerCase().trim();
+    const FLAG_MAP = {
+      "-a": "add", "-d": "del", "-l": "list",
+      "-r": "reg", "-i": "info", "-k": "usekey",
+    };
+    const sub = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase().trim();
     let data = readThuebot();
 
     // ── rent add ──────────────────────────────────────────────────────────────

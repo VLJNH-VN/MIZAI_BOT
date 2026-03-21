@@ -18,7 +18,8 @@ module.exports = {
   },
 
   run: async ({ api, event, args, send, prefix, threadID, senderId }) => {
-    const sub    = (args[0] || "").toLowerCase().trim();
+    const FLAG_MAP = { "-p": "prefix", "-r": "rank" };
+    const sub    = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase().trim();
     const value  = (args[1] || "").toLowerCase().trim();
 
     if (!sub) {

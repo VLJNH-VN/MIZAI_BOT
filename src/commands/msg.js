@@ -21,15 +21,16 @@ module.exports = {
   run: async ({ api, event, args, send, senderId, prefix, threadID }) => {
     if (!isBotAdmin(senderId)) return send("⛔ Chỉ Admin bot mới dùng được lệnh này.");
 
-    const sub = (args[0] || "").toLowerCase();
+    const FLAG_MAP = { "-l": "list", "-a": "add", "-r": "remove", "-s": "send" };
+    const sub = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase();
 
     if (!sub) {
       return send(
         `⚡ QUICKMSG — TIN NHẮN NHANH\n━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `${prefix}msg list            Xem danh sách\n` +
-        `${prefix}msg add <tắt>|<nd>  Thêm tin nhắn nhanh\n` +
-        `${prefix}msg remove <id>     Xóa\n` +
-        `${prefix}msg send <tắt>      Gửi vào chat\n\n` +
+        `${prefix}msg list|-l            Xem danh sách\n` +
+        `${prefix}msg add|-a <tắt>|<nd>  Thêm tin nhắn nhanh\n` +
+        `${prefix}msg remove|-r <id>     Xóa\n` +
+        `${prefix}msg send|-s <tắt>      Gửi vào chat\n\n` +
         `💡 Ví dụ:\n${prefix}msg add xc | Xin chào! Mình là Mizai Bot.`
       );
     }

@@ -56,15 +56,16 @@ module.exports = {
   run: async ({ api, event, args, send, isGroup, threadID }) => {
     if (!isGroup) return send("⚠️ Lệnh này chỉ dùng được trong nhóm.");
 
-    const sub = (args[0] || "").toLowerCase();
+    const FLAG_MAP = { "-n": "ten", "-l": "link", "-a": "avatar", "-s": "setting" };
+    const sub = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase();
 
     if (!sub) {
       return send(
         "⚙️ Cài Đặt Nhóm — .setnhom\n" +
         "━━━━━━━━━━━━━━━━━━━━\n" +
-        "• .setnhom ten <tên mới>\n" +
+        "• .setnhom ten|-n <tên mới>\n" +
         "  Đổi tên nhóm\n\n" +
-        "• .setnhom link on|off\n" +
+        "• .setnhom link|-l on|off\n" +
         "  Bật/tắt link mời vào nhóm\n\n" +
         "• .setnhom avatar\n" +
         "  Đổi avatar nhóm (reply/tag ảnh kèm lệnh)\n\n" +

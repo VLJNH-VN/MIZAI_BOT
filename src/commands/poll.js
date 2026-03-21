@@ -19,14 +19,15 @@ module.exports = {
   run: async ({ api, event, args, send, isGroup, threadID }) => {
     if (!isGroup) return send("⚠️ Lệnh này chỉ dùng được trong nhóm.");
 
-    const sub = (args[0] || "").toLowerCase();
+    const FLAG_MAP = { "-t": "tao", "-x": "xem", "-v": "vote", "-th": "them" };
+    const sub = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase();
 
     // ── Không có sub-command → hướng dẫn ─────────────────────────────────────
     if (!sub) {
       return send(
         "📊 Lệnh Poll — Bình Chọn Nhóm\n" +
         "━━━━━━━━━━━━━━━━━━━━\n" +
-        "• .poll tao <câu hỏi> | <lựa chọn 1> | <lựa chọn 2> ...\n" +
+        "• .poll tao|-t <câu hỏi> | <lựa chọn 1> | <lựa chọn 2> ...\n" +
         "  Tạo bình chọn mới (tối thiểu 2 lựa chọn)\n\n" +
         "• .poll xem <pollId>\n" +
         "  Xem chi tiết và kết quả bình chọn\n\n" +

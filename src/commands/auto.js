@@ -51,7 +51,8 @@ module.exports = {
     },
 
     run: async ({ api, event, args, send, prefix, threadID }) => {
-        const sub = (args[0] || "").toLowerCase().trim();
+        const FLAG_MAP = { "-b": "bot", "-l": "list", "-a": "add" };
+        const sub = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase().trim();
 
         // ── Không có sub-command → hướng dẫn ────────────────────────────────
         if (!sub) {

@@ -27,17 +27,21 @@ module.exports = {
   run: async ({ api, event, args, send, senderId, prefix }) => {
     if (!isBotAdmin(senderId)) return send("⛔ Chỉ Admin bot mới dùng được lệnh này.");
 
-    const sub = (args[0] || "").toLowerCase();
+    const FLAG_MAP = {
+      "-n": "name", "-b": "bio", "-a": "avatar",
+      "-q": "qr",   "-on": "online", "-off": "offline",
+    };
+    const sub = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase();
 
     if (!sub) {
       return send(
         `🤖 BOTPROFILE — QUẢN LÝ BOT\n━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `${prefix}mizai name <tên>    Đổi tên bot\n` +
-        `${prefix}mizai bio <bio>     Cập nhật bio\n` +
-        `${prefix}mizai avatar        Đổi avatar (reply ảnh)\n` +
-        `${prefix}mizai qr [uid]      Lấy QR code\n` +
-        `${prefix}mizai online        Bật online\n` +
-        `${prefix}mizai offline       Tắt online`
+        `${prefix}mizai name|-n <tên>    Đổi tên bot\n` +
+        `${prefix}mizai bio|-b <bio>     Cập nhật bio\n` +
+        `${prefix}mizai avatar|-a        Đổi avatar (reply ảnh)\n` +
+        `${prefix}mizai qr|-q [uid]      Lấy QR code\n` +
+        `${prefix}mizai online|-on        Bật online\n` +
+        `${prefix}mizai offline|-off      Tắt online`
       );
     }
 

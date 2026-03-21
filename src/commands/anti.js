@@ -86,7 +86,8 @@ module.exports = {
       return send("⛔ Lệnh này chỉ dùng được trong nhóm.");
     }
 
-    const sub    = (args[0] || "").toLowerCase();
+    const FLAG_MAP = { "-s": "status", "-b": "bot" };
+    const sub    = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase();
     const toggle = (args[1] || "").toLowerCase();
 
     // ── Xem tổng trạng thái ───────────────────────────────────────────────

@@ -183,19 +183,23 @@ async function search(query, limit = 8) {
 /**
  * Lấy danh sách video từ @username qua fown.onrender.com (search API).
  * Không cần cookie, không cần secUid.
- * @param {string} username  có thể có hoặc không có @ phía trước
- * @param {number} limit     Số video tối đa (mặc định 50)
+ * @param {string}        username  có thể có hoặc không có @ phía trước
+ * @param {number|"all"}  limit     Số video tối đa, hoặc "all" để lấy toàn bộ (mặc định "all")
  * @returns {Promise<Array<{ id, videoUrl, tiktokUrl, title, author, _useFown }>>}
  */
-async function getUserVideos(username, limit = 50) {
+async function getUserVideos(username, limit = "all") {
   const uid = username.replace(/^@/, "");
-  const safeLimit = Math.max(1, Math.min(limit, 200));
+
+  // limit "all" → svl=all; số → svl=số (min 1)
+  const svl = (limit === "all" || !limit)
+    ? "all"
+    : Math.max(1, Math.min(Number(limit), 200));
 
   let res;
   try {
     res = await axios.get(`${FOWN_API}/api/search`, {
-      params: { ttsearch: `@${uid}`, svl: safeLimit },
-      timeout: 25000,
+      params: { ttuser: uid, svl },
+      timeout: 60000,
     });
   } catch (e) {
     throw new Error(`Fown search lỗi: ${e.message}`);
@@ -306,8 +310,8 @@ async function bulkAdd(tipName, query, limit = 8, onProgress = null) {
   let results;
   try {
     if (isUser) {
-      global.logInfo?.(`[cawr.tt] GetUserPosts: ${query}`);
-      results = await getUserVideos(query);
+      global.logInfo?.(`[cawr.tt] GetUserPosts: ${query} (svl=all)`);
+      results = await getUserVideos(query, "all");
     } else {
       const safeLimit = Math.min(Math.max(1, limit), 50);
       global.logInfo?.(`[cawr.tt] Search: "${query}" (${safeLimit} video)`);

@@ -623,6 +623,40 @@ async function handleProfileAction(api, profileAction, send) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
+//  CUSTOM STICKER — Mizai tự vẽ / AI-gen sticker
+// ════════════════════════════════════════════════════════════════════════════════
+const { generateSticker } = require("../../utils/ai/stickerGen");
+
+async function handleCustomStickerAction(api, stickerAction, threadId, msgType, send) {
+  const mode      = (stickerAction.mode      || "text").trim();
+  const text      = (stickerAction.text      || "").trim();
+  const emotion   = (stickerAction.emotion   || "default").trim();
+  const aiPrompt  = (stickerAction.aiPrompt  || "").trim();
+
+  let stickerPath = null;
+  try {
+    stickerPath = await generateSticker({ text, emotion, aiPrompt, mode });
+
+    await api.sendMessage(
+      {
+        msg         : "",
+        attachments : [stickerPath],
+      },
+      threadId,
+      msgType
+    );
+    global.logInfo?.(`[goibot/customSticker] Đã gửi sticker (${mode}) → ${text || aiPrompt}`);
+  } catch (err) {
+    global.logWarn?.(`[goibot/customSticker] Lỗi: ${err?.message}`);
+    if (send) await send("(Mizai thử tạo sticker nhưng bị lỗi ~)");
+  } finally {
+    if (stickerPath) {
+      try { fs.unlinkSync(stickerPath); } catch {}
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
 //  TỰ CHỦ — Mizai tự quyết định đổi profile theo mood
 // ════════════════════════════════════════════════════════════════════════════════
 const SELF_REFLECT_MIN_MS = 3 * 60 * 60 * 1000;   // 3h
@@ -887,6 +921,9 @@ async function handleGoibot({ api, event }) {
       if (botMsg?.profile?.status) {
         await handleProfileAction(api, botMsg.profile, null);
       }
+      if (botMsg?.customSticker?.status) {
+        await handleCustomStickerAction(api, botMsg.customSticker, threadId, event.type, null);
+      }
       return;
     }
 
@@ -1001,6 +1038,11 @@ async function handleGoibot({ api, event }) {
     // ── Profile — Mizai tự cập nhật avatar / bio / tên ────────────────────────
     if (botMsg?.profile?.status) {
       await handleProfileAction(api, botMsg.profile, send);
+    }
+
+    // ── Custom sticker — Mizai tự vẽ / AI-gen ──────────────────────────────────
+    if (botMsg?.customSticker?.status) {
+      await handleCustomStickerAction(api, botMsg.customSticker, threadId, event.type, send);
     }
 
   } catch (err) {

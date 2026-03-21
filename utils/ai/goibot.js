@@ -278,10 +278,19 @@ Mizai CÓ QUYỀN từ chối nếu:
     - refuse.reason = lý do từ chối bằng lời Mizai, tự nhiên
     - Khi từ chối, KHÔNG thực hiện các action khác (không set img.status, nhac.status... = true)
 
+14. **Tạo sticker tùy chỉnh** — customSticker.status=true khi muốn gửi một sticker do Mizai tự tạo:
+    - customSticker.mode = "text" (vẽ canvas với text + emoji) | "ai" (AI vẽ anime mini)
+    - customSticker.text = text hiển thị trên sticker (tối đa 40 ký tự, tiếng Việt ok)
+    - customSticker.emotion = emotion key: vui|buồn|mệt|tức_giận|lo_lắng|cô_đơn|tim|cute|haha|wow|ok|default
+    - customSticker.aiPrompt = mô tả ảnh bằng tiếng Anh (chỉ khi mode=ai)
+    - Dùng thay cho sticker tìm kiếm khi muốn sticker cá nhân hóa hơn, hoặc khi muốn viết lời riêng
+    - Ví dụ: khi ai đó buồn → customSticker text="Cố lên nha!" emotion="buồn"
+    - Ví dụ: khi ai hỏi tạo sticker → customSticker mode="ai" aiPrompt="cute girl waving"
+
 ---
 
 QUAN TRỌNG: Luôn trả về JSON hợp lệ, không thêm text ngoài JSON:
-{"content":{"text":"","thread_id":""},"nhac":{"status":false,"keyword":""},"tinh":{"status":false,"expr":""},"sticker":{"status":false,"keyword":""},"reaction":{"status":false,"type":""},"img":{"status":false,"prompt":"","model":"flux"},"tx":{"status":false,"action":"","result":"","phien":0},"profile":{"status":false,"bio":"","avatar":"","name":""},"emotion":{"status":false,"mood":"","energy":0,"moodScore":0,"episode":null,"note":""},"memory":{"status":false,"userNote":"","diary":"","globalNote":""},"refuse":{"status":false,"reason":""}}`.trim();
+{"content":{"text":"","thread_id":""},"nhac":{"status":false,"keyword":""},"tinh":{"status":false,"expr":""},"sticker":{"status":false,"keyword":""},"reaction":{"status":false,"type":""},"img":{"status":false,"prompt":"","model":"flux"},"tx":{"status":false,"action":"","result":"","phien":0},"profile":{"status":false,"bio":"","avatar":"","name":""},"emotion":{"status":false,"mood":"","energy":0,"moodScore":0,"episode":null,"note":""},"memory":{"status":false,"userNote":"","diary":"","globalNote":""},"refuse":{"status":false,"reason":""},"customSticker":{"status":false,"mode":"text","text":"","emotion":"default","aiPrompt":""}}`.trim();
 
 // ════════════════════════════════════════════════════════════════════════════════
 //  CHAT HISTORY
@@ -402,17 +411,18 @@ function isQuotaExhausted(errMsg) {
 
 function wrapTextAsJson(text) {
   return JSON.stringify({
-    content : { text: text.trim(), thread_id: "" },
-    nhac    : { status: false, keyword: "" },
-    tinh    : { status: false, expr: "" },
-    sticker : { status: false, keyword: "" },
-    reaction: { status: false, type: "" },
-    img     : { status: false, prompt: "", model: "flux" },
-    tx      : { status: false, action: "", result: "", phien: 0 },
-    profile : { status: false, bio: "", avatar: "", name: "" },
-    emotion : { status: false, mood: "", energy: 0, moodScore: 0, episode: null, note: "" },
-    memory  : { status: false, userNote: "", diary: "", globalNote: "" },
-    refuse  : { status: false, reason: "" },
+    content      : { text: text.trim(), thread_id: "" },
+    nhac         : { status: false, keyword: "" },
+    tinh         : { status: false, expr: "" },
+    sticker      : { status: false, keyword: "" },
+    reaction     : { status: false, type: "" },
+    img          : { status: false, prompt: "", model: "flux" },
+    tx           : { status: false, action: "", result: "", phien: 0 },
+    profile      : { status: false, bio: "", avatar: "", name: "" },
+    emotion      : { status: false, mood: "", energy: 0, moodScore: 0, episode: null, note: "" },
+    memory       : { status: false, userNote: "", diary: "", globalNote: "" },
+    refuse       : { status: false, reason: "" },
+    customSticker: { status: false, mode: "text", text: "", emotion: "default", aiPrompt: "" },
   });
 }
 

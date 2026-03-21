@@ -5,8 +5,31 @@
 
 const fs   = require("fs");
 const path = require("path");
+const axios = require("axios");
 const { execSync }  = require("child_process");
 const { ThreadType } = require("zca-js");
+
+const TEMP_DIR = path.join(process.cwd(), "includes", "cache");
+
+async function downloadToTemp(url, uid) {
+  if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+  const tmpPath = path.join(TEMP_DIR, `as_${uid}.mp4`);
+  const res = await axios.get(url, {
+    responseType:     "arraybuffer",
+    timeout:          120000,
+    maxContentLength: 200 * 1024 * 1024,
+    headers: { "User-Agent": global.userAgent || "Mozilla/5.0" },
+  });
+  fs.writeFileSync(tmpPath, Buffer.from(res.data));
+  if (fs.statSync(tmpPath).size === 0) throw new Error("File rỗng");
+  return tmpPath;
+}
+
+function cleanup(filePath) {
+  setTimeout(() => {
+    try { if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (_) {}
+  }, 15000);
+}
 
 const VIDEO_EXTS = new Set([".mp4", ".mov", ".mkv", ".webm"]);
 const VIDEO_DIR  = path.join(process.cwd(), "includes", "cache", "videos");
@@ -96,14 +119,20 @@ function startAutoSend(api) {
             );
           }
 
-          // ── Ưu tiên 1: Video từ listapi (GitHub raw URL) ─────────────────
+          // ── Ưu tiên 1: Video từ listapi (tải về → upload Zalo → sendVideo) ──
           // Config ví dụ: { "listapi": "gaixinh" }
           if (cfg.listapi && global.cawr?.tt) {
             const ghUrl = global.cawr.tt.pickRandom(cfg.listapi);
             if (ghUrl) {
+              let tmpPath = null;
               try {
+                const uid = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                tmpPath = await downloadToTemp(ghUrl, uid);
+                const uploaded = await api.uploadAttachment([tmpPath], threadId, ThreadType.Group);
+                const fileUrl  = uploaded?.[0]?.fileUrl;
+                if (!fileUrl) throw new Error("uploadAttachment không trả về fileUrl");
                 await api.sendVideo({
-                  videoUrl:     ghUrl,
+                  videoUrl:     fileUrl,
                   thumbnailUrl: "",
                   msg:          "",
                   width:        576,
@@ -114,6 +143,8 @@ function startAutoSend(api) {
                 continue; // đã gửi video → bỏ qua local video
               } catch (vErr) {
                 global.logWarn?.(`[AutoSend] Gửi listapi video thất bại: ${vErr?.message}`);
+              } finally {
+                if (tmpPath) cleanup(tmpPath);
               }
             }
           }

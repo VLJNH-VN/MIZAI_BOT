@@ -2,7 +2,8 @@
 
 /**
  * src/commands/vd.js
- * Xem video ngẫu nhiên từ listapi/<tên>.json (GitHub raw URL)
+ * Xem video ngẫu nhiên từ listapi/<tên>.json
+ * Flow: GitHub URL → tải về local → uploadAttachment → sendVideo (fileUrl)
  *
  * Cách dùng:
  *   .vd              → Xem danh sách listapi có sẵn
@@ -12,8 +13,10 @@
 
 const fs   = require("fs");
 const path = require("path");
+const axios = require("axios");
 
 const LISTAPI_DIR = path.join(process.cwd(), "includes", "listapi");
+const TEMP_DIR    = path.join(process.cwd(), "includes", "cache");
 
 // ── Lấy danh sách file listapi đang có ────────────────────────────────────────
 function getListapiFiles() {
@@ -26,7 +29,7 @@ function getListapiFiles() {
 // ── Chọn ngẫu nhiên n phần tử không trùng từ mảng ────────────────────────────
 function pickRandN(arr, n) {
   if (!arr.length) return [];
-  const copy = [...arr];
+  const copy  = [...arr];
   const picks = [];
   const count = Math.min(n, copy.length);
   for (let i = 0; i < count; i++) {
@@ -36,11 +39,56 @@ function pickRandN(arr, n) {
   return picks;
 }
 
+// ── Tải URL về file tạm, trả về đường dẫn ────────────────────────────────────
+async function downloadToTemp(url, uid) {
+  if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+  const tmpPath = path.join(TEMP_DIR, `vd_${uid}.mp4`);
+  const res = await axios.get(url, {
+    responseType:     "arraybuffer",
+    timeout:          120000,
+    maxContentLength: 200 * 1024 * 1024,
+    headers: { "User-Agent": global.userAgent || "Mozilla/5.0" },
+  });
+  fs.writeFileSync(tmpPath, Buffer.from(res.data));
+  if (fs.statSync(tmpPath).size === 0) throw new Error("File tải về rỗng");
+  return tmpPath;
+}
+
+// ── Xoá file tạm sau 15 giây ─────────────────────────────────────────────────
+function cleanup(filePath) {
+  setTimeout(() => {
+    try { if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (_) {}
+  }, 15000);
+}
+
+// ── Gửi 1 video: tải về → upload Zalo → sendVideo ────────────────────────────
+async function sendOneVideo(api, event, ghUrl, caption) {
+  const uid     = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const tmpPath = await downloadToTemp(ghUrl, uid);
+  try {
+    const uploaded = await api.uploadAttachment([tmpPath], event.threadId, event.type);
+    const fileUrl  = uploaded?.[0]?.fileUrl;
+    if (!fileUrl) throw new Error("uploadAttachment không trả về fileUrl");
+
+    await api.sendVideo({
+      videoUrl:     fileUrl,
+      thumbnailUrl: "",
+      msg:          caption || "",
+      width:        576,
+      height:       1024,
+      duration:     10000,
+      ttl:          500_000,
+    }, event.threadId, event.type);
+  } finally {
+    cleanup(tmpPath);
+  }
+}
+
 module.exports = {
   config: {
     name:            "vd",
     aliases:         ["video", "randvd", "playvd"],
-    version:         "1.0.0",
+    version:         "2.0.0",
     hasPermssion:    0,
     credits:         "MiZai",
     description:     "Xem video ngẫu nhiên từ listapi",
@@ -50,7 +98,7 @@ module.exports = {
       ".vd <tên>        — Gửi 1 video ngẫu nhiên từ listapi/<tên>",
       ".vd <tên> <số>   — Gửi n video liên tiếp (tối đa 10)",
     ].join("\n"),
-    cooldowns: 3,
+    cooldowns: 5,
   },
 
   run: async ({ api, event, args, send }) => {
@@ -96,29 +144,18 @@ module.exports = {
       await send(`🎬 Đang gửi ${count} video từ "${tipName}"... (${list.length} video có sẵn)`);
     }
 
-    // ── Gửi video ─────────────────────────────────────────────────────────────
+    // ── Gửi từng video: tải về → upload Zalo → sendVideo ────────────────────
     const picks = pickRandN(list, count);
-    let sentOk = 0;
+    let sentOk  = 0;
 
     for (const ghUrl of picks) {
       try {
-        await api.sendVideo({
-          videoUrl:     ghUrl,
-          thumbnailUrl: "",
-          msg:          count === 1 ? `🎬 ${tipName}` : "",
-          width:        576,
-          height:       1024,
-          duration:     10000,
-          ttl:          500_000,
-        }, event.threadId, event.type);
+        const caption = count === 1 ? `🎬 ${tipName}` : "";
+        await sendOneVideo(api, event, ghUrl, caption);
         sentOk++;
       } catch (err) {
-        global.logWarn?.(`[vd] sendVideo lỗi: ${err?.message} | url: ${ghUrl}`);
-        // Thử fallback: gửi link text
-        try {
-          await send(`🔗 ${ghUrl}`);
-          sentOk++;
-        } catch (_) {}
+        global.logWarn?.(`[vd] Lỗi gửi video: ${err?.message} | ${ghUrl}`);
+        await send(`❌ Gửi video thất bại: ${err?.message || "Lỗi không xác định"}`);
       }
     }
 

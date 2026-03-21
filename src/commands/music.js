@@ -173,10 +173,9 @@ module.exports = {
         tracks.forEach(t => { t._durStr = fmtDurationSec(t.duration); });
         let cardPath;
         try { cardPath = await drawSearchCard({ platform: "sc", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
-        //const msg = `💬 Reply số từ 1-${tracks.length} để tải nhạc`;
         const sent = cardPath
-          ? await api.sendMessage({ msg, attachments: [cardPath] }, threadID, event.type)
-          : await send(msg);
+          ? await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type)
+          : await send(`💬 Reply số từ 1-${tracks.length} để tải nhạc`);
         if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
         const msgId = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId;
         if (msgId) registerReply({ messageId: String(msgId), commandName: "music", payload: { platform: "sc", tracks } });
@@ -187,10 +186,9 @@ module.exports = {
         tracks.forEach(t => { t._durStr = fmtDurationMs(t.duration); });
         let cardPath;
         try { cardPath = await drawSearchCard({ platform: "spt", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
-        //const msg = `📌 Reply STT (1–${tracks.length}) để tải nhạc`;
         const sent = cardPath
-          ? await api.sendMessage({ msg, attachments: [cardPath] }, threadID, event.type)
-          : await send(msg);
+          ? await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type)
+          : await send(`📌 Reply STT (1–${tracks.length}) để tải nhạc`);
         if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
         const msgId = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId ?? sent?.msgId;
         if (msgId) registerReply({ messageId: String(msgId), commandName: "music", payload: { platform: "spt", tracks }, ttl: 10 * 60 * 1000 });
@@ -205,10 +203,9 @@ module.exports = {
         }));
         let cardPath;
         try { cardPath = await drawSearchCard({ platform: "mix", query, tracks: cardTracks }); } catch (_) {}
-        const msg = `💬 Reply số từ 1-5 để xem link Mixcloud`;
         const sent = cardPath
-          ? await api.sendMessage({ msg, attachments: [cardPath] }, threadID, event.type)
-          : await send(msg);
+          ? await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type)
+          : await send(`💬 Reply số từ 1-5 để xem link Mixcloud`);
         if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
         const sentId = sent?.message?.msgId ?? (Array.isArray(sent?.attachment) && sent.attachment[0]?.msgId);
         if (sentId) registerReply({ messageId: String(sentId), commandName: "music", payload: { platform: "mix", results } });

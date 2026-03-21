@@ -228,7 +228,12 @@ module.exports = {
       if (!tracks.length) return send("❌ Hết dữ liệu. Vui lòng tìm lại.");
       if (isNaN(choice) || choice < 1 || choice > tracks.length) return send(`⚠️ Reply số từ 1 đến ${tracks.length}`);
       const t = tracks[choice - 1];
-      try { await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: event.data }); } catch (_) {}
+      try {
+        const _raw = event?.data ?? {};
+        const _mid = _raw?.msgId ?? _raw?.cliMsgId ?? _raw?.clientMsgId ?? null;
+        const _cid = _raw?.cliMsgId ?? _raw?.clientMsgId ?? _mid ?? null;
+        if (_mid || _cid) await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: { msgId: _mid, cliMsgId: _cid } });
+      } catch (_) {}
       try {
         const res = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(t.url)}`, { timeout: 120000 });
         const audioUrl = res.data?.download_audio_url || res.data?.download_url;
@@ -257,7 +262,12 @@ module.exports = {
       if (!tracks.length) return send("❌ Hết dữ liệu. Vui lòng tìm lại.");
       if (isNaN(choice) || choice < 1 || choice > tracks.length) return send(`⚠️ Nhập số từ 1 đến ${tracks.length}.`);
       const track = tracks[choice - 1];
-      try { await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: event.data }); } catch (_) {}
+      try {
+        const _raw = event?.data ?? {};
+        const _mid = _raw?.msgId ?? _raw?.cliMsgId ?? _raw?.clientMsgId ?? null;
+        const _cid = _raw?.cliMsgId ?? _raw?.clientMsgId ?? _mid ?? null;
+        if (_mid || _cid) await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: { msgId: _mid, cliMsgId: _cid } });
+      } catch (_) {}
       try {
         const keyword   = `${track.title} ${track.author}`;
         const searchRes = await global.axios.get(`${FOWN_API}/api/search?ytmsearch=${encodeURIComponent(keyword)}&svl=1`, { timeout: 30000 });

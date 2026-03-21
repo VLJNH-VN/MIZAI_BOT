@@ -20,10 +20,14 @@ const ICON_LOADING = "⏳";
  */
 async function reactToEvent(api, event, icon) {
   try {
+    const raw      = event?.data ?? {};
+    const msgId    = raw?.msgId    ?? raw?.cliMsgId    ?? raw?.clientMsgId ?? null;
+    const cliMsgId = raw?.cliMsgId ?? raw?.clientMsgId ?? raw?.msgId       ?? null;
+    if (!msgId && !cliMsgId) return;
     await api.addReaction(icon, {
       type    : event.type,
       threadId: event.threadId,
-      data    : event.data,
+      data    : { msgId, cliMsgId },
     });
   } catch (_) {}
 }

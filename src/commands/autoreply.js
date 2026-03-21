@@ -1,85 +1,73 @@
-const { isBotAdmin } = require("../../utils/bot/botManager");
+"use strict";
+
+const fs   = require("fs");
+const path = require("path");
+
+const DATA_PATH = path.join(__dirname, "../../includes/data/autoreply.json");
+
+function loadRules() {
+  try { return JSON.parse(fs.readFileSync(DATA_PATH, "utf-8")); }
+  catch (_) { return []; }
+}
+
+function saveRules(rules) {
+  fs.writeFileSync(DATA_PATH, JSON.stringify(rules, null, 2), "utf-8");
+}
 
 module.exports = {
   config: {
-    name: "autoreply",
-    aliases: ["ar", "tudongtl"],
-    version: "1.0.0",
-    hasPermssion: 2,
-    credits: "MIZAI",
-    description: "Quản lý tin nhắn tự động trả lời (vắng mặt)",
+    name:            "autoreply",
+    aliases:         ["ar", "tudongtl"],
+    version:         "2.0.0",
+    hasPermssion:    2,
+    credits:         "MIZAI",
+    description:     "Quản lý tin nhắn tự động trả lời theo từ khóa",
     commandCategory: "Quản Trị",
     usages: [
-      "autoreply list                     — Xem danh sách auto reply",
+      "autoreply list                      — Xem danh sách",
       "autoreply add <từ_khóa> | <trả lời> — Thêm auto reply",
-      "autoreply delete <id>              — Xóa auto reply",
+      "autoreply del <id>                  — Xóa auto reply",
     ].join("\n"),
-    cooldowns: 5,
+    cooldowns: 3,
   },
 
-  run: async ({ api, event, args, send, senderId, prefix }) => {
-    if (!isBotAdmin(senderId)) return send("⛔ Chỉ Admin bot mới dùng được lệnh này.");
-
+  run: async ({ args, send, prefix }) => {
     const sub = (args[0] || "").toLowerCase();
 
-    if (!sub) {
-      return send(
-        `🔁 AUTOREPLY — TỰ ĐỘNG TRẢ LỜI\n━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `${prefix}autoreply list              Xem danh sách\n` +
-        `${prefix}autoreply add <kw> | <reply> Thêm mới\n` +
-        `${prefix}autoreply delete <id>        Xóa\n\n` +
-        `💡 Ví dụ:\n${prefix}autoreply add xin chào | Chào bạn! Mizai đang bận.`
+    if (!sub || sub === "list") {
+      const rules = loadRules();
+      if (!rules.length) return send("📭 Chưa có auto reply nào.");
+      const lines = rules.map((r, i) =>
+        `${i + 1}. [ID:${r.id}] 🎯 "${r.keyword}" → "${String(r.reply).slice(0, 40)}"`
       );
+      return send(`🔁 DANH SÁCH AUTO REPLY (${rules.length}):\n${lines.join("\n")}`);
     }
 
-    try {
-      switch (sub) {
-
-        case "list": {
-          const list = await api.getAutoReplyList();
-          const items = list?.autoReplies || list?.data || list || [];
-          if (!items.length) return send("📭 Chưa có auto reply nào.");
-          const lines = items.map((item, i) => {
-            const trigger = item.trigger || item.keyword || item.content || "?";
-            const reply = item.reply || item.message || item.response || "?";
-            return `${i + 1}. [${item.id || i}] 🎯 "${trigger}" → "${reply.slice(0, 40)}..."`;
-          });
-          return send(`🔁 DANH SÁCH AUTO REPLY (${items.length}):\n${lines.join("\n")}`);
-        }
-
-        case "add": {
-          const fullText = args.slice(1).join(" ");
-          const parts = fullText.split("|");
-          if (parts.length < 2) {
-            return send(`⚠️ Ví dụ: ${prefix}autoreply add xin chào | Chào bạn! Đang bận.`);
-          }
-          const trigger = parts[0].trim();
-          const reply = parts.slice(1).join("|").trim();
-          if (!trigger || !reply) return send("⚠️ Từ khóa và nội dung trả lời không được để trống.");
-
-          await api.createAutoReply({
-            trigger,
-            message: reply,
-            enabled: true,
-          });
-          return send(`✅ Đã thêm auto reply:\n🎯 Từ khóa: "${trigger}"\n💬 Trả lời: "${reply}"`);
-        }
-
-        case "delete":
-        case "del":
-        case "rm": {
-          const id = args[1];
-          if (!id) return send(`⚠️ Ví dụ: ${prefix}autoreply delete 123`);
-          await api.deleteAutoReply(id);
-          return send(`✅ Đã xóa auto reply ID: ${id}`);
-        }
-
-        default:
-          return send(`❌ Lệnh không hợp lệ. Dùng: ${prefix}autoreply để xem hướng dẫn.`);
-      }
-    } catch (err) {
-      const msg = err?.response?.data?.error || err?.message || "Lỗi không xác định";
-      return send(`❌ Lỗi: ${msg}`);
+    if (sub === "add") {
+      const fullText = args.slice(1).join(" ");
+      const sepIdx = fullText.indexOf("|");
+      if (sepIdx === -1) return send(`⚠️ Cú pháp: ${prefix}autoreply add <từ khóa> | <trả lời>`);
+      const keyword = fullText.slice(0, sepIdx).trim().toLowerCase();
+      const reply   = fullText.slice(sepIdx + 1).trim();
+      if (!keyword || !reply) return send("⚠️ Từ khóa và nội dung không được để trống.");
+      const rules = loadRules();
+      const id = Date.now();
+      rules.push({ id, keyword, reply });
+      saveRules(rules);
+      return send(`✅ Đã thêm auto reply:\n🎯 Từ khóa: "${keyword}"\n💬 Trả lời: "${reply}"`);
     }
+
+    if (sub === "del" || sub === "delete" || sub === "rm") {
+      const idArg = args[1];
+      if (!idArg) return send(`⚠️ Cú pháp: ${prefix}autoreply del <id>`);
+      const rules   = loadRules();
+      const before  = rules.length;
+      const filtered = rules.filter(r => String(r.id) !== String(idArg));
+      if (filtered.length === before) return send(`❌ Không tìm thấy ID: ${idArg}`);
+      saveRules(filtered);
+      return send(`✅ Đã xóa auto reply ID: ${idArg}`);
+    }
+
+    return send(`❌ Lệnh không hợp lệ. Dùng: ${prefix}autoreply để xem hướng dẫn.`);
   },
 };

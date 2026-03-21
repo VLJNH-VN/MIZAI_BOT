@@ -1,6 +1,27 @@
+const fs   = require("fs");
+const path = require("path");
 const { handleCommand } = require("../../includes/handlers/handleCommand");
 const { handleReply } = require("../../includes/handlers/handleReply");
 const { handleUploadAttachments } = require("../../includes/handlers/handleUploadAttachments");
+
+const AUTOREPLY_PATH = path.join(__dirname, "../../includes/data/autoreply.json");
+
+function loadAutoReplyRules() {
+  try { return JSON.parse(fs.readFileSync(AUTOREPLY_PATH, "utf-8")); }
+  catch (_) { return []; }
+}
+
+async function handleAutoReply({ api, event }) {
+  try {
+    const raw  = event?.data ?? {};
+    const body = (typeof raw.content === "string" ? raw.content : (raw.content?.text || raw.content?.msg || "")).trim().toLowerCase();
+    if (!body) return;
+    const rules = loadAutoReplyRules();
+    const match = rules.find(r => body.includes(String(r.keyword).toLowerCase()));
+    if (!match) return;
+    await api.sendMessage({ msg: match.reply }, event.threadId, event.type);
+  } catch (_) {}
+}
 
 async function handleListen({ api, event, commands, prefix }) {
   if (!commands || typeof commands.forEach !== "function") return;
@@ -196,6 +217,13 @@ async function handleMessage(params) {
     await handleListen(params);
   } catch (err) {
     logError(`Lỗi handleListen: ${err?.message || err}`);
+  }
+
+  // ── Auto reply theo từ khóa ────────────────────────────────────────────────
+  try {
+    await handleAutoReply({ api, event });
+  } catch (err) {
+    logError(`Lỗi handleAutoReply: ${err?.message || err}`);
   }
 
   // ── Xử lý reply ────────────────────────────────────────────────────────────

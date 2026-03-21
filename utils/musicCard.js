@@ -278,6 +278,195 @@ async function drawNowPlayingCard({ platform, title, artist, duration, thumb }) 
   return outPath;
 }
 
+/**
+ * Tạo ảnh "Đang tải" thay cho text thuần
+ */
+async function drawLoadingCard({ platform, title, artist, duration }) {
+  const p  = PLATFORM[platform] || PLATFORM.sc;
+  const W  = 660;
+  const H  = 200;
+  const PAD = 28;
+
+  const canvas = createCanvas(W, H);
+  const ctx    = canvas.getContext("2d");
+
+  // ── Nền ─────────────────────────────────────────────────────────────────────
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, p.bg1);
+  bg.addColorStop(1, p.bg2);
+  ctx.fillStyle = bg;
+  roundRect(ctx, 0, 0, W, H, 16);
+  ctx.fill();
+
+  ctx.strokeStyle = p.color + "55";
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, 1, 1, W - 2, H - 2, 16);
+  ctx.stroke();
+
+  // ── Spinner (vòng tròn loading vẽ tay) ────────────────────────────────────
+  const cx = PAD + 62;
+  const cy = H / 2;
+  const R  = 46;
+
+  // Vòng nền mờ
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.strokeStyle = p.color + "22";
+  ctx.lineWidth = 8;
+  ctx.stroke();
+
+  // Cung loading - nhiều đoạn với opacity giảm dần (tạo hiệu ứng spinner tĩnh)
+  const segments = 8;
+  for (let i = 0; i < segments; i++) {
+    const startAngle = (i / segments) * Math.PI * 2 - Math.PI / 2;
+    const endAngle   = startAngle + (Math.PI * 2) / segments - 0.08;
+    const alpha      = Math.round(((i + 1) / segments) * 220);
+    const hex        = alpha.toString(16).padStart(2, "0");
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, startAngle, endAngle);
+    ctx.strokeStyle = p.color + hex;
+    ctx.lineWidth = 8;
+    ctx.lineCap = "round";
+    ctx.stroke();
+  }
+
+  // Chấm tròn ở đầu spinner
+  const dotAngle = -Math.PI / 2;
+  ctx.beginPath();
+  ctx.arc(cx + R * Math.cos(dotAngle), cy + R * Math.sin(dotAngle), 6, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+
+  // Label dưới spinner
+  ctx.font = "bold 12px monospace";
+  ctx.fillStyle = p.color;
+  ctx.textAlign = "center";
+  ctx.fillText("LOADING", cx, cy + R + 20);
+  ctx.textAlign = "left";
+
+  // ── Divider dọc ────────────────────────────────────────────────────────────
+  const divX = PAD + 62 * 2 + 8;
+  ctx.fillStyle = p.color + "33";
+  ctx.fillRect(divX, PAD, 1.5, H - PAD * 2);
+
+  // ── Thông tin bên phải ─────────────────────────────────────────────────────
+  const textX = divX + 22;
+
+  // Header "ĐANG TẢI"
+  ctx.font = "bold 13px monospace";
+  ctx.fillStyle = p.color + "bb";
+  ctx.fillText(`${p.name.toUpperCase()} · ĐANG TẢI`, textX, 44);
+
+  // ── Icon + Title ────────────────────────────────────────────────────────────
+  const row1Y = 82;
+  drawNoteIcon(ctx, textX, row1Y - 14, 18, p.color);
+  ctx.font = "bold 22px sans-serif";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(truncate(title, 28), textX + 26, row1Y);
+
+  // ── Icon + Artist ──────────────────────────────────────────────────────────
+  const row2Y = 120;
+  drawPersonIcon(ctx, textX, row2Y - 14, 18, "#aaaaaa");
+  ctx.font = "16px sans-serif";
+  ctx.fillStyle = "#aaaaaa";
+  ctx.fillText(truncate(artist, 34), textX + 26, row2Y);
+
+  // ── Icon + Duration ───────────────────────────────────────────────────────
+  const row3Y = 154;
+  drawClockIcon(ctx, textX, row3Y - 14, 18, p.color);
+  ctx.font = "bold 16px monospace";
+  ctx.fillStyle = p.color;
+  ctx.fillText(duration, textX + 26, row3Y);
+
+  // Watermark
+  ctx.font = "bold 12px sans-serif";
+  ctx.fillStyle = p.color + "55";
+  const wm = "✦ Mizai Bot";
+  ctx.fillText(wm, W - PAD - ctx.measureText(wm).width, H - 14);
+
+  const outPath = path.join(os.tmpdir(), `loading_card_${Date.now()}.png`);
+  fs.writeFileSync(outPath, canvas.toBuffer("image/png"));
+  return outPath;
+}
+
+// ── Icon helpers vẽ tay ───────────────────────────────────────────────────────
+
+function drawNoteIcon(ctx, x, y, size, color) {
+  const s = size;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = color;
+
+  // Thân nốt nhạc (hình bầu dục)
+  ctx.beginPath();
+  ctx.ellipse(s * 0.22, s * 0.85, s * 0.22, s * 0.16, -0.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Cột nốt
+  ctx.fillRect(s * 0.42, s * 0.1, s * 0.1, s * 0.76);
+
+  // Cờ nốt (cung tròn)
+  ctx.beginPath();
+  ctx.moveTo(s * 0.52, s * 0.1);
+  ctx.bezierCurveTo(s * 0.9, s * 0.15, s * 0.95, s * 0.5, s * 0.52, s * 0.55);
+  ctx.lineWidth = s * 0.1;
+  ctx.strokeStyle = color;
+  ctx.lineCap = "round";
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawPersonIcon(ctx, x, y, size, color) {
+  const s = size;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = color;
+
+  // Đầu (hình tròn)
+  ctx.beginPath();
+  ctx.arc(s * 0.5, s * 0.28, s * 0.22, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Thân (nửa hình tròn phía dưới)
+  ctx.beginPath();
+  ctx.arc(s * 0.5, s * 1.05, s * 0.42, Math.PI, 0);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawClockIcon(ctx, x, y, size, color) {
+  const s = size;
+  ctx.save();
+  ctx.translate(x + s / 2, y + s / 2);
+
+  // Mặt đồng hồ
+  ctx.beginPath();
+  ctx.arc(0, 0, s * 0.5, 0, Math.PI * 2);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = s * 0.1;
+  ctx.stroke();
+
+  // Kim giờ
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, -s * 0.28);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = s * 0.12;
+  ctx.lineCap = "round";
+  ctx.stroke();
+
+  // Kim phút
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(s * 0.22, 0);
+  ctx.lineWidth = s * 0.09;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
 function drawDefaultThumb(ctx, x, y, size, p) {
   const grad = ctx.createRadialGradient(x + size / 2, y + size / 2, 10, x + size / 2, y + size / 2, size / 2);
   grad.addColorStop(0, p.color + "44");
@@ -294,4 +483,4 @@ function drawDefaultThumb(ctx, x, y, size, p) {
   ctx.textBaseline = "alphabetic";
 }
 
-module.exports = { drawSearchCard, drawNowPlayingCard };
+module.exports = { drawSearchCard, drawNowPlayingCard, drawLoadingCard };

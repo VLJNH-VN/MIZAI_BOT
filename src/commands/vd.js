@@ -133,37 +133,29 @@ async function sendOneVideo(api, event, srcUrl, caption) {
     // Bước 3: GitHub upload → sendVideo inline
     let sentAsVideo = false;
 
-    // Helper: resolve redirect URL (GitHub Releases redirect → objects.githubusercontent.com CDN)
-    const resolveRedirect = async (url) => {
-      try {
-        const fetchFn = globalThis.fetch || (await import("node-fetch")).default;
-        const res = await fetchFn(url, { method: "HEAD", redirect: "follow" });
-        return (res.url && res.url !== url) ? res.url : url;
-      } catch { return url; }
-    };
-
-    if (typeof global.githubReleaseUpload === "function" && fileSize < 50 * 1024 * 1024) {
+    // Dùng githubUpload (raw.githubusercontent.com) thay vì githubReleaseUpload:
+    // - Releases trả về signed URL có expiry + Content-Type: application/octet-stream → Zalo reject
+    // - raw.githubusercontent.com URL không expire, Content-Type theo extension (.mp4 → video/mp4)
+    if (typeof global.githubUpload === "function" && fileSize < 50 * 1024 * 1024) {
       let ghUrl = null;
       try {
         const filename = `vid_${id}.mp4`;
-        ghUrl = await global.githubReleaseUpload(uploadPath, filename, { tag: "vd-upload" });
-        global.logInfo?.(`[vd] GitHub Releases upload OK: ${ghUrl}`);
+        ghUrl = await global.githubUpload(uploadPath, `vd-upload/${filename}`);
+        global.logInfo?.(`[vd] GitHub raw upload OK: ${ghUrl}`);
       } catch (e) {
-        global.logWarn?.(`[vd] GitHub Releases upload thất bại: ${e.message}`);
+        global.logWarn?.(`[vd] GitHub raw upload thất bại: ${e.message}`);
       }
       if (ghUrl) {
         try {
-          // Resolve redirect → CDN URL thực sự (Zalo server không follow redirect tốt)
-          const videoUrl = await resolveRedirect(ghUrl);
-          global.logInfo?.(`[vd] videoUrl sau resolve: ${videoUrl}`);
+          global.logInfo?.(`[vd] videoUrl (raw): ${ghUrl}`);
           await api.sendVideo({
-            videoUrl,
+            videoUrl:     ghUrl,
             thumbnailUrl: "",
             msg:          caption || "",
             width:        meta.width   || 576,
             height:       meta.height  || 1024,
             duration:     meta.duration * 1000,
-            fileSize,     // truyền thẳng → bỏ qua HEAD request trong sendVideo
+            fileSize,
             ttl:          500_000,
           }, event.threadId, event.type);
           global.logInfo?.("[vd] sendVideo thành công.");

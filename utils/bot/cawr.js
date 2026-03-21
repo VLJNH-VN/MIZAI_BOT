@@ -26,11 +26,27 @@
  *   (lấy @username không cần cookie)
  */
 
-const fs   = require("fs");
-const path = require("path");
-const axios = require("axios");
+const fs     = require("fs");
+const path   = require("path");
+const axios  = require("axios");
+const crypto = require("crypto");
 
 const TikTok = require("@tobyg74/tiktok-api-dl");
+
+function generateMsToken(len = 148) {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+  const bytes = crypto.randomBytes(len);
+  return Array.from(bytes, b => chars[b % chars.length]).join("");
+}
+
+function buildFullCookie(baseCookie) {
+  const hasMs      = /msToken=/.test(baseCookie);
+  const hasChain   = /tt_chain_token=/.test(baseCookie);
+  let cookie = baseCookie;
+  if (!hasMs)    cookie += `; msToken=${generateMsToken()}`;
+  if (!hasChain) cookie += `; tt_chain_token=${generateMsToken(24)}`;
+  return cookie;
+}
 
 const LISTAPI_DIR  = path.join(process.cwd(), "includes", "listapi");
 const TEMP_DIR     = path.join(process.cwd(), "includes", "cache");

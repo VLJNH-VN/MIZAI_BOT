@@ -75,6 +75,8 @@ function loadCommands(commandsDir) {
     return commands;
   }
 
+  let totalAliases = 0;
+
   for (const filePath of files) {
     const loaded = loadCommandFromFile(filePath);
     if (!loaded) continue;
@@ -82,11 +84,15 @@ function loadCommands(commandsDir) {
     commands.set(loaded.name, loaded.command);
 
     for (const alias of loaded.aliases) {
-      if (!commands.has(alias)) commands.set(alias, loaded.command);
+      if (!commands.has(alias)) {
+        commands.set(alias, loaded.command);
+        totalAliases++;
+      }
     }
   }
 
-  logInfo(`Loaded command: ${commands.size} (Load Cả Alias)`);
+  const uniqueCmds = commands.size - totalAliases;
+  logInfo(`Loaded command: ${uniqueCmds} lệnh | ${totalAliases} bí danh | ${commands.size} tổng`);
   return commands;
 }
 

@@ -176,7 +176,7 @@ module.exports = {
           writer.on("finish", resolve);
           writer.on("error", reject);
         });
-        await api.sendMessage({ attachments: [tmpPath] }, event.threadId, event.type);
+        await api.sendMessage({ msg: "", attachments: [tmpPath] }, event.threadId, event.type);
       } catch (dlErr) {
         return send(`❌ Không gửi được video: ${dlErr?.message || "Lỗi không xác định"}\n🔗 ${videoUrl}`);
       } finally {

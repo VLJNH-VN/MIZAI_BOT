@@ -128,33 +128,7 @@ async function sendOneVideo(api, event, ghUrl, caption) {
 
     global.logInfo?.(`[vd] threadId=${event.threadId} | type=${event.type} | size=${(fileSize/1024).toFixed(0)}KB | w=${meta.width} h=${meta.height} dur=${meta.duration}`);
 
-    // Bước 3: Serve local qua Replit HTTP server → video/mp4 URL → sendVideo
-    if (typeof global.serveVideoFile === "function") {
-      try {
-        const serveUrl = global.serveVideoFile(uploadPath);
-        global.logInfo?.(`[vd] serveUrl: ${serveUrl}`);
-        try {
-          await api.sendVideo({
-            videoUrl:     serveUrl,
-            thumbnailUrl: "",
-            msg:          caption || "",
-            width:        meta.width  || 576,
-            height:       meta.height || 1024,
-            duration:     meta.duration * 1000,
-            fileSize:     fileSize,
-            ttl:          500_000,
-          }, event.threadId, event.type);
-          global.logInfo?.("[vd] sendVideo (Replit serve) thành công.");
-          return;
-        } catch (e2) {
-          global.logWarn?.(`[vd] sendVideo thất bại: ${e2.message} | url=${serveUrl?.slice(0, 100)}`);
-        }
-      } catch (e) {
-        global.logWarn?.(`[vd] serveVideoFile thất bại: ${e.message}`);
-      }
-    }
-
-    // Bước 4: Fallback → sendMessage + attachments
+    // Gửi video qua sendMessage + attachments (file local)
     await api.sendMessage(
       { msg: caption || "", attachments: [uploadPath], ttl: 500_000 },
       event.threadId, event.type

@@ -4,6 +4,8 @@ const path = require("path");
 const { Zalo } = require("zca-js");
 const { imageSize } = require("image-size");
 const QRCode = require("qrcode");
+const sharp = require("sharp");
+const jsQR = require("jsqr");
 
 // ── IMEI & Cookie helpers ─────────────────────────────────────────────────────
 
@@ -51,9 +53,17 @@ function normalizeCookies(raw) {
 
 // ── Zalo Client ───────────────────────────────────────────────────────────────
 
-async function displayQRInTerminal(qrData) {
+async function displayQRInTerminal(imageBase64) {
   try {
-    const qrString = await QRCode.toString(qrData, { type: "terminal", small: true });
+    const buf = Buffer.from(imageBase64, "base64");
+    const { data, info } = await sharp(buf).raw().toBuffer({ resolveWithObject: true });
+    const decoded = jsQR(data, info.width, info.height);
+    const qrContent = decoded ? decoded.data : null;
+    if (!qrContent) {
+      logWarn("[QR] Không thể decode QR image, hãy mở file qr.png để quét.");
+      return;
+    }
+    const qrString = await QRCode.toString(qrContent, { type: "terminal", small: true });
     console.log("\n╔══════════════════════════════════════╗");
     console.log("║      QUÉT MÃ QR ĐỂ ĐĂNG NHẬP ZALO  ║");
     console.log("╚══════════════════════════════════════╝");
@@ -112,8 +122,8 @@ async function createZaloClient() {
     const { type, data, actions } = event;
     if (type === 0) {
       await actions.saveToFile(qrPath);
-      if (data && data.code) {
-        await displayQRInTerminal(data.code);
+      if (data && data.image) {
+        await displayQRInTerminal(data.image);
       } else {
         logInfo(`[QR] QR đã lưu tại: ${path.resolve(qrPath)} — hãy mở file để quét.`);
       }

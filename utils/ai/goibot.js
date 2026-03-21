@@ -550,7 +550,13 @@ async function sendToGroq(userMessage, threadId, opts = {}) {
 
   if (resultText === null) {
     usedEngine = "Gemini";
-    resultText = await callGemini(userMessage, history, { imageParts, useSearch, urls });
+    try {
+      resultText = await callGemini(userMessage, history, { imageParts, useSearch, urls });
+    } catch (geminiErr) {
+      const gMsg = geminiErr?.message || "";
+      global.logWarn?.(`[goibot][Gemini] Lỗi fallback: ${gMsg.slice(0, 100)}`);
+      resultText = null;
+    }
   }
 
   if (resultText === null) {
@@ -583,13 +589,13 @@ function extractImageUrl(raw) {
   const c = raw.content;
   if (c && typeof c === "object") {
     const url = c.url || c.normalUrl || c.hdUrl || c.href || c.fileUrl || c.downloadUrl || c.src;
-    if (url && /\.(jpg|jpeg|png|gif|webp)/i.test(url.split("?")[0])) return url;
-    if (url && !url.includes("zaloapp") && c.thumb) return c.thumb;
+    if (url && typeof url === "string" && /\.(jpg|jpeg|png|gif|webp)/i.test(url.split("?")[0])) return url;
+    if (url && typeof url === "string" && !url.includes("zaloapp") && c.thumb) return c.thumb;
   }
   const attArr = Array.isArray(raw.attach) ? raw.attach : [];
   for (const a of attArr) {
     const url = a.url || a.normalUrl || a.hdUrl || a.href || a.fileUrl || a.src;
-    if (url) return url;
+    if (url && typeof url === "string") return url;
   }
   return null;
 }

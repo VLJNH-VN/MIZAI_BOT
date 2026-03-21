@@ -656,8 +656,10 @@ async function runSelfReflect(api) {
       SELF_PROFILE: self,
     }) + "\n" + moodCtx + (memCtx ? "\n" + memCtx : "");
 
-    const { sendToGroq } = require("../../utils/ai/goibot");
+    const { sendToGroq, clearChatHistory } = require("../../utils/ai/goibot");
     const responseText   = await sendToGroq(ctx, "__self_reflect__");
+    // Xóa history self-reflect ngay sau khi dùng — tránh tích lũy vô hạn
+    clearChatHistory("__self_reflect__");
     if (!responseText) return;
 
     let botMsg;
@@ -882,6 +884,9 @@ async function handleGoibot({ api, event }) {
         const kw = botMsg.sticker.keyword || "cute";
         await sendStickerByKeyword(api, kw, threadId, event.type);
       }
+      if (botMsg?.profile?.status) {
+        await handleProfileAction(api, botMsg.profile, null);
+      }
       return;
     }
 
@@ -991,6 +996,11 @@ async function handleGoibot({ api, event }) {
     // ── TX admin action ────────────────────────────────────────────────────────
     if (botMsg?.tx?.status && isAdmin) {
       await handleTxAction(botMsg.tx, senderId, send);
+    }
+
+    // ── Profile — Mizai tự cập nhật avatar / bio / tên ────────────────────────
+    if (botMsg?.profile?.status) {
+      await handleProfileAction(api, botMsg.profile, send);
     }
 
   } catch (err) {

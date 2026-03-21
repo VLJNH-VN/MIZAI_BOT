@@ -141,7 +141,7 @@ module.exports = {
     cooldowns: 5,
   },
 
-  run: async ({ api, args, send, registerReply, commandName, threadId, type }) => {
+  run: async ({ api, event, args, send, registerReply, commandName, threadID }) => {
     const FLAG_MAP = { sc: "sc", soundcloud: "sc", scl: "sc", spt: "spt", spotify: "spt", mix: "mix", mixcloud: "mix", nhac: "sc", music: "sc" };
 
     let platform = FLAG_MAP[commandName] || null;
@@ -175,7 +175,7 @@ module.exports = {
         try { cardPath = await drawSearchCard({ platform: "sc", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
         const msg = `💬 Reply số từ 1-${tracks.length} để tải nhạc`;
         const sent = cardPath
-          ? await api.sendMessage({ msg, attachments: [cardPath] }, threadId, type)
+          ? await api.sendMessage({ msg, attachments: [cardPath] }, threadID, event.type)
           : await send(msg);
         if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
         const msgId = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId;
@@ -189,7 +189,7 @@ module.exports = {
         try { cardPath = await drawSearchCard({ platform: "spt", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
         const msg = `📌 Reply STT (1–${tracks.length}) để tải nhạc`;
         const sent = cardPath
-          ? await api.sendMessage({ msg, attachments: [cardPath] }, threadId, type)
+          ? await api.sendMessage({ msg, attachments: [cardPath] }, threadID, event.type)
           : await send(msg);
         if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
         const msgId = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId ?? sent?.msgId;
@@ -207,7 +207,7 @@ module.exports = {
         try { cardPath = await drawSearchCard({ platform: "mix", query, tracks: cardTracks }); } catch (_) {}
         const msg = `💬 Reply số từ 1-5 để xem link Mixcloud`;
         const sent = cardPath
-          ? await api.sendMessage({ msg, attachments: [cardPath] }, threadId, type)
+          ? await api.sendMessage({ msg, attachments: [cardPath] }, threadID, event.type)
           : await send(msg);
         if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
         const sentId = sent?.message?.msgId ?? (Array.isArray(sent?.attachment) && sent.attachment[0]?.msgId);

@@ -15,8 +15,6 @@ const { drawSearchCard, drawNowPlayingCard } = require("../../utils/canvas");
 const os = require("os");
 
 const FOWN_API = "https://fown.onrender.com";
-const SPT_ID     = "1530d567ec6542669896bc96efd370f3";
-const SPT_SECRET = "6e0241b124da40dfb98728b7f29cedfd";
 const MIXCLOUD_GRAPHQL_URL = "https://app.mixcloud.com/graphql";
 
 async function downloadToTmp(url) {
@@ -61,34 +59,20 @@ function formatDuration(seconds) {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
-// ── Spotify ───────────────────────────────────────────────────────────────────
-async function sptGetToken() {
-  const res = await global.axios.post(
-    "https://accounts.spotify.com/api/token",
-    "grant_type=client_credentials",
-    {
-      headers: {
-        Authorization: "Basic " + Buffer.from(`${SPT_ID}:${SPT_SECRET}`).toString("base64"),
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      timeout: 15000,
-    }
-  );
-  return res.data.access_token;
-}
-
+// ── Spotify (via fown API / yt-dlp spsearch) ──────────────────────────────────
 async function sptSearch(keyword) {
-  const token = await sptGetToken();
-  const res   = await global.axios.get(
-    `https://api.spotify.com/v1/search?q=${encodeURIComponent(keyword)}&type=track&limit=6`,
-    { headers: { Authorization: `Bearer ${token}` }, timeout: 15000 }
+  const res = await global.axios.get(
+    `${FOWN_API}/api/search?spsearch=${encodeURIComponent(keyword)}&svl=6`,
+    { timeout: 30000 }
   );
-  return res.data.tracks.items.map(item => ({
-    id:       item.id,
-    title:    item.name,
-    author:   item.album.artists[0].name,
-    duration: item.duration_ms,
-    link:     item.external_urls.spotify,
+  return (res.data?.results || []).map(item => ({
+    id:       item.id || "",
+    title:    item.title || "Unknown",
+    author:   item.uploader || "Unknown",
+    duration: (item.duration || 0) * 1000,
+    link:     item.url || "",
+    _durSec:  item.duration || 0,
+    thumbnail: item.thumbnail || "",
   }));
 }
 
@@ -216,7 +200,7 @@ module.exports = {
       } else if (platform === "spt") {
         const tracks = await sptSearch(query);
         if (!tracks.length) return send(`😔 Không tìm thấy kết quả cho "${query}"`);
-        tracks.forEach(t => { t._durStr = fmtDurationMs(t.duration); });
+        tracks.forEach(t => { t._durStr = t._durSec ? fmtDurationSec(t._durSec) : fmtDurationMs(t.duration); });
         let cardPath;
         try { cardPath = await drawSearchCard({ platform: "spt", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
         const sent = cardPath
@@ -300,12 +284,24 @@ module.exports = {
         if (_mid || _cid) await api.addReaction(Reactions.WOW, { type: event.type, threadId: event.threadId, data: { msgId: _mid, cliMsgId: _cid } });
       } catch (_) {}
       try {
-        const keyword   = `${track.title} ${track.author}`;
-        const searchRes = await global.axios.get(`${FOWN_API}/api/search?ytmsearch=${encodeURIComponent(keyword)}&svl=1`, { timeout: 30000 });
-        const ytmUrl = searchRes.data?.results?.[0]?.url;
-        if (!ytmUrl) return send("❌ Không tìm thấy nhạc trên YouTube Music. Thử bài khác.");
-        const mediaRes = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(ytmUrl)}`, { timeout: 120000 });
-        const audioUrl = mediaRes.data?.download_audio_url || mediaRes.data?.download_url;
+        const durStr = track._durSec ? fmtDurationSec(track._durSec) : fmtDurationMs(track.duration);
+        const spfUrl = track.link || track.url || "";
+        let audioUrl = null;
+
+        if (spfUrl) {
+          const mediaRes = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(spfUrl)}`, { timeout: 120000 });
+          audioUrl = mediaRes.data?.download_audio_url || mediaRes.data?.download_url || null;
+        }
+
+        if (!audioUrl) {
+          const keyword   = `${track.title} ${track.author}`;
+          const searchRes = await global.axios.get(`${FOWN_API}/api/search?ytmsearch=${encodeURIComponent(keyword)}&svl=1`, { timeout: 30000 });
+          const ytmUrl    = searchRes.data?.results?.[0]?.url;
+          if (!ytmUrl) return send("❌ Không tìm thấy nhạc. Thử bài khác.");
+          const mediaRes2 = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(ytmUrl)}`, { timeout: 120000 });
+          audioUrl = mediaRes2.data?.download_audio_url || mediaRes2.data?.download_url || null;
+        }
+
         if (!audioUrl) return send("❌ Không lấy được link tải. Thử lại sau.");
         let cardPath;
         try {
@@ -313,14 +309,15 @@ module.exports = {
             platform: "spt",
             title:    track.title,
             artist:   track.author,
-            duration: fmtDurationMs(track.duration),
+            duration: durStr,
+            thumb:    track.thumbnail || "",
           });
         } catch (_) {}
         if (cardPath) {
           await api.sendMessage({ msg: "", attachments: [cardPath] }, event.threadId, event.type);
           try { fs.unlinkSync(cardPath); } catch (_) {}
         } else {
-          const infoMsg = `🎵 ${track.title}\n👤 ${track.author}\n⏳ ${fmtDurationMs(track.duration)}`;
+          const infoMsg = `🎵 ${track.title}\n👤 ${track.author}\n⏳ ${durStr}`;
           await send(infoMsg);
         }
         await sendAudioSafe(api, audioUrl, event.threadId, event.type, send);

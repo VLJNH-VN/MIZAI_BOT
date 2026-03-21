@@ -597,17 +597,39 @@ async function fetchImageAsBase64(url) {
 
 function extractImageUrl(raw) {
   if (!raw) return null;
+
+  const ZALO_CDN = /\b(zdn\.vn|dlfl\.vn|zmp3\.vn|zadn\.vn|zalo\.me|zaloapp\.me|cover\.zdn|s\d+-ava)/i;
+  const IMG_EXT  = /\.(jpg|jpeg|png|gif|webp)/i;
+
+  function isImageUrl(url) {
+    if (!url || typeof url !== "string") return false;
+    if (url.includes("zaloapp")) return false;
+    const bare = url.split("?")[0];
+    return IMG_EXT.test(bare) || ZALO_CDN.test(url);
+  }
+
   const c = raw.content;
   if (c && typeof c === "object") {
-    const url = c.url || c.normalUrl || c.hdUrl || c.href || c.fileUrl || c.downloadUrl || c.src;
-    if (url && typeof url === "string" && /\.(jpg|jpeg|png|gif|webp)/i.test(url.split("?")[0])) return url;
-    if (url && typeof url === "string" && !url.includes("zaloapp") && c.thumb) return c.thumb;
+    // hdUrl / normalUrl là trường ảnh chính của Zalo — ưu tiên cao nhất
+    const hdUrl     = c.hdUrl     || c.normalUrl  || c.href || "";
+    const thumbUrl  = c.thumb     || c.thumbUrl   || "";
+    const genericUrl = c.url || c.fileUrl || c.downloadUrl || c.src || "";
+
+    if (isImageUrl(hdUrl))     return hdUrl;
+    if (isImageUrl(genericUrl)) return genericUrl;
+    // Nếu có width/height (ảnh Zalo) dùng thumb làm fallback
+    if ((c.width || c.height) && isImageUrl(thumbUrl)) return thumbUrl;
+    if ((c.width || c.height) && thumbUrl) return thumbUrl;
   }
+
   const attArr = Array.isArray(raw.attach) ? raw.attach : [];
   for (const a of attArr) {
-    const url = a.url || a.normalUrl || a.hdUrl || a.href || a.fileUrl || a.src;
-    if (url && typeof url === "string") return url;
+    const url = a.hdUrl || a.normalUrl || a.url || a.href || a.fileUrl || a.src || "";
+    if (isImageUrl(url)) return url;
+    // Fallback: nếu attachment có thumb hoặc kích thước
+    if ((a.width || a.height) && (a.thumb || a.thumbUrl)) return a.thumb || a.thumbUrl;
   }
+
   return null;
 }
 

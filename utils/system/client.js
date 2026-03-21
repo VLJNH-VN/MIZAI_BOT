@@ -105,20 +105,28 @@ async function createZaloClient() {
   logInfo("[QR] Đang tạo mã QR để đăng nhập Zalo...");
   logInfo(`[QR] QR code sẽ được lưu tại: ${path.resolve(qrPath)}`);
 
-  let _qrDisplayed = false;
   const api = await zalo.loginQR({
     userAgent,
     qrPath,
-    onQR: async (qrData) => {
-      if (qrData) { _qrDisplayed = true; await displayQRInTerminal(qrData); }
-      else logInfo(`[QR] QR đã lưu tại: ${path.resolve(qrPath)} — hãy mở file để quét.`);
+  }, async (event) => {
+    const { type, data, actions } = event;
+    if (type === 0) {
+      await actions.saveToFile(qrPath);
+      if (data && data.code) {
+        await displayQRInTerminal(data.code);
+      } else {
+        logInfo(`[QR] QR đã lưu tại: ${path.resolve(qrPath)} — hãy mở file để quét.`);
+      }
+    } else if (type === 1) {
+      logInfo("[QR] Mã QR đã hết hạn, đang tạo mã mới...");
+      actions.retry();
+    } else if (type === 2) {
+      logInfo("[QR] Đã quét mã QR, đang chờ xác nhận trên điện thoại...");
+    } else if (type === 3) {
+      logWarn("[QR] Đăng nhập bị từ chối trên điện thoại.");
+      actions.retry();
     }
   });
-
-  if (!_qrDisplayed) {
-    logInfo(`[QR] QR code đã lưu tại: ${path.resolve(qrPath)}`);
-    logInfo("[QR] Hãy mở file qr.png và quét bằng ứng dụng Zalo trên điện thoại.");
-  }
 
   logInfo("Đăng nhập Zalo bằng QR thành công.");
   return api;

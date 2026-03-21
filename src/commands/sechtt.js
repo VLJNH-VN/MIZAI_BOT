@@ -144,43 +144,73 @@ module.exports = {
     await send(`⏳ Đang tải video...\n🎬 ${title}\n👤 ${uploader} · ⏱ ${dur} · 👁 ${views}`);
 
     try {
+      // Lấy link video từ fown API
       const downloadRes = await global.axios.get(
         `${FOWN_API}/api/download?url=${encodeURIComponent(video.url)}&format=best`,
         { timeout: 120000 }
       );
 
-      let videoUrl = downloadRes.data?.raw_url || downloadRes.data?.url || null;
+      // raw_url là link GitHub/CDN trực tiếp (có thể null nếu chưa cấu hình GitHub)
+      let videoUrl = downloadRes.data?.raw_url || null;
 
       if (!videoUrl) {
-        const mediaRes = await global.axios.get(
-          `${FOWN_API}/api/media?url=${encodeURIComponent(video.url)}`,
-          { timeout: 60000 }
-        );
-        videoUrl = mediaRes.data?.download_url || mediaRes.data?.download_audio_url || null;
+        // Dùng fown download endpoint trực tiếp làm video URL
+        videoUrl = `${FOWN_API}/api/download?url=${encodeURIComponent(video.url)}&format=best`;
+      }
+
+      // Nếu là URL tương đối, thêm base
+      if (videoUrl && videoUrl.startsWith("/")) {
+        videoUrl = FOWN_API + videoUrl;
       }
 
       if (!videoUrl) return send("❌ Không lấy được link tải. Thử video khác.");
 
-      let tmpPath;
+      // Resolve redirect nếu là GitHub releases URL (trả về URL CDN thực)
+      let finalVideoUrl = videoUrl;
       try {
-        await send("⏳ Đang tải video về để gửi...").catch(() => {});
-        tmpPath = path.join(os.tmpdir(), `mizai_tt_${Date.now()}.mp4`);
-        const writer = fs.createWriteStream(tmpPath);
-        const fileRes = await global.axios.get(videoUrl, {
-          responseType: "stream",
-          timeout: 120000,
-          headers: { "User-Agent": global.userAgent || "Mozilla/5.0" },
+        const headRes = await global.axios.head(videoUrl, {
+          maxRedirects: 10,
+          timeout: 15000,
+          validateStatus: () => true,
         });
-        await new Promise((resolve, reject) => {
-          fileRes.data.pipe(writer);
-          writer.on("finish", resolve);
-          writer.on("error", reject);
-        });
-        await api.sendMessage({ msg: "", attachments: [tmpPath] }, event.threadId, event.type);
-      } catch (dlErr) {
-        return send(`❌ Không gửi được video: ${dlErr?.message || "Lỗi không xác định"}\n🔗 ${videoUrl}`);
-      } finally {
-        if (tmpPath) try { fs.unlinkSync(tmpPath); } catch (_) {}
+        const resolved = headRes.request?.res?.responseUrl || headRes.request?.responseURL || null;
+        if (resolved && resolved.startsWith("http")) finalVideoUrl = resolved;
+      } catch (_) {}
+
+      try {
+        await api.sendVideo(
+          {
+            videoUrl:     finalVideoUrl,
+            duration:     video.duration || 0,
+            width:        1280,
+            height:       720,
+          },
+          event.threadId,
+          event.type
+        );
+      } catch (sendErr) {
+        // Fallback: tải về rồi gửi qua sendMessage attachments
+        await send("⏳ Đang tải về để gửi...").catch(() => {});
+        let tmpPath;
+        try {
+          tmpPath = path.join(os.tmpdir(), `mizai_tt_${Date.now()}.mp4`);
+          const writer = fs.createWriteStream(tmpPath);
+          const fileRes = await global.axios.get(finalVideoUrl, {
+            responseType: "stream",
+            timeout:      120000,
+            headers:      { "User-Agent": global.userAgent || "Mozilla/5.0" },
+          });
+          await new Promise((resolve, reject) => {
+            fileRes.data.pipe(writer);
+            writer.on("finish", resolve);
+            writer.on("error", reject);
+          });
+          await api.sendMessage({ msg: "", attachments: [tmpPath] }, event.threadId, event.type);
+        } catch (dlErr) {
+          return send(`❌ Không gửi được video: ${dlErr?.message || "Lỗi không xác định"}\n🔗 ${finalVideoUrl}`);
+        } finally {
+          if (tmpPath) try { fs.unlinkSync(tmpPath); } catch (_) {}
+        }
       }
     } catch (err) {
       return send(`❌ Lỗi tải video: ${err?.message || "Không xác định"}`);

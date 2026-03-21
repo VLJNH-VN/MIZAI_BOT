@@ -253,6 +253,9 @@ Mizai CÓ QUYỀN từ chối nếu:
 6. **Điều khiển TX** — CHỈ Admin (isAdmin=true): tx.status=true, tx.action=cau|nha|reset_cau|reset_nha
 
 7. **Phân tích ảnh** — khi hasImage=true
+   - Nếu bạn có thể thấy nội dung ảnh (Gemini): mô tả và phân tích trực tiếp
+   - Nếu bạn KHÔNG thể thấy ảnh (Groq fallback): thừa nhận đã nhận ảnh, không đòi gửi lại, xử lý theo yêu cầu văn bản của user
+   - Khi user yêu cầu "tạo sticker từ ảnh này" mà hasImage=true → LUÔN thực hiện customSticker (không hỏi lại), dùng aiPrompt mô tả chung "cute anime style portrait"
 
 8. **Tìm kiếm web** — khi cần thông tin mới nhất
 
@@ -548,26 +551,36 @@ async function callGemini(userMessage, historyEntries, opts = {}) {
 // ════════════════════════════════════════════════════════════════════════════════
 async function sendToGroq(userMessage, threadId, opts = {}) {
   const { imageParts = [], useSearch = false, urls = [] } = opts;
-  const history  = getChatHistory(threadId);
+  const history    = getChatHistory(threadId);
   const needGemini = imageParts.length > 0 || useSearch || urls.length > 0;
 
   let resultText = null;
   let usedEngine = "Groq";
 
+  // ── Bước 1: Nếu không cần Gemini → dùng Groq trực tiếp ────────────────────
   if (!needGemini) {
     resultText = await callGroq(userMessage, history);
     if (resultText !== null) usedEngine = "Groq";
   }
 
-  if (resultText === null) {
+  // ── Bước 2: Cần Gemini (có ảnh/url/search) → thử Gemini trước ──────────────
+  if (resultText === null && needGemini) {
     usedEngine = "Gemini";
     try {
       resultText = await callGemini(userMessage, history, { imageParts, useSearch, urls });
     } catch (geminiErr) {
       const gMsg = geminiErr?.message || "";
-      global.logWarn?.(`[goibot][Gemini] Lỗi fallback: ${gMsg.slice(0, 100)}`);
+      global.logWarn?.(`[goibot][Gemini] Lỗi: ${gMsg.slice(0, 100)}`);
       resultText = null;
     }
+  }
+
+  // ── Bước 3: Gemini thất bại → fallback Groq (không gửi ảnh binary) ─────────
+  // Groq vẫn biết có ảnh qua hasImage=true trong userMessage context
+  if (resultText === null) {
+    global.logWarn?.("[goibot] Gemini không khả dụng, fallback Groq (không có ảnh binary).");
+    usedEngine = "Groq";
+    resultText = await callGroq(userMessage, history);
   }
 
   if (resultText === null) {

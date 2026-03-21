@@ -14,9 +14,10 @@
   ],
   "autoCheck": true,
   "live": [
-    "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",
+    "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"
+  ],
+  "dead": [
     "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"
   ],
-  "dead": [],
   "no_balance": []
 }

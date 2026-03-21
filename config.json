@@ -2,7 +2,7 @@
   "prefix": ">",
   "loginMethod": "qr",
   "cookiePath": "./cookie.json",
-  "imei": "5f279a81-87da-4fd7-9276-1b4aa437b9de-91e1a2a41c0741f7f47615ab9de2fb8a",
+  "imei": "3d093692-ae08-465c-bcaf-ea1a2829d1e1-74c987a7c11e14edf988007dcd378420",
   "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
   "ownerId": "6024931307373526012",
   "adminBotIds": [
@@ -16,5 +16,8 @@
   "uploadRepo": "VLJNH-VN/UPLOAD_MIZAI",
   "branch": "main",
   "autoUndoOnAngry": true,
-  "🔄 undoEnabled": true
+  "🔄 undoEnabled": true,
+  "tiktokUsername": "",
+  "tiktokPassword": "",
+  "tiktokCookie": ""
 }

@@ -47,7 +47,7 @@ module.exports = {
         case "name": {
           const newName = args.slice(1).join(" ").trim();
           if (!newName) return send(`⚠️ Ví dụ: ${prefix}mizai name Mizai Bot`);
-          await api.updateProfile({ displayName: newName });
+          await api.updateProfile({ profile: { name: newName } });
           return send(`✅ Đã đổi tên bot thành: "${newName}"`);
         }
 
@@ -60,8 +60,8 @@ module.exports = {
 
         case "avatar": {
           const raw = event?.data || {};
-          const imgUrl = raw?.quote?.content?.url || raw?.quote?.content?.hdUrl
-            || raw?.quote?.content?.normalUrl;
+          const quoted = await global.resolveQuote({ raw, api, threadId: event.threadId, event });
+          const imgUrl = quoted?.mediaUrl;
 
           if (!imgUrl) {
             return send(`⚠️ Reply một ảnh rồi dùng: ${prefix}mizai avatar`);

@@ -7,7 +7,7 @@
  * Flow (theo chuẩn autoDown):
  *   1. Download GitHub URL về local
  *   2. Convert sang H264 (Zalo yêu cầu)
- *   3. Upload transfer.sh → URL video/mp4 → api.sendVideo
+ *   3. Upload 0x0.st → URL video/mp4 → api.sendVideo
  *   4. Fallback: sendMessage + attachments (file local)
  *
  * Cách dùng:
@@ -128,29 +128,29 @@ async function sendOneVideo(api, event, ghUrl, caption) {
 
     global.logInfo?.(`[vd] threadId=${event.threadId} | type=${event.type} | size=${(fileSize/1024).toFixed(0)}KB | w=${meta.width} h=${meta.height} dur=${meta.duration}`);
 
-    // Bước 3: Upload transfer.sh → video/mp4 URL → sendVideo
+    // Bước 3: Upload 0x0.st → URL video/mp4 → sendVideo
     try {
-      const filename  = `vd_${id}.mp4`;
-      const uploadRes = await axios.put(
-        `https://transfer.sh/${filename}`,
-        fs.createReadStream(uploadPath),
-        {
-          headers: {
-            "Content-Type":   "video/mp4",
-            "Content-Length": fileSize,
-            "Max-Days":       "1",
-          },
-          timeout: 120000,
-          maxBodyLength: Infinity,
-        }
-      );
-      const transferUrl = (uploadRes.data || "").trim();
-      global.logInfo?.(`[vd] transfer.sh URL: ${transferUrl}`);
+      const FormData = require("form-data");
+      const form = new FormData();
+      form.append("file", fs.createReadStream(uploadPath), {
+        filename:    `vd_${id}.mp4`,
+        contentType: "video/mp4",
+        knownLength: fileSize,
+      });
 
-      if (transferUrl.startsWith("https://")) {
+      const uploadRes = await axios.post("https://0x0.st", form, {
+        headers: { ...form.getHeaders() },
+        timeout: 120000,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      });
+      const hostUrl = (uploadRes.data || "").trim();
+      global.logInfo?.(`[vd] 0x0.st URL: ${hostUrl}`);
+
+      if (hostUrl.startsWith("https://")) {
         try {
           await api.sendVideo({
-            videoUrl:     transferUrl,
+            videoUrl:     hostUrl,
             thumbnailUrl: "",
             msg:          caption || "",
             width:        meta.width  || 576,
@@ -159,14 +159,14 @@ async function sendOneVideo(api, event, ghUrl, caption) {
             fileSize:     fileSize,
             ttl:          500_000,
           }, event.threadId, event.type);
-          global.logInfo?.("[vd] sendVideo (transfer.sh) thành công.");
+          global.logInfo?.("[vd] sendVideo (0x0.st) thành công.");
           return;
         } catch (e2) {
-          global.logWarn?.(`[vd] sendVideo thất bại: ${e2.message} | url=${transferUrl?.slice(0, 80)}`);
+          global.logWarn?.(`[vd] sendVideo thất bại: ${e2.message} | url=${hostUrl?.slice(0, 80)}`);
         }
       }
     } catch (e) {
-      global.logWarn?.(`[vd] transfer.sh thất bại: ${e.message}`);
+      global.logWarn?.(`[vd] 0x0.st thất bại: ${e.message}`);
     }
 
     // Bước 4: Fallback → sendMessage + attachments

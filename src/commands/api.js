@@ -247,8 +247,9 @@ module.exports = {
       ".api add <tên> <file_json>  — Import link từ file JSON khác trong listapi",
       ".api check                  — Kiểm tra & convert TẤT CẢ file lên GitHub",
       ".api check <tên>            — Kiểm tra & convert 1 file cụ thể lên GitHub",
-      ".api tt <tên> <từ khóa> <số>    — Tìm n video TikTok, tải & upload GitHub",
-      ".api tt <tên> <từ khóa> -n <số> — Tương tự (cả 2 format đều dùng được)"
+      ".api tt <tên> <từ khóa> [số]     — Tìm video TikTok (max 50), tải & upload GitHub",
+      ".api tt <tên> @username           — Lấy TOÀN BỘ video từ @user, tải & upload GitHub",
+      ".api tt <tên> <từ khóa> -n <số>  — Tương tự, cả 2 format đều dùng được"
     ].join("\n"),
     cooldowns: 5
   },
@@ -262,8 +263,9 @@ module.exports = {
         "  .api add <tên> <file_json>       — Import từ file JSON khác trong listapi\n" +
         "  .api check                        — Kiểm tra & convert tất cả file lên GitHub\n" +
         "  .api check <tên>                 — Kiểm tra & convert 1 file cụ thể\n" +
-        "  .api tt <tên> <từ khóa> <số>      — Tìm n video TikTok, tải & upload GitHub\n" +
-        "  .api tt <tên> <từ khóa> -n <số>  — Tương tự, cả 2 format đều dùng được"
+        "  .api tt <tên> <từ khóa> [số]     — Tìm video TikTok (max 50), tải & upload GitHub\n" +
+        "  .api tt <tên> @username            — Lấy TOÀN BỘ video từ @user, tải & upload GitHub\n" +
+        "  .api tt <tên> <từ khóa> -n <số>   — Tương tự, cả 2 format đều dùng được"
       );
     }
 
@@ -484,11 +486,16 @@ module.exports = {
       }
 
       const tipName = args[1];
-      if (!tipName) return send("⚠️ Nhập tên file lưu.\nVí dụ: .api tt gai ten 50");
+      if (!tipName) return send(
+        "⚠️ Nhập tên file lưu.\n" +
+        "Ví dụ: .api tt gai ten 50\n" +
+        "       .api tt gai @username"
+      );
 
       // Parse số lượng — hỗ trợ cả 2 dạng:
       //   .api tt gai ten -n 50
       //   .api tt gai ten 50      (số ở cuối, không cần -n)
+      // Giới hạn max 50 cho tìm kiếm text. @username thì lấy full không giới hạn.
       let limit = 8;
       let queryArgs = args.slice(2);
 
@@ -496,22 +503,32 @@ module.exports = {
       const nIdx = queryArgs.findIndex(a => a === "-n");
       if (nIdx !== -1 && queryArgs[nIdx + 1]) {
         const parsed = parseInt(queryArgs[nIdx + 1], 10);
-        if (!isNaN(parsed) && parsed >= 1) limit = Math.min(parsed, 200);
+        if (!isNaN(parsed) && parsed >= 1) limit = Math.min(parsed, 50);
         queryArgs.splice(nIdx, 2);
       } else {
         // Dạng số cuối không có -n
         const last = queryArgs[queryArgs.length - 1];
         const parsed = parseInt(last, 10);
         if (!isNaN(parsed) && parsed >= 1 && String(parsed) === last) {
-          limit = Math.min(parsed, 200);
+          limit = Math.min(parsed, 50);
           queryArgs = queryArgs.slice(0, -1);
         }
       }
 
       const query = queryArgs.join(" ").trim();
-      if (!query) return send("⚠️ Nhập từ khóa tìm kiếm.\nVí dụ: .api tt gai ten 50");
+      if (!query) return send(
+        "⚠️ Nhập từ khóa hoặc @username.\n" +
+        "Ví dụ: .api tt gai ten 50\n" +
+        "       .api tt gai @username"
+      );
 
-      await send(`🔍 Đang tìm TikTok: "${query}" (${limit} video)...\n⏳ Sẽ tải & upload lần lượt lên GitHub.`);
+      const isUserMode = query.startsWith("@");
+
+      if (isUserMode) {
+        await send(`👤 Đang lấy toàn bộ video từ TikTok: ${query}\n⏳ Sẽ tải & upload lần lượt lên GitHub (không giới hạn số lượng)...`);
+      } else {
+        await send(`🔍 Đang tìm TikTok: "${query}" (tối đa ${limit} video)...\n⏳ Sẽ tải & upload lần lượt lên GitHub.`);
+      }
 
       let res;
       try {
@@ -520,14 +537,22 @@ module.exports = {
         return send(`❌ Lỗi: ${err?.message || "Không xác định"}`);
       }
 
-      if (res.total === 0) return send(`😔 Không tìm thấy video TikTok cho "${query}"`);
+      if (res.total === 0) {
+        return send(
+          isUserMode
+            ? `😔 Không tìm thấy video nào từ ${query}`
+            : `😔 Không tìm thấy video TikTok cho "${query}"`
+        );
+      }
 
       const finalList = global.cawr.tt.loadList(tipName);
-      let msg  = `🎬 KẾT QUẢ — TikTok → listapi/${tipName}.json\n`;
+      const source = isUserMode ? `@${query.replace(/^@/, "")}` : `"${query}"`;
+      let msg  = `🎬 KẾT QUẢ — TikTok (${source}) → listapi/${tipName}.json\n`;
       msg += `━━━━━━━━━━━━━━━━\n`;
       msg += `✅ Upload thành công : ${res.success}\n`;
-      msg += `⏭ Bỏ qua (trùng/ảnh): ${res.skipped}\n`;
+      msg += `⏭ Bỏ qua (trùng/lịch sử/ảnh): ${res.skipped}\n`;
       msg += `❌ Thất bại           : ${res.failed}\n`;
+      msg += `📊 Tổng đã xử lý     : ${res.total}\n`;
       msg += `📦 Tổng trong file    : ${finalList.length}`;
       if (res.failed > 0) msg += `\n⚠️ Lý do lỗi: ${[...new Set(res.failReasons)].join(", ")}`;
       return send(msg);

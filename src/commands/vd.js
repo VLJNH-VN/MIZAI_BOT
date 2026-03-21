@@ -103,22 +103,30 @@ function convertToH264(inputPath, outputPath) {
   );
 }
 
-// ── Tạo thumbnail từ video (giây thứ 1, scale 320:-1) ────────────────────────
-function createThumbnail(videoPath, thumbPath) {
+// ── Tạo thumbnail từ video (theo GwenDev pattern) ────────────────────────────
+// Tạo .jpg trước → rename thành .bin → upload như "others" → nhận fileUrl/fileName
+function createThumbnail(videoPath, thumbBinPath) {
+  const tmpJpg = thumbBinPath.replace(/\.bin$/, ".jpg");
   execSync(
-    `ffmpeg -y -i "${videoPath}" -ss 00:00:01 -vframes 1 -vf scale=320:-1 -q:v 5 "${thumbPath}"`,
+    `ffmpeg -y -i "${videoPath}" -ss 00:00:01 -vframes 1 -vf scale=320:-1 -q:v 5 "${tmpJpg}"`,
     { timeout: 30000, stdio: "pipe" }
   );
+  fs.renameSync(tmpJpg, thumbBinPath);
 }
 
 // ── Upload file lên Zalo CDN qua uploadAttachment → trả về URL ───────────────
-// Pattern theo GwenDev: api.uploadAttachment([path]) → { fileUrl, fileName }
+// .bin file → zca-js trả về { fileType:"others", fileUrl, fileName }
+// → thumbnailUrl = fileUrl + "/" + fileName (dùng được cho sendVideo)
 async function uploadAttachmentToZalo(api, filePath, threadId, threadType) {
   try {
     const uploaded = await api.uploadAttachment([filePath], threadId, threadType);
     const file = uploaded?.[0];
-    if (file?.fileUrl && file?.fileName) {
+    if (!file) return null;
+    if (file.fileUrl && file.fileName) {
       return `${file.fileUrl}/${file.fileName}`;
+    }
+    if (file.fileType === "image") {
+      return file.hdUrl || file.normalUrl || null;
     }
   } catch (e) {
     global.logWarn?.(`[vd] uploadAttachment thất bại: ${e.message}`);
@@ -137,7 +145,7 @@ async function sendOneVideo(api, event, srcUrl, caption) {
   const id        = uid();
   const rawPath   = path.join(TEMP_DIR, `vd_raw_${id}.mp4`);
   const h264Path  = path.join(TEMP_DIR, `vd_h264_${id}.mp4`);
-  const thumbPath = path.join(TEMP_DIR, `vd_thumb_${id}.jpg`);
+  const thumbPath = path.join(TEMP_DIR, `vd_thumb_${id}.bin`);
 
   try {
     // Bước 1: Tải về local

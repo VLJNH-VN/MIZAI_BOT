@@ -30,14 +30,15 @@ async function downloadToTmp(url) {
   return tmpPath;
 }
 
-// Upload file lên Zalo CDN qua uploadAttachment → lấy voiceUrl (theo GwenDev)
+// Upload file lên Zalo CDN qua uploadAttachment → lấy URL
+// zca-js trả về: image → normalUrl/hdUrl | video/others → fileUrl/fileName
 async function uploadToZaloAndGetUrl(api, filePath, threadId, type) {
   try {
     const uploaded = await api.uploadAttachment([filePath], threadId, type);
     const file = uploaded?.[0];
-    if (file?.fileUrl && file?.fileName) {
-      return `${file.fileUrl}/${file.fileName}`;
-    }
+    if (!file) return null;
+    if (file.fileType === "image") return file.hdUrl || file.normalUrl || null;
+    if (file.fileUrl && file.fileName) return `${file.fileUrl}/${file.fileName}`;
   } catch (_) {}
   return null;
 }

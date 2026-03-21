@@ -149,23 +149,36 @@ function convertToAac(inputPath, outputPath) {
     );
 }
 
-// ─── Tạo thumbnail từ video (giây thứ 1, scale 320:-1) ──────────────────────────
-function createThumbnail(videoPath, thumbPath) {
+// ─── Tạo thumbnail từ video (theo GwenDev pattern) ──────────────────────────────
+// GwenDev trick: tạo .jpg trước → rename thành .bin → upload như "others" file
+//   → zca-js trả về { fileUrl, fileName } thay vì { normalUrl, hdUrl }
+//   → dùng fileUrl/fileName làm thumbnailUrl trong sendVideo
+function createThumbnail(videoPath, thumbBinPath) {
+    const tmpJpg = thumbBinPath.replace(/\.bin$/, ".jpg");
     execSync(
-        `ffmpeg -y -i "${videoPath}" -ss 00:00:01 -vframes 1 -vf scale=320:-1 -q:v 5 "${thumbPath}"`,
+        `ffmpeg -y -i "${videoPath}" -ss 00:00:01 -vframes 1 -vf scale=320:-1 -q:v 5 "${tmpJpg}"`,
         { timeout: 30000, stdio: "pipe" }
     );
+    fs.renameSync(tmpJpg, thumbBinPath);
 }
 
 // ─── Upload file lên Zalo CDN qua uploadAttachment → trả về URL ─────────────────
-// Pattern theo GwenDev: api.uploadAttachment([path]) → { fileUrl, fileName }
-//   → thumbnailZaloUrl = fileUrl + "/" + fileName
+// zca-js trả về 3 kiểu response tùy loại file:
+//   - image (jpg/png/webp): { fileType:"image", normalUrl, hdUrl }
+//   - video/others (.bin/.aac etc.): { fileType:"video"|"others", fileUrl, fileName }
+// Ta dùng .bin để nhận fileUrl/fileName (URL dùng được cho sendVideo thumbnailUrl)
 async function uploadAttachmentToZalo(api, filePath, threadId, threadType) {
     try {
         const uploaded = await api.uploadAttachment([filePath], threadId, threadType);
         const file = uploaded?.[0];
-        if (file?.fileUrl && file?.fileName) {
+        if (!file) return null;
+        // Video / file response (.bin/.aac): fileUrl + "/" + fileName
+        if (file.fileUrl && file.fileName) {
             return `${file.fileUrl}/${file.fileName}`;
+        }
+        // Image response fallback: hdUrl / normalUrl
+        if (file.fileType === "image") {
+            return file.hdUrl || file.normalUrl || null;
         }
     } catch (e) {
         logWarn(`[AutoDown] uploadAttachment thất bại: ${e.message}`);
@@ -213,7 +226,7 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
     const uid      = uniqueId();
     const rawPath  = path.join(tempDir, `ad_raw_${uid}.mp4`);
     const h264Path = path.join(tempDir, `ad_h264_${uid}.mp4`);
-    const thumbPath = path.join(tempDir, `ad_thumb_${uid}.jpg`);
+    const thumbPath = path.join(tempDir, `ad_thumb_${uid}.bin`);
     try {
         await downloadFile(videoUrl, rawPath);
 
@@ -575,13 +588,16 @@ async function handleOther(api, url, threadId, threadType) {
         if (d.download_url) {
             try {
                 // Upload thumbnail lên Zalo CDN (theo GwenDev pattern)
+                // Lưu dưới dạng .bin để nhận fileUrl/fileName từ uploadAttachment
                 let thumbnailZaloUrl = "";
                 if (thumbnail) {
                     try {
-                        const tpOther = path.join(tempDir, `ad_otherthumb_${uniqueId()}.jpg`);
-                        await downloadFile(thumbnail, tpOther);
-                        thumbnailZaloUrl = await uploadAttachmentToZalo(api, tpOther, threadId, threadType) || "";
-                        try { fs.unlinkSync(tpOther); } catch {}
+                        const tpOtherJpg = path.join(tempDir, `ad_otherthumb_${uniqueId()}.jpg`);
+                        const tpOtherBin = tpOtherJpg.replace(/\.jpg$/, ".bin");
+                        await downloadFile(thumbnail, tpOtherJpg);
+                        fs.renameSync(tpOtherJpg, tpOtherBin);
+                        thumbnailZaloUrl = await uploadAttachmentToZalo(api, tpOtherBin, threadId, threadType) || "";
+                        try { fs.unlinkSync(tpOtherBin); } catch {}
                     } catch {}
                 }
                 await api.sendVideo({

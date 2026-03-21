@@ -307,27 +307,30 @@ module.exports = {
         const _cid = _raw?.cliMsgId ?? _raw?.clientMsgId ?? _mid ?? null;
         if (_mid || _cid) await api.addReaction(Reactions.WOW, { type: event.type, threadId: event.threadId, data: { msgId: _mid, cliMsgId: _cid } });
       } catch (_) {}
+      let cardPath;
       try {
-        const mediaRes = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(mixUrl)}`, { timeout: 120000 });
-        const audioUrl = mediaRes.data?.download_audio_url || mediaRes.data?.download_url;
-        if (!audioUrl) return send(`❌ Không lấy được link tải.\n🔗 Nghe trực tiếp: ${mixUrl}`);
-        let cardPath;
-        try {
-          cardPath = await drawNowPlayingCard({
-            platform: "mix",
-            title:    r.name,
-            artist:   r.owner.displayName,
-            duration: formatDuration(r.audioLength),
-          });
-        } catch (_) {}
-        if (cardPath) {
-          await api.sendMessage({ msg: "", attachments: [cardPath] }, event.threadId, event.type);
-          try { fs.unlinkSync(cardPath); } catch (_) {}
-        } else {
-          await send(`🎵 ${r.name}\n👤 ${r.owner.displayName}\n⏳ ${formatDuration(r.audioLength)}`);
-        }
+        cardPath = await drawNowPlayingCard({
+          platform: "mix",
+          title:    r.name,
+          artist:   r.owner.displayName,
+          duration: formatDuration(r.audioLength),
+        });
+      } catch (_) {}
+      let audioUrl = null;
+      try {
+        const mediaRes = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(mixUrl)}`, { timeout: 20000 });
+        audioUrl = mediaRes.data?.download_audio_url || mediaRes.data?.download_url || null;
+      } catch (_) {}
+      const fallbackText = `🎵 ${r.name}\n👤 ${r.owner.displayName}\n⏳ ${formatDuration(r.audioLength)}\n🔗 ${mixUrl}`;
+      if (cardPath) {
+        await api.sendMessage({ msg: audioUrl ? "" : `🔗 ${mixUrl}`, attachments: [cardPath] }, event.threadId, event.type);
+        try { fs.unlinkSync(cardPath); } catch (_) {}
+      } else {
+        await send(fallbackText);
+      }
+      if (audioUrl) {
         await api.sendVoice({ voiceUrl: audioUrl }, event.threadId, event.type);
-      } catch (err) { return send(`❌ Lỗi tải nhạc: ${err.message}\n🔗 Nghe trực tiếp: ${mixUrl}`); }
+      }
     }
   },
 };

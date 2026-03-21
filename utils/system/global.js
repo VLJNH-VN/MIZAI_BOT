@@ -371,25 +371,9 @@ function setApi(apiInstance) {
       }
     );
 
-    const browserUrl = uploadRes.data?.browser_download_url;
-    if (!browserUrl) return null;
-
-    // browser_download_url là redirect URL (github.com/releases/download/...)
-    // Zalo không follow redirect → fileSize=0 → bị reject
-    // Cần resolve redirect để lấy URL CDN thực (objects.githubusercontent.com)
-    try {
-      const redirectRes = await axios.head(browserUrl, {
-        maxRedirects: 10,
-        validateStatus: () => true,
-      });
-      const finalUrl = redirectRes.request?.res?.responseUrl
-        || redirectRes.request?.responseURL
-        || redirectRes.config?.url
-        || browserUrl;
-      return finalUrl;
-    } catch (_) {
-      return browserUrl;
-    }
+    // Trả về browser_download_url (stable URL, Zalo server tự follow redirect khi play)
+    // Không resolve redirect vì URL đã resolve có thể là signed/time-limited URL
+    return uploadRes.data?.browser_download_url || null;
   };
 
   global.githubDownload = async (repoFilePath, localFilePath, options = {}) => {

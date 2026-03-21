@@ -146,6 +146,7 @@ async function sendOneVideo(api, event, ghUrl, caption) {
             width:        meta.width,
             height:       meta.height,
             duration:     meta.duration * 1000,
+            fileSize:     fileSize,   // bypass HEAD request (redirect URL → 302 → fileSize=0)
             ttl:          500_000,
           }, event.threadId, event.type);
           global.logInfo?.("[vd] sendVideo (GitHub Releases) thành công.");

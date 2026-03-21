@@ -230,10 +230,18 @@ async function getUserVideos(username, limit = "all") {
 async function fownGetRawUrl(tiktokUrl) {
   try {
     const res = await axios.get(`${FOWN_API}/api/download`, {
-      params:  { url: tiktokUrl },
-      timeout: 40000,
+      params:       { url: tiktokUrl },
+      timeout:      60000,
+      responseType: "arraybuffer",
+      validateStatus: () => true,
     });
-    return res.data?.raw_url || null;
+    const ct = (res.headers["content-type"] || "").toLowerCase();
+    if (ct.includes("application/json")) {
+      const json = JSON.parse(Buffer.from(res.data).toString("utf-8"));
+      return json?.raw_url || null;
+    }
+    // Fown đang stream video (GitHub chưa cấu hình/bị lỗi) → trả null để fallback
+    return null;
   } catch (e) {
     global.logWarn?.(`[cawr.tt] fownGetRawUrl lỗi (${tiktokUrl.slice(-30)}): ${e.message}`);
     return null;
@@ -343,12 +351,19 @@ async function bulkAdd(tipName, query, limit = 8, onProgress = null) {
       let finalUrl = null;
 
       if (item._useFown) {
-        // Lấy raw_url từ fown (GitHub CDN) — không cần tải về local
-       // global.logInfo?.(`[cawr.tt] Fown download ${i + 1}/${results.length}: ${item.id}`);
+        // Ưu tiên: lấy raw_url từ fown (GitHub CDN) — không cần tải về local
         finalUrl = await fownGetRawUrl(item.tiktokUrl);
+
+        if (!finalUrl) {
+          // Fallback: fown đang stream trực tiếp → tự tải về và upload GitHub
+          global.logWarn?.(`[cawr.tt] Fown stream fallback ${i + 1}/${results.length}: ${item.id}`);
+          const fownStreamUrl = `${FOWN_API}/api/download?url=${encodeURIComponent(item.tiktokUrl)}`;
+          finalUrl = await uploadVideo(fownStreamUrl, tipName, uid);
+        }
+
         if (!finalUrl) {
           failed++;
-          failReasons.push(`Fown không trả về URL: ${item.id}`);
+          failReasons.push(`Không tải được video: ${item.id}`);
           onProgress?.(i + 1, results.length, "fail");
           continue;
         }

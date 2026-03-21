@@ -86,18 +86,42 @@ module.exports = {
       return send(`❌ Không tìm thấy lệnh "${key}".${hint}`);
     }
 
-    // ── menu all ──────────────────────────────────────────────────────────────
+    // ── menu all (phân trang 20 lệnh/trang) ──────────────────────────────────
     if (sub === "all") {
       const seen = new Set();
-      let txt = `╭─────────────⭓\n`, count = 0;
+      const allCmds = [];
       for (const cmd of cmds.values()) {
         const name = cmd?.config?.name;
         if (!name || seen.has(name)) continue;
         seen.add(name);
-        txt += `│ ${++count}. ${name} | ${cmd.config.description || ""}\n`;
+        allCmds.push({ name, desc: cmd.config.description || "" });
       }
+
+      const PAGE_SIZE = 20;
+      const totalPages = Math.ceil(allCmds.length / PAGE_SIZE);
+      const page = 1;
+      const slice = allCmds.slice(0, PAGE_SIZE);
+
+      let txt = `╭─────────────⭓\n│ 📋 Tất cả lệnh — Trang ${page}/${totalPages}\n├─────⭔\n`;
+      slice.forEach((c, i) => { txt += `│ ${i + 1}. ${c.name} | ${c.desc}\n`; });
+      txt += `├────────⭔\n│ 📝 Tổng: ${allCmds.length} lệnh\n`;
+      if (totalPages > 1) txt += `│ ⏰ Reply số trang (2–${totalPages}) để xem tiếp\n`;
       txt += `╰─────────────⭓`;
-      return send(txt);
+
+      const sent = await send(txt);
+      const msgId =
+        sent?.msgId ??
+        sent?.message?.msgId ??
+        (Array.isArray(sent?.attachment) ? sent.attachment[0]?.msgId : null);
+
+      if (msgId && totalPages > 1) {
+        registerReply({
+          messageId:   String(msgId),
+          commandName: "menu",
+          payload:     { case: "allPage", allCmds, totalPages, prefix: p },
+        });
+      }
+      return;
     }
 
     // ── menu (nhóm lệnh → reply để xem chi tiết) ─────────────────────────────
@@ -164,6 +188,40 @@ module.exports = {
           messageId:   String(msgId),
           commandName: "menu",
           payload:     { case: "infoCmds", data: item.commandsName, prefix: p },
+        });
+      }
+      return;
+    }
+
+    // ── menu all → chuyển trang ───────────────────────────────────────────────
+    if ($case === "allPage") {
+      const { allCmds = [], totalPages = 1 } = replyData;
+      const page = num;
+      if (!page || page < 1 || page > totalPages) {
+        return send(`⚠️ Trang không hợp lệ. Nhập số từ 1 đến ${totalPages}.`);
+      }
+      const PAGE_SIZE = 20;
+      const slice = allCmds.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+      let txt = `╭─────────────⭓\n│ 📋 Tất cả lệnh — Trang ${page}/${totalPages}\n├─────⭔\n`;
+      slice.forEach((c, i) => {
+        txt += `│ ${(page - 1) * PAGE_SIZE + i + 1}. ${c.name} | ${c.desc}\n`;
+      });
+      txt += `├────────⭔\n│ 📝 Tổng: ${allCmds.length} lệnh\n`;
+      if (page < totalPages) txt += `│ ⏰ Reply số trang (${page + 1}–${totalPages}) để xem tiếp\n`;
+      txt += `╰─────────────⭓`;
+
+      const sent = await send(txt);
+      const msgId =
+        sent?.msgId ??
+        sent?.message?.msgId ??
+        (Array.isArray(sent?.attachment) ? sent.attachment[0]?.msgId : null);
+
+      if (msgId && page < totalPages && reg) {
+        reg({
+          messageId:   String(msgId),
+          commandName: "menu",
+          payload:     { case: "allPage", allCmds, totalPages, prefix: p },
         });
       }
       return;

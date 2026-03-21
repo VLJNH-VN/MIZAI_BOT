@@ -356,7 +356,6 @@ async function bulkAdd(tipName, query, limit = 8, onProgress = null) {
 
         if (!finalUrl) {
           // Fallback: fown đang stream trực tiếp → tự tải về và upload GitHub
-          global.logWarn?.(`[cawr.tt] Fown stream fallback ${i + 1}/${results.length}: ${item.id}`);
           const fownStreamUrl = `${FOWN_API}/api/download?url=${encodeURIComponent(item.tiktokUrl)}`;
           finalUrl = await uploadVideo(fownStreamUrl, tipName, uid);
         }

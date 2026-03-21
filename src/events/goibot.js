@@ -831,6 +831,14 @@ async function handleGoibot({ api, event }) {
     const imgUrlQuote   = raw.quote ? extractImageUrl(raw.quote) : null;
     const imgUrlToUse   = imgUrlCurrent || imgUrlQuote;
 
+    // DEBUG: log cấu trúc quote để kiểm tra
+    if (raw.quote) {
+      global.logInfo?.(`[goibot/debug] cliMsgType=${raw.quote.cliMsgType} attach_type=${typeof raw.quote.attach}`);
+      global.logInfo?.(`[goibot/debug] attach: ${String(raw.quote.attach).slice(0, 400)}`);
+      global.logInfo?.(`[goibot/debug] fromD: ${String(raw.quote.fromD).slice(0, 400)}`);
+      global.logInfo?.(`[goibot/debug] imgUrlQuote=${imgUrlQuote}`);
+    }
+
     if (imgUrlToUse) {
       try {
         const imgData = await fetchImageAsBase64(imgUrlToUse);

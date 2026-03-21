@@ -598,7 +598,7 @@ async function fetchImageAsBase64(url) {
 function extractImageUrl(raw) {
   if (!raw) return null;
 
-  const ZALO_CDN = /\b(zdn\.vn|dlfl\.vn|zmp3\.vn|zadn\.vn|zalo\.me|zaloapp\.me|cover\.zdn|s\d+-ava)/i;
+  const ZALO_CDN = /\b(zdn\.vn|dlfl\.vn|zmp3\.vn|zadn\.vn|zalo\.me|cover\.zdn|s\d+-ava)/i;
   const IMG_EXT  = /\.(jpg|jpeg|png|gif|webp)/i;
 
   function isImageUrl(url) {
@@ -608,26 +608,68 @@ function extractImageUrl(raw) {
     return IMG_EXT.test(bare) || ZALO_CDN.test(url);
   }
 
-  const c = raw.content;
-  if (c && typeof c === "object") {
-    // hdUrl / normalUrl là trường ảnh chính của Zalo — ưu tiên cao nhất
-    const hdUrl     = c.hdUrl     || c.normalUrl  || c.href || "";
-    const thumbUrl  = c.thumb     || c.thumbUrl   || "";
-    const genericUrl = c.url || c.fileUrl || c.downloadUrl || c.src || "";
-
-    if (isImageUrl(hdUrl))     return hdUrl;
-    if (isImageUrl(genericUrl)) return genericUrl;
-    // Nếu có width/height (ảnh Zalo) dùng thumb làm fallback
-    if ((c.width || c.height) && isImageUrl(thumbUrl)) return thumbUrl;
-    if ((c.width || c.height) && thumbUrl) return thumbUrl;
+  // Trích URL từ một object attachment (hdUrl/normalUrl/url...)
+  function urlFromObj(a) {
+    if (!a || typeof a !== "object") return null;
+    const url = a.hdUrl || a.normalUrl || a.url || a.href || a.fileUrl || a.downloadUrl || a.src || "";
+    if (isImageUrl(url)) return url;
+    // Fallback: có width/height → là ảnh, dùng thumb
+    const thumb = a.thumb || a.thumbUrl || "";
+    if ((a.width || a.height) && thumb) return thumb;
+    return null;
   }
 
-  const attArr = Array.isArray(raw.attach) ? raw.attach : [];
-  for (const a of attArr) {
-    const url = a.hdUrl || a.normalUrl || a.url || a.href || a.fileUrl || a.src || "";
-    if (isImageUrl(url)) return url;
-    // Fallback: nếu attachment có thumb hoặc kích thước
-    if ((a.width || a.height) && (a.thumb || a.thumbUrl)) return a.thumb || a.thumbUrl;
+  // ── 1. Tin nhắn thường: có raw.content (object) ─────────────────────────────
+  const c = raw.content;
+  if (c && typeof c === "object") {
+    const found = urlFromObj(c);
+    if (found) return found;
+  }
+
+  // ── 2. Quote của Zalo: attach là string JSON hoặc object hoặc array ─────────
+  // Cấu trúc quote: { ownerId, cliMsgId, msg, attach, cliMsgType, ... }
+  const rawAttach = raw.attach;
+  if (rawAttach) {
+    // a) attach là string JSON → parse rồi xử lý
+    if (typeof rawAttach === "string") {
+      try {
+        const parsed = JSON.parse(rawAttach);
+        // Array of attachments
+        if (Array.isArray(parsed)) {
+          for (const a of parsed) {
+            const u = urlFromObj(a);
+            if (u) return u;
+          }
+        } else {
+          const u = urlFromObj(parsed);
+          if (u) return u;
+        }
+      } catch { /* không phải JSON, bỏ qua */ }
+
+      // Thử extract URL trực tiếp từ chuỗi
+      const urlMatch = rawAttach.match(/https?:\/\/[^\s"']+/);
+      if (urlMatch && isImageUrl(urlMatch[0])) return urlMatch[0];
+    }
+
+    // b) attach là array
+    if (Array.isArray(rawAttach)) {
+      for (const a of rawAttach) {
+        const u = urlFromObj(a);
+        if (u) return u;
+      }
+    }
+
+    // c) attach là object đơn lẻ
+    if (typeof rawAttach === "object" && !Array.isArray(rawAttach)) {
+      const u = urlFromObj(rawAttach);
+      if (u) return u;
+    }
+  }
+
+  // ── 3. raw.msg là string có chứa URL ảnh (fallback hiếm gặp) ────────────────
+  if (typeof raw.msg === "string") {
+    const urlMatch = raw.msg.match(/https?:\/\/[^\s"']+/);
+    if (urlMatch && isImageUrl(urlMatch[0])) return urlMatch[0];
   }
 
   return null;

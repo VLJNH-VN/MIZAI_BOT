@@ -20,6 +20,7 @@ const fs             = require("fs");
 const path           = require("path");
 const axios          = require("axios");
 const { execSync }   = require("child_process");
+const { uploadThumbnail } = require("../../utils/zaloMedia");
 
 const LISTAPI_DIR = path.join(process.cwd(), "includes", "listapi");
 const TEMP_DIR    = path.join(process.cwd(), "includes", "cache");
@@ -103,49 +104,12 @@ function convertToH264(inputPath, outputPath) {
   );
 }
 
-// ── Tạo thumbnail từ video (theo GwenDev pattern) ────────────────────────────
-// Tạo .jpg trước → rename thành .bin → upload như "others" → nhận fileUrl/fileName
-function createThumbnail(videoPath, thumbBinPath) {
-  const tmpJpg = thumbBinPath.replace(/\.bin$/, ".jpg");
-  execSync(
-    `ffmpeg -y -i "${videoPath}" -ss 00:00:01 -vframes 1 -vf scale=320:-1 -q:v 5 "${tmpJpg}"`,
-    { timeout: 30000, stdio: "pipe" }
-  );
-  fs.renameSync(tmpJpg, thumbBinPath);
-}
-
-// ── Upload file lên Zalo CDN qua uploadAttachment → trả về URL ───────────────
-// .bin file → zca-js trả về { fileType:"others", fileUrl, fileName }
-// → thumbnailUrl = fileUrl + "/" + fileName (dùng được cho sendVideo)
-async function uploadAttachmentToZalo(api, filePath, threadId, threadType) {
-  try {
-    const uploaded = await api.uploadAttachment([filePath], threadId, threadType);
-    const file = uploaded?.[0];
-    if (!file) return null;
-    if (file.fileUrl && file.fileName) {
-      return `${file.fileUrl}/${file.fileName}`;
-    }
-    if (file.fileType === "image") {
-      return file.hdUrl || file.normalUrl || null;
-    }
-  } catch (e) {
-    global.logWarn?.(`[vd] uploadAttachment thất bại: ${e.message}`);
-  }
-  return null;
-}
-
 // ── Gửi 1 video: download → H264 → thumbnail → uploadAttachment → sendVideo ──
-// Flow (theo pattern GwenDev):
-//   1. Download srcUrl về local
-//   2. Convert H264 (Zalo yêu cầu codec này)
-//   3. Tạo thumbnail → uploadAttachment(thumb) → thumbnailZaloUrl
-//   4. githubReleaseUpload → sendVideo(releaseUrl, thumbnailZaloUrl)
-//   5. Fallback: sendMessage + attachments
+// Dùng utils/zaloMedia.js cho thumbnail upload + sendVideo
 async function sendOneVideo(api, event, srcUrl, caption) {
-  const id        = uid();
-  const rawPath   = path.join(TEMP_DIR, `vd_raw_${id}.mp4`);
-  const h264Path  = path.join(TEMP_DIR, `vd_h264_${id}.mp4`);
-  const thumbPath = path.join(TEMP_DIR, `vd_thumb_${id}.bin`);
+  const id       = uid();
+  const rawPath  = path.join(TEMP_DIR, `vd_raw_${id}.mp4`);
+  const h264Path = path.join(TEMP_DIR, `vd_h264_${id}.mp4`);
 
   try {
     // Bước 1: Tải về local
@@ -165,17 +129,13 @@ async function sendOneVideo(api, event, srcUrl, caption) {
     const fileSize = fs.statSync(uploadPath).size;
     global.logInfo?.(`[vd] size=${(fileSize/1024).toFixed(0)}KB | w=${meta.width} h=${meta.height} dur=${meta.duration}s`);
 
-    // Bước 3: Tạo thumbnail → uploadAttachment → lấy Zalo CDN URL (theo GwenDev)
-    let thumbnailZaloUrl = "";
+    // Bước 3: Tạo thumbnail → upload Zalo CDN (dùng utils/zaloMedia)
+    let thumbnailUrl = "";
     try {
-      createThumbnail(uploadPath, thumbPath);
-      if (fs.existsSync(thumbPath) && fs.statSync(thumbPath).size > 0) {
-        global.logInfo?.(`[vd] Upload thumbnail: ${path.basename(thumbPath)}`);
-        thumbnailZaloUrl = await uploadAttachmentToZalo(api, thumbPath, event.threadId, event.type) || "";
-        global.logInfo?.(`[vd] Thumbnail Zalo URL: ${thumbnailZaloUrl?.slice(0, 60)}`);
-      }
+      thumbnailUrl = await uploadThumbnail(api, uploadPath, event.threadId, event.type) || "";
+      global.logInfo?.(`[vd] Thumbnail Zalo URL: ${thumbnailUrl?.slice(0, 60)}`);
     } catch (et) {
-      global.logWarn?.(`[vd] Tạo/upload thumbnail lỗi: ${et.message}`);
+      global.logWarn?.(`[vd] Thumbnail lỗi: ${et.message}`);
     }
 
     // Bước 4: GitHub Releases upload → sendVideo
@@ -183,14 +143,13 @@ async function sendOneVideo(api, event, srcUrl, caption) {
 
     if (typeof global.githubReleaseUpload === "function" && fileSize < 50 * 1024 * 1024) {
       try {
-        const filename    = `vd_${id}.mp4`;
-        const releaseUrl  = await global.githubReleaseUpload(uploadPath, filename);
+        const releaseUrl = await global.githubReleaseUpload(uploadPath, `vd_${id}.mp4`);
         global.logInfo?.(`[vd] GitHub Release upload OK: ${releaseUrl?.slice(0, 80)}`);
 
         if (releaseUrl) {
           await api.sendVideo({
             videoUrl:     releaseUrl,
-            thumbnailUrl: thumbnailZaloUrl || "",
+            thumbnailUrl,
             msg:          caption || "",
             width:        meta.width    || 576,
             height:       meta.height   || 1024,
@@ -215,7 +174,7 @@ async function sendOneVideo(api, event, srcUrl, caption) {
     }
 
   } finally {
-    cleanup(rawPath, h264Path, thumbPath);
+    cleanup(rawPath, h264Path);
   }
 }
 

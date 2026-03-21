@@ -64,7 +64,8 @@ MIZAI_BOT/
 ├── utils/
 │   ├── ai/goibot.js            # Logic AI (Groq, Gemini)
 │   ├── bot/                    # botManager, messageUtils
-│   └── system/                 # client, global, loader, logger, maintenance, keepAlive, githubBackup
+│   ├── system/                 # client, global, loader, logger, maintenance, keepAlive, githubBackup
+│   └── zaloMedia.js            # Gửi video/voice Zalo chuẩn (GwenDev pattern) — xem mục bên dưới
 │
 └── scripts/                    # Script tiện ích (chạy bằng npm run ...)
     ├── new-cmd.js              # Tạo lệnh mới
@@ -124,6 +125,64 @@ npm run backup                      # Backup dữ liệu lên GitHub
 | fun | 5 | Giải trí, tương tác |
 | ai | 3 | Trí tuệ nhân tạo |
 | utility | 8 | Tiện ích hệ thống |
+
+## utils/zaloMedia.js — Gửi media Zalo chuẩn (GwenDev pattern)
+
+Module tái sử dụng cho mọi dự án `zca-js`. Copy file vào `utils/` và import là dùng được ngay.
+
+### Vấn đề nền tảng
+
+`api.sendVideo(thumbnailUrl)` yêu cầu URL có thể fetch được bởi Zalo server. URL bên ngoài (TikTok CDN, YouTube thumbnail...) thường bị block hoặc hết hạn. Giải pháp: upload thumbnail lên Zalo CDN trước → URL vĩnh cửu.
+
+### Trick .bin (học từ GwenDev)
+
+`zca-js` xử lý `uploadAttachment` theo extension file:
+
+| Extension | Response | Dùng cho |
+|---|---|---|
+| `.jpg/.png` | `{ hdUrl, normalUrl }` | Chỉ gửi ảnh |
+| `.bin` | `{ fileUrl, fileName }` | thumbnailUrl = `fileUrl/fileName` |
+| `.aac` | `{ fileUrl, fileName }` | voiceUrl = `fileUrl/fileName` |
+
+**Trick**: Tạo thumbnail bằng ffmpeg (output `.jpg`) → `rename` thành `.bin` → upload → nhận `fileUrl/fileName` → dùng làm `thumbnailUrl` trong `sendVideo`.
+
+### API
+
+```js
+const { zaloSendVideo, zaloSendVoice, uploadThumbnail, uploadAttachmentToZalo } =
+  require("../../utils/zaloMedia");
+
+// Gửi video (tự tạo thumbnail, tự upload CDN, tự fallback)
+await zaloSendVideo(api, {
+  videoUrl:  "https://...",      // URL vĩnh cửu (GitHub Releases, CDN)
+  videoPath: "/tmp/video.mp4",   // File local để tạo thumbnail (optional)
+  msg:       "Caption",
+  width:     720, height: 1280,
+  duration:  30,                 // giây
+}, threadId, threadType);
+
+// Gửi voice từ file local hoặc URL
+await zaloSendVoice(api, "/tmp/audio.aac", threadId, threadType);
+await zaloSendVoice(api, "https://.../audio.mp3", threadId, threadType);
+
+// Chỉ upload thumbnail → lấy URL (dùng khi tự gọi sendVideo)
+const thumbUrl = await uploadThumbnail(api, "/tmp/video.mp4", threadId, threadType);
+
+// Upload bất kỳ file → lấy URL
+const url = await uploadAttachmentToZalo(api, "/tmp/file.bin", threadId, threadType);
+```
+
+### Flow tổng quát
+
+```
+VIDEO:
+  Download URL → Convert H264 → uploadThumbnail(.jpg→.bin) → GitHub Upload
+  → api.sendVideo(ghUrl, thumbZaloUrl) || fallback sendMessage attachment
+
+AUDIO:
+  Download URL → Convert AAC → uploadAttachment(.aac) → voiceUrl
+  → api.sendVoice(voiceUrl) || fallback GitHub → fallback attachment
+```
 
 ## Lưu ý bảo mật
 

@@ -103,17 +103,41 @@ function convertToH264(inputPath, outputPath) {
   );
 }
 
-// ── Gửi 1 video: download → H264 → GitHub Releases → sendVideo ───────────────
-// Flow:
+// ── Tạo thumbnail từ video (giây thứ 1, scale 320:-1) ────────────────────────
+function createThumbnail(videoPath, thumbPath) {
+  execSync(
+    `ffmpeg -y -i "${videoPath}" -ss 00:00:01 -vframes 1 -vf scale=320:-1 -q:v 5 "${thumbPath}"`,
+    { timeout: 30000, stdio: "pipe" }
+  );
+}
+
+// ── Upload file lên Zalo CDN qua uploadAttachment → trả về URL ───────────────
+// Pattern theo GwenDev: api.uploadAttachment([path]) → { fileUrl, fileName }
+async function uploadAttachmentToZalo(api, filePath, threadId, threadType) {
+  try {
+    const uploaded = await api.uploadAttachment([filePath], threadId, threadType);
+    const file = uploaded?.[0];
+    if (file?.fileUrl && file?.fileName) {
+      return `${file.fileUrl}/${file.fileName}`;
+    }
+  } catch (e) {
+    global.logWarn?.(`[vd] uploadAttachment thất bại: ${e.message}`);
+  }
+  return null;
+}
+
+// ── Gửi 1 video: download → H264 → thumbnail → uploadAttachment → sendVideo ──
+// Flow (theo pattern GwenDev):
 //   1. Download srcUrl về local
 //   2. Convert H264 (Zalo yêu cầu codec này)
-//   3. githubReleaseUpload → browser_download_url (objects.githubusercontent.com)
-//      → sendVideo(releaseUrl): Zalo server follow redirect, đọc được Content-Length
-//   4. Fallback: sendMessage + attachments (gửi như file nếu sendVideo lỗi)
+//   3. Tạo thumbnail → uploadAttachment(thumb) → thumbnailZaloUrl
+//   4. githubReleaseUpload → sendVideo(releaseUrl, thumbnailZaloUrl)
+//   5. Fallback: sendMessage + attachments
 async function sendOneVideo(api, event, srcUrl, caption) {
-  const id       = uid();
-  const rawPath  = path.join(TEMP_DIR, `vd_raw_${id}.mp4`);
-  const h264Path = path.join(TEMP_DIR, `vd_h264_${id}.mp4`);
+  const id        = uid();
+  const rawPath   = path.join(TEMP_DIR, `vd_raw_${id}.mp4`);
+  const h264Path  = path.join(TEMP_DIR, `vd_h264_${id}.mp4`);
+  const thumbPath = path.join(TEMP_DIR, `vd_thumb_${id}.jpg`);
 
   try {
     // Bước 1: Tải về local
@@ -133,10 +157,20 @@ async function sendOneVideo(api, event, srcUrl, caption) {
     const fileSize = fs.statSync(uploadPath).size;
     global.logInfo?.(`[vd] size=${(fileSize/1024).toFixed(0)}KB | w=${meta.width} h=${meta.height} dur=${meta.duration}s`);
 
-    // Bước 3: GitHub Releases upload → sendVideo (objects.githubusercontent.com)
-    // Dùng githubReleaseUpload thay vì githubUpload vì:
-    //   - raw.githubusercontent.com: Zalo server reject (không có Content-Length)
-    //   - objects.githubusercontent.com (Releases): Zalo server follow redirect, stream được
+    // Bước 3: Tạo thumbnail → uploadAttachment → lấy Zalo CDN URL (theo GwenDev)
+    let thumbnailZaloUrl = "";
+    try {
+      createThumbnail(uploadPath, thumbPath);
+      if (fs.existsSync(thumbPath) && fs.statSync(thumbPath).size > 0) {
+        global.logInfo?.(`[vd] Upload thumbnail: ${path.basename(thumbPath)}`);
+        thumbnailZaloUrl = await uploadAttachmentToZalo(api, thumbPath, event.threadId, event.type) || "";
+        global.logInfo?.(`[vd] Thumbnail Zalo URL: ${thumbnailZaloUrl?.slice(0, 60)}`);
+      }
+    } catch (et) {
+      global.logWarn?.(`[vd] Tạo/upload thumbnail lỗi: ${et.message}`);
+    }
+
+    // Bước 4: GitHub Releases upload → sendVideo
     let sentAsVideo = false;
 
     if (typeof global.githubReleaseUpload === "function" && fileSize < 50 * 1024 * 1024) {
@@ -148,7 +182,7 @@ async function sendOneVideo(api, event, srcUrl, caption) {
         if (releaseUrl) {
           await api.sendVideo({
             videoUrl:     releaseUrl,
-            thumbnailUrl: "",
+            thumbnailUrl: thumbnailZaloUrl || "",
             msg:          caption || "",
             width:        meta.width    || 576,
             height:       meta.height   || 1024,
@@ -163,7 +197,7 @@ async function sendOneVideo(api, event, srcUrl, caption) {
       }
     }
 
-    // Bước 4: Fallback → sendMessage + attachments (file local)
+    // Bước 5: Fallback → sendMessage + attachments (file local)
     if (!sentAsVideo) {
       await api.sendMessage(
         { msg: caption || "", attachments: [uploadPath], ttl: 500_000 },
@@ -173,7 +207,7 @@ async function sendOneVideo(api, event, srcUrl, caption) {
     }
 
   } finally {
-    cleanup(rawPath, h264Path);
+    cleanup(rawPath, h264Path, thumbPath);
   }
 }
 

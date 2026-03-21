@@ -30,18 +30,64 @@ async function downloadToTmp(url) {
   return tmpPath;
 }
 
-async function sendAudioSafe(api, audioUrl, threadId, type, notifyFn) {
+// Upload file lên Zalo CDN qua uploadAttachment → lấy voiceUrl (theo GwenDev)
+async function uploadToZaloAndGetUrl(api, filePath, threadId, type) {
   try {
-    await api.sendVoice({ voiceUrl: audioUrl }, threadId, type);
-  } catch {
-    let tmpPath;
-    try {
-      if (notifyFn) await notifyFn("⏳ File dài, đang tải về để gửi...").catch(() => {});
-      tmpPath = await downloadToTmp(audioUrl);
-      await api.sendMessage({ attachments: [tmpPath] }, threadId, type);
-    } finally {
-      if (tmpPath) try { fs.unlinkSync(tmpPath); } catch (_) {}
+    const uploaded = await api.uploadAttachment([filePath], threadId, type);
+    const file = uploaded?.[0];
+    if (file?.fileUrl && file?.fileName) {
+      return `${file.fileUrl}/${file.fileName}`;
     }
+  } catch (_) {}
+  return null;
+}
+
+// Gửi voice theo pattern GwenDev:
+//   1. Download → convert AAC → uploadAttachment → sendVoice(voiceUrl từ Zalo CDN)
+//   2. Fallback: sendVoice(direct URL)
+//   3. Fallback: sendMessage attachment
+async function sendAudioSafe(api, audioUrl, threadId, type, notifyFn) {
+  let tmpPath;
+  let aacPath;
+  try {
+    if (notifyFn) await notifyFn("⏳ Đang xử lý âm thanh...").catch(() => {});
+    tmpPath = await downloadToTmp(audioUrl);
+
+    // Convert sang AAC (nếu chưa là AAC)
+    const convPath = tmpPath.replace(/\.[^.]+$/, "") + "_conv.aac";
+    try {
+      const { execSync } = require("child_process");
+      execSync(`ffmpeg -y -i "${tmpPath}" -vn -c:a aac -b:a 128k "${convPath}"`,
+        { timeout: 120000, stdio: "pipe" });
+      aacPath = convPath;
+    } catch {
+      aacPath = tmpPath;
+    }
+
+    // Bước 1: uploadAttachment(AAC) → sendVoice (Zalo CDN URL theo GwenDev)
+    const voiceUrl = await uploadToZaloAndGetUrl(api, aacPath, threadId, type);
+    if (voiceUrl) {
+      await api.sendVoice({ voiceUrl, ttl: 900_000 }, threadId, type);
+      return;
+    }
+
+    // Bước 2: Fallback → sendVoice(direct URL)
+    try {
+      await api.sendVoice({ voiceUrl: audioUrl }, threadId, type);
+      return;
+    } catch {}
+
+    // Bước 3: Fallback → sendMessage attachment
+    await api.sendMessage({ attachments: [aacPath] }, threadId, type);
+
+  } catch {
+    // Last resort fallback
+    try {
+      await api.sendVoice({ voiceUrl: audioUrl }, threadId, type);
+    } catch {}
+  } finally {
+    if (tmpPath && tmpPath !== aacPath) try { fs.unlinkSync(tmpPath); } catch (_) {}
+    if (aacPath) try { fs.unlinkSync(aacPath); } catch (_) {}
   }
 }
 

@@ -149,6 +149,30 @@ function convertToAac(inputPath, outputPath) {
     );
 }
 
+// ─── Tạo thumbnail từ video (giây thứ 1, scale 320:-1) ──────────────────────────
+function createThumbnail(videoPath, thumbPath) {
+    execSync(
+        `ffmpeg -y -i "${videoPath}" -ss 00:00:01 -vframes 1 -vf scale=320:-1 -q:v 5 "${thumbPath}"`,
+        { timeout: 30000, stdio: "pipe" }
+    );
+}
+
+// ─── Upload file lên Zalo CDN qua uploadAttachment → trả về URL ─────────────────
+// Pattern theo GwenDev: api.uploadAttachment([path]) → { fileUrl, fileName }
+//   → thumbnailZaloUrl = fileUrl + "/" + fileName
+async function uploadAttachmentToZalo(api, filePath, threadId, threadType) {
+    try {
+        const uploaded = await api.uploadAttachment([filePath], threadId, threadType);
+        const file = uploaded?.[0];
+        if (file?.fileUrl && file?.fileName) {
+            return `${file.fileUrl}/${file.fileName}`;
+        }
+    } catch (e) {
+        logWarn(`[AutoDown] uploadAttachment thất bại: ${e.message}`);
+    }
+    return null;
+}
+
 // ─── Cleanup (tích hợp từ utility — xóa file tạm sau khi gửi xong) ─────────────
 function cleanup(...files) {
     setTimeout(() => {
@@ -180,20 +204,16 @@ setInterval(cleanupOldFiles, 5 * 60 * 1000);
 // ─── Gửi VIDEO ─────────────────────────────────────────────────────────────────
 // sendVideo: info = { thumbnail, duration, width, height }
 //
-// Tại sao KHÔNG dùng direct URL (tikwm/yt-dlp) cho api.sendVideo:
-//   - URL tikwm/yt-dlp có TTL ngắn → Zalo app fetch lại khi phát sẽ lỗi
-//   - URL proxy render.com → Zalo server không stream được
-//   - api.sendVideo "thành công" chỉ là Zalo API nhận message, không verify URL
-//
-// Flow đúng:
-//   Bước 1: Download → convert H264 → githubUpload → api.sendVideo(ghUrl)
-//           raw.githubusercontent.com là URL vĩnh cửu, Zalo stream được
+// Flow (theo pattern GwenDev):
+//   Bước 1: Download → convert H264 → tạo thumbnail local → uploadAttachment(thumb)
+//           → thumbnailZaloUrl → api.sendVideo(ghUrl, thumbnailZaloUrl)
 //   Bước 2: sendMessage + attachments (nếu file > 50MB hoặc thiếu githubToken)
 //   Bước 3: gửi link text
 async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
     const uid      = uniqueId();
     const rawPath  = path.join(tempDir, `ad_raw_${uid}.mp4`);
     const h264Path = path.join(tempDir, `ad_h264_${uid}.mp4`);
+    const thumbPath = path.join(tempDir, `ad_thumb_${uid}.jpg`);
     try {
         await downloadFile(videoUrl, rawPath);
 
@@ -217,8 +237,20 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
         const fileSize = fs.statSync(uploadPath).size;
         logDebug(`[AutoDown] Video: ${path.basename(uploadPath)} (${meta.width}x${meta.height}, ${meta.duration}s, ${(fileSize / 1024 / 1024).toFixed(1)}MB)`);
 
+        // ── Tạo thumbnail local rồi upload lên Zalo CDN (theo GwenDev) ────────
+        let thumbnailZaloUrl = "";
+        try {
+            createThumbnail(uploadPath, thumbPath);
+            if (fs.existsSync(thumbPath) && fs.statSync(thumbPath).size > 0) {
+                logDebug(`[AutoDown] Upload thumbnail: ${path.basename(thumbPath)}`);
+                thumbnailZaloUrl = await uploadAttachmentToZalo(api, thumbPath, threadId, threadType) || "";
+                logInfo(`[AutoDown] Thumbnail Zalo URL: ${thumbnailZaloUrl?.slice(0, 60)}`);
+            }
+        } catch (et) {
+            logWarn(`[AutoDown] Tạo/upload thumbnail lỗi: ${et.message}`);
+        }
+
         // ── Bước 1: GitHub upload → api.sendVideo ────────────────────────────
-        // GitHub raw URL vĩnh cửu, Zalo stream được ổn định
         if (typeof global.githubUpload === "function" && fileSize < 50 * 1024 * 1024) {
             try {
                 const repoPath = `autodown/vid_${uid}.mp4`;
@@ -226,7 +258,7 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
                 if (ghUrl) {
                     await api.sendVideo({
                         videoUrl:     ghUrl,
-                        thumbnailUrl: info.thumbnail || "",
+                        thumbnailUrl: thumbnailZaloUrl || info.thumbnail || "",
                         msg:          caption,
                         width:        meta.width    || info.width  || 720,
                         height:       meta.height   || info.height || 1280,
@@ -260,11 +292,16 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
             threadId, threadType
         );
     } finally {
-        cleanup(rawPath, h264Path);
+        cleanup(rawPath, h264Path, thumbPath);
     }
 }
 
 // ─── Gửi AUDIO ─────────────────────────────────────────────────────────────────
+// Flow (theo pattern GwenDev):
+//   1. Download → convert AAC
+//   2. uploadAttachment(aacPath) → voiceUrl (Zalo CDN)
+//   3. api.sendVoice({ voiceUrl })
+//   Fallback: githubUpload → sendVoice hoặc sendMessage attachment
 async function sendAudio(api, audioUrl, info, caption, threadId, threadType) {
     const uid     = uniqueId();
     const rawPath = path.join(tempDir, `ad_aud_${uid}`);
@@ -289,7 +326,21 @@ async function sendAudio(api, audioUrl, info, caption, threadId, threadType) {
             );
         }
 
-        // ── Gửi voice: githubUpload → sendVoice(raw URL) ────────────────────
+        // ── Bước 1: uploadAttachment(AAC) → sendVoice (theo GwenDev) ────────
+        // upload file AAC lên Zalo CDN, lấy voiceUrl rồi dùng sendVoice
+        try {
+            logDebug(`[AutoDown] Upload AAC qua uploadAttachment: ${path.basename(aacPath)}`);
+            const voiceUrl = await uploadAttachmentToZalo(api, aacPath, threadId, threadType);
+            if (voiceUrl) {
+                await api.sendVoice({ voiceUrl, ttl: 900_000 }, threadId, threadType);
+                logInfo("[AutoDown] sendVoice (uploadAttachment) thành công.");
+                return;
+            }
+        } catch (e0) {
+            logWarn(`[AutoDown] sendVoice uploadAttachment thất bại: ${e0.message}`);
+        }
+
+        // ── Bước 2: Fallback githubUpload → sendVoice ────────────────────────
         const aacSize = fs.statSync(aacPath).size;
         if (typeof global.githubUpload === "function" && aacSize < 50 * 1024 * 1024) {
             try {
@@ -304,7 +355,7 @@ async function sendAudio(api, audioUrl, info, caption, threadId, threadType) {
             }
         }
 
-        // ── Fallback: gửi file audio ──────────────────────────────────────────
+        // ── Bước 3: Fallback gửi file audio ──────────────────────────────────
         await api.sendMessage(
             { msg: caption, attachments: [aacPath], ttl: 500_000 },
             threadId, threadType
@@ -523,9 +574,19 @@ async function handleOther(api, url, threadId, threadType) {
         // ── Ưu tiên download_url từ fown API (GitHub Releases, URL vĩnh cửu) ──
         if (d.download_url) {
             try {
+                // Upload thumbnail lên Zalo CDN (theo GwenDev pattern)
+                let thumbnailZaloUrl = "";
+                if (thumbnail) {
+                    try {
+                        const tpOther = path.join(tempDir, `ad_otherthumb_${uniqueId()}.jpg`);
+                        await downloadFile(thumbnail, tpOther);
+                        thumbnailZaloUrl = await uploadAttachmentToZalo(api, tpOther, threadId, threadType) || "";
+                        try { fs.unlinkSync(tpOther); } catch {}
+                    } catch {}
+                }
                 await api.sendVideo({
                     videoUrl:     d.download_url,
-                    thumbnailUrl: thumbnail || "",
+                    thumbnailUrl: thumbnailZaloUrl || thumbnail || "",
                     msg:          caption,
                     width,
                     height,

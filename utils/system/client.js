@@ -51,7 +51,16 @@ function normalizeCookies(raw) {
   throw new Error("cookie.json không đúng định dạng");
 }
 
-// ── Zalo Client ───────────────────────────────────────────────────────────────
+function saveCookieFile(cookiePath, cookies) {
+  try {
+    fs.writeFileSync(cookiePath, JSON.stringify(cookies, null, 2), "utf-8");
+    logInfo(`[Cookie] Đã lưu cookie vào ${path.resolve(cookiePath)}`);
+  } catch (err) {
+    logWarn(`[Cookie] Không thể lưu cookie: ${err?.message}`);
+  }
+}
+
+// ── QR Display ────────────────────────────────────────────────────────────────
 
 async function displayQRInTerminal(imageBase64) {
   try {
@@ -74,51 +83,13 @@ async function displayQRInTerminal(imageBase64) {
   }
 }
 
-async function createZaloClient() {
-  const config = global.config;
-  const loginMethod = (config.loginMethod || "qr").toLowerCase();
-  const userAgent = (config.userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64)").trim();
+// ── Login via QR ──────────────────────────────────────────────────────────────
 
-  const zalo = new Zalo({
-    selfListen: true,
-    checkUpdate: true,
-    logging: true,
-    imageMetadataGetter: async (filePath) => {
-      const buf = await fs.promises.readFile(filePath);
-      const dim = imageSize(buf);
-      const stat = await fs.promises.stat(filePath);
-      return { width: dim?.width, height: dim?.height, size: stat?.size ?? buf.length };
-    }
-  });
-
-  if (loginMethod === "cookie") {
-    const cookiePath = config.cookiePath || "./cookie.json";
-    if (!fs.existsSync(cookiePath)) throw new Error(`Không tìm thấy file cookie: ${cookiePath}`);
-    const cookieRaw = JSON.parse(fs.readFileSync(cookiePath, "utf-8"));
-    const cookie = normalizeCookies(cookieRaw).map((c) => ({
-      ...c,
-      key:      c.key || c.name,
-      value:    String(c.value),
-      domain:   c.domain   || ".zalo.me",
-      path:     c.path     || "/",
-      secure:   c.secure   ?? true,
-      httpOnly: c.httpOnly ?? true
-    }));
-    let imei = looksLikeZaloImei(config.imei) ? config.imei : generateImei(userAgent);
-    if (!looksLikeZaloImei(config.imei)) { persistImeiToConfig(imei); config.imei = imei; }
-    const api = await zalo.login({ cookie, imei, userAgent });
-    logInfo("Đăng nhập Zalo bằng COOKIE thành công.");
-    return api;
-  }
-
-  const qrPath = config.qrPath || "./qr.png";
+async function loginWithQR(zalo, userAgent, cookiePath, qrPath) {
   logInfo("[QR] Đang tạo mã QR để đăng nhập Zalo...");
   logInfo(`[QR] QR code sẽ được lưu tại: ${path.resolve(qrPath)}`);
 
-  const api = await zalo.loginQR({
-    userAgent,
-    qrPath,
-  }, async (event) => {
+  const api = await zalo.loginQR({ userAgent, qrPath }, async (event) => {
     const { type, data, actions } = event;
     if (type === 0) {
       await actions.saveToFile(qrPath);
@@ -135,11 +106,80 @@ async function createZaloClient() {
     } else if (type === 3) {
       logWarn("[QR] Đăng nhập bị từ chối trên điện thoại.");
       actions.retry();
+    } else if (type === 4) {
+      if (data && data.cookie) {
+        saveCookieFile(cookiePath, data.cookie);
+        const cfg = global.config;
+        if (data.imei) {
+          cfg.imei = data.imei;
+          persistImeiToConfig(data.imei);
+        }
+      }
     }
   });
 
   logInfo("Đăng nhập Zalo bằng QR thành công.");
   return api;
+}
+
+// ── Login via Cookie ──────────────────────────────────────────────────────────
+
+async function loginWithCookie(zalo, userAgent, cookiePath, imei) {
+  const cookieRaw = JSON.parse(fs.readFileSync(cookiePath, "utf-8"));
+  const cookie = normalizeCookies(cookieRaw).map((c) => ({
+    ...c,
+    key:      c.key || c.name,
+    value:    String(c.value),
+    domain:   c.domain   || ".zalo.me",
+    path:     c.path     || "/",
+    secure:   c.secure   ?? true,
+    httpOnly: c.httpOnly ?? true
+  }));
+  const api = await zalo.login({ cookie, imei, userAgent });
+  logInfo("Đăng nhập Zalo bằng COOKIE thành công.");
+  return api;
+}
+
+// ── Main entry point ──────────────────────────────────────────────────────────
+
+async function createZaloClient() {
+  const config = global.config;
+  const userAgent = (config.userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64)").trim();
+  const cookiePath = config.cookiePath || "./cookie.json";
+  const qrPath = config.qrPath || "./qr.png";
+
+  let imei = looksLikeZaloImei(config.imei) ? config.imei : generateImei(userAgent);
+  if (!looksLikeZaloImei(config.imei)) {
+    persistImeiToConfig(imei);
+    config.imei = imei;
+  }
+
+  const zalo = new Zalo({
+    selfListen: true,
+    checkUpdate: true,
+    logging: true,
+    imageMetadataGetter: async (filePath) => {
+      const buf = await fs.promises.readFile(filePath);
+      const dim = imageSize(buf);
+      const stat = await fs.promises.stat(filePath);
+      return { width: dim?.width, height: dim?.height, size: stat?.size ?? buf.length };
+    }
+  });
+
+  // Thử đăng nhập bằng cookie trước
+  if (fs.existsSync(cookiePath)) {
+    try {
+      logInfo("[Cookie] Đang thử đăng nhập bằng cookie...");
+      const api = await loginWithCookie(zalo, userAgent, cookiePath, imei);
+      return api;
+    } catch (err) {
+      logWarn(`[Cookie] Đăng nhập bằng cookie thất bại: ${err?.message || err}`);
+      logInfo("[Cookie] Chuyển sang đăng nhập bằng QR...");
+    }
+  }
+
+  // Fallback: đăng nhập QR và lưu cookie lại
+  return await loginWithQR(zalo, userAgent, cookiePath, qrPath);
 }
 
 module.exports = { createZaloClient, looksLikeZaloImei, generateImei, persistImeiToConfig, normalizeCookies };

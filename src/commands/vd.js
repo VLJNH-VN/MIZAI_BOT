@@ -187,11 +187,7 @@ module.exports = {
     credits:         "MiZai",
     description:     "Xem video ngẫu nhiên từ listapi",
     commandCategory: "Giải Trí",
-    usages: [
-      ".vd              — Xem danh sách listapi có sẵn",
-      ".vd <tên>        — Gửi 1 video ngẫu nhiên từ listapi/<tên>",
-      ".vd <tên> <số>   — Gửi n video liên tiếp (tối đa 10)",
-    ].join("\n"),
+    usages: "vd [<tên> [<số>]]   — Danh sách listapi / gửi 1 hoặc n video (tối đa 10)",
     cooldowns: 5,
   },
 

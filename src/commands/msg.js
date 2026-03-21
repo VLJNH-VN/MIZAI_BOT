@@ -10,10 +10,9 @@ module.exports = {
     description: "Quản lý tin nhắn nhanh (quick message)",
     commandCategory: "Quản Trị",
     usages: [
-      "quickmsg list               — Xem danh sách tin nhắn nhanh",
-      "quickmsg add <tắt> | <nội_dung> — Thêm tin nhắn nhanh",
-      "quickmsg remove <id>        — Xóa tin nhắn nhanh",
-      "quickmsg send <tắt>         — Gửi tin nhắn nhanh vào chat này",
+      "quickmsg list | remove <id>         — Xem / xoá tin nhắn nhanh",
+      "quickmsg add <tắt> | <nội_dung>     — Thêm tin nhắn nhanh",
+      "quickmsg send <tắt>                  — Gửi tin nhắn nhanh",
     ].join("\n"),
     cooldowns: 5,
   },

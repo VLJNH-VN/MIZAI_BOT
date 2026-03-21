@@ -10,9 +10,7 @@ module.exports = {
     commandCategory: "Nhóm",
     usages:
       "poll tao <câu hỏi> | <lựa chọn 1> | <lựa chọn 2> ...\n" +
-      "poll xem <pollId>\n" +
-      "poll vote <pollId> <số thứ tự>\n" +
-      "poll them <pollId> <lựa chọn mới>",
+      "poll xem|vote|them <pollId> [số | lựa chọn mới]",
     cooldowns: 5
   },
 

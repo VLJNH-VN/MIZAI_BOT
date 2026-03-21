@@ -10,12 +10,7 @@ module.exports = {
     credits: "GwenDev / MiZai",
     description: "Xem bảng tương tác nhóm theo ngày/tuần/tháng hoặc cá nhân",
     commandCategory: "Nhóm",
-    usages: [
-      "checktt          — Xem top tương tác ngày",
-      "checktt week     — Xem top tương tác tuần",
-      "checktt month    — Xem top tương tác tháng",
-      "checktt @mention — Xem tương tác của người đó",
-    ].join("\n"),
+    usages: "checktt [week|month] [@mention]   — Top tương tác ngày/tuần/tháng / cá nhân",
     cooldowns: 10,
   },
 

@@ -46,9 +46,8 @@ module.exports = {
     description: "Cấm hoặc gỡ cấm người dùng nhắn tin trong nhóm",
     commandCategory: "Quản Trị",
     usages: [
-      "mute @mention [10m|2h|1d]  — Mute người dùng (có hoặc không có thời hạn)",
-      "mute off @mention           — Gỡ mute",
-      "mute list                   — Danh sách đang bị mute",
+      "mute @mention [10m|2h|1d]   — Mute thành viên (có/không thời hạn)",
+      "mute off @mention | list     — Gỡ mute / danh sách đang mute",
     ].join("\n"),
     cooldowns: 5,
   },

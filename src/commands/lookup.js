@@ -14,10 +14,7 @@ module.exports = {
     credits:         "MiZai",
     description:     "Tra cứu Wikipedia hoặc thời tiết theo địa điểm",
     commandCategory: "Tra Cứu",
-    usages: [
-      "lookup wiki <từ khóa>    — Tra cứu Wikipedia",
-      "lookup tt [thành phố]    — Xem thời tiết",
-    ].join("\n"),
+    usages: "lookup wiki <từ khóa> | tt [thành phố]   — Tra cứu Wikipedia / Thời tiết",
     cooldowns: 5,
   },
 

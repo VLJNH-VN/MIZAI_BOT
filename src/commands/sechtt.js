@@ -104,11 +104,7 @@ module.exports = {
     credits:         "MiZai",
     description:     "Tìm kiếm video TikTok và tải về",
     commandCategory: "Giải Trí",
-    usages: [
-      "sechtt <từ khóa>         — Tìm 8 video TikTok",
-      "sechtt <từ khóa> <số>    — Tìm n video (vd: sechtt gái mup 15)",
-      "sechtt <từ khóa> -n <số> — Tương tự, cả 2 format đều dùng được",
-    ].join("\n"),
+    usages: "sechtt <từ khóa> [<số> | -n <số>]   — Tìm video TikTok (mặc định 8)",
     cooldowns: 5,
   },
 

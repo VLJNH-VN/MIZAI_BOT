@@ -194,11 +194,7 @@ module.exports = {
     credits:         "MiZai",
     description:     "Tìm & tải nhạc từ SoundCloud, Spotify hoặc Mixcloud",
     commandCategory: "Giải Trí",
-    usages: [
-      "music sc <từ khóa>    — Tìm trên SoundCloud",
-      "music spt <từ khóa>   — Tìm trên Spotify",
-      "music mix <từ khóa>   — Tìm trên Mixcloud",
-    ].join("\n"),
+    usages: "music sc|spt|mix <từ khóa>   — Tìm nhạc (SoundCloud / Spotify / Mixcloud)",
     cooldowns: 5,
   },
 

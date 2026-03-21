@@ -18,10 +18,8 @@ module.exports = {
     description:     "Xem tài khoản, nhận điểm danh và bảng xếp hạng kinh tế",
     commandCategory: "Kinh Tế",
     usages: [
-      "wallet            — Xem số dư & thông tin tài khoản",
-      "wallet daily      — Nhận tiền điểm danh hàng ngày",
-      "wallet rank       — Bảng xếp hạng giàu nhất",
-      "wallet rank me    — Thống kê cá nhân",
+      "wallet [daily]     — Xem số dư / nhận điểm danh hàng ngày",
+      "wallet rank [me]   — Bảng xếp hạng / thống kê cá nhân",
     ].join("\n"),
     cooldowns: 3,
   },

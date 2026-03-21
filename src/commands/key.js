@@ -114,13 +114,9 @@ module.exports = {
     description: "Quản lý Gemini key (AIza...) và Groq key (gsk_...)",
     commandCategory: "Quản Trị",
     usages: [
-      ".key add <key>         — Thêm key (Gemini hoặc Groq)",
-      ".key del <key|số>      — Xoá key Gemini (g1, g2...) hoặc Groq (1, 2...)",
-      ".key alive [g1|g2...]  — Khôi phục key bị đánh dấu dead nhầm",
-      ".key list              — Danh sách tất cả key",
-      ".key check             — Check tất cả key",
-      ".key check <key>       — Check 1 key cụ thể",
-      ".key autocheck         — Bật/tắt tự động kiểm tra",
+      "key add|del <key|số>            — Thêm/xoá key (Gemini g1..., Groq 1...)",
+      "key list | check [<key>]         — Danh sách / kiểm tra key",
+      "key alive [g1|g2...] | autocheck — Khôi phục key dead / bật tắt tự kiểm tra",
     ].join("\n"),
     cooldowns: 3
   },

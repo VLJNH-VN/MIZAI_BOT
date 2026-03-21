@@ -18,10 +18,8 @@ module.exports = {
     description:     "Lấy link download media hoặc gửi link/video",
     commandCategory: "Tiện Ích",
     usages: [
-      "media getlink          — Lấy URL download (reply vào media)",
-      "media link <url>       — Gửi link với preview",
-      "media video <url>      — Gửi video từ URL",
-      "media parse <url>      — Phân tích thông tin link",
+      "media getlink | parse <url>   — Lấy URL download / phân tích link",
+      "media link|video <url>         — Gửi link preview / video từ URL",
     ].join("\n"),
     cooldowns: 5,
   },

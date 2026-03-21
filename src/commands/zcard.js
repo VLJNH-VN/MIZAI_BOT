@@ -10,10 +10,7 @@ module.exports = {
     credits: "MIZAI",
     description: "Gửi danh thiếp người dùng Zalo",
     commandCategory: "Tiện Ích",
-    usages: [
-      "zcard @tag          — Gửi danh thiếp người được tag",
-      "zcard <uid>         — Gửi danh thiếp theo UID",
-    ].join("\n"),
+    usages: "zcard @tag|<uid>   — Gửi danh thiếp",
     cooldowns: 5,
   },
 

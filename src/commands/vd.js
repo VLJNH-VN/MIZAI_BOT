@@ -161,7 +161,8 @@ async function sendOneVideo(api, event, srcUrl, caption) {
           global.logInfo?.("[vd] sendVideo thành công.");
           sentAsVideo = true;
         } catch (e) {
-          global.logWarn?.(`[vd] sendVideo thất bại: ${e.message}`);
+          global.logWarn?.(`[vd] sendVideo thất bại: ${e.message} | stack: ${e.stack?.split('\n')[1]?.trim()}`);
+          try { global.logWarn?.(`[vd] error detail: ${JSON.stringify(e)}`); } catch {}
         }
       }
     }

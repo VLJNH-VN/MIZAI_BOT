@@ -205,7 +205,7 @@ module.exports = {
         }));
         let cardPath;
         try { cardPath = await drawSearchCard({ platform: "mix", query, tracks: cardTracks }); } catch (_) {}
-        //const msg = `💬 Reply số từ 1-5 để xem link Mixcloud`;
+        const msg = `💬 Reply số từ 1-5 để xem link Mixcloud`;
         const sent = cardPath
           ? await api.sendMessage({ msg, attachments: [cardPath] }, threadID, event.type)
           : await send(msg);

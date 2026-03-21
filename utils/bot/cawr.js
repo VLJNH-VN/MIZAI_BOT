@@ -190,15 +190,10 @@ async function search(query, limit = 8) {
 async function getUserVideos(username, limit = "all") {
   const uid = username.replace(/^@/, "");
 
-  // limit "all" → svl=all; số → svl=số (min 1)
-  const svl = (limit === "all" || !limit)
-    ? "all"
-    : Math.max(1, Math.min(Number(limit), 200));
-
   let res;
   try {
     res = await axios.get(`${FOWN_API}/api/search`, {
-      params: { ttuser: uid, svl },
+      params: { ttuser: uid, svl: "all" },
       timeout: 60000,
     });
   } catch (e) {
@@ -212,7 +207,12 @@ async function getUserVideos(username, limit = "all") {
     throw new Error(msg);
   }
 
-  return videos.map(v => ({
+  // Slice theo limit nếu được chỉ định
+  const list = (limit !== "all" && Number(limit) > 0)
+    ? videos.slice(0, Number(limit))
+    : videos;
+
+  return list.map(v => ({
     id:        String(v.id || `${Date.now()}_${Math.random().toString(36).slice(2,6)}`),
     videoUrl:  null,                 // Không có direct URL; dùng fown download
     tiktokUrl: v.url || `https://www.tiktok.com/@${uid}/video/${v.id}`,

@@ -103,13 +103,13 @@ function convertToH264(inputPath, outputPath) {
   );
 }
 
-// ── Gửi 1 video: download → H264 → uploadAttachment (Zalo CDN) → sendVideo ───
+// ── Gửi 1 video: download → H264 → GitHub Releases → sendVideo ───────────────
 // Flow:
 //   1. Download srcUrl về local
 //   2. Convert H264 (Zalo yêu cầu codec này)
-//   3. uploadAttachment → lấy fileUrl từ Zalo CDN → sendVideo(fileUrl)
-//      Zalo CDN URL có HEAD Content-Length đúng → sendVideo không bị code 114
-//   4. Fallback: sendMessage + attachments (nếu sendVideo vẫn lỗi)
+//   3. githubReleaseUpload → browser_download_url (objects.githubusercontent.com)
+//      → sendVideo(releaseUrl): Zalo server follow redirect, đọc được Content-Length
+//   4. Fallback: sendMessage + attachments (gửi như file nếu sendVideo lỗi)
 async function sendOneVideo(api, event, srcUrl, caption) {
   const id       = uid();
   const rawPath  = path.join(TEMP_DIR, `vd_raw_${id}.mp4`);
@@ -133,29 +133,34 @@ async function sendOneVideo(api, event, srcUrl, caption) {
     const fileSize = fs.statSync(uploadPath).size;
     global.logInfo?.(`[vd] size=${(fileSize/1024).toFixed(0)}KB | w=${meta.width} h=${meta.height} dur=${meta.duration}s`);
 
-    // Bước 3: uploadAttachment → Zalo CDN URL → sendVideo
+    // Bước 3: GitHub Releases upload → sendVideo (objects.githubusercontent.com)
+    // Dùng githubReleaseUpload thay vì githubUpload vì:
+    //   - raw.githubusercontent.com: Zalo server reject (không có Content-Length)
+    //   - objects.githubusercontent.com (Releases): Zalo server follow redirect, stream được
     let sentAsVideo = false;
 
-    try {
-      const uploaded = await api.uploadAttachment([uploadPath], event.threadId, event.type);
-      const fileUrl  = uploaded?.[0]?.fileUrl;
-      global.logInfo?.(`[vd] uploadAttachment OK: fileUrl=${fileUrl?.slice(0, 80)}`);
+    if (typeof global.githubReleaseUpload === "function" && fileSize < 50 * 1024 * 1024) {
+      try {
+        const filename    = `vd_${id}.mp4`;
+        const releaseUrl  = await global.githubReleaseUpload(uploadPath, filename);
+        global.logInfo?.(`[vd] GitHub Release upload OK: ${releaseUrl?.slice(0, 80)}`);
 
-      if (fileUrl) {
-        await api.sendVideo({
-          videoUrl:     fileUrl,
-          thumbnailUrl: "",
-          msg:          caption || "",
-          width:        meta.width    || 576,
-          height:       meta.height   || 1024,
-          duration:     meta.duration * 1000,
-          ttl:          500_000,
-        }, event.threadId, event.type);
-        global.logInfo?.("[vd] sendVideo thành công.");
-        sentAsVideo = true;
+        if (releaseUrl) {
+          await api.sendVideo({
+            videoUrl:     releaseUrl,
+            thumbnailUrl: "",
+            msg:          caption || "",
+            width:        meta.width    || 576,
+            height:       meta.height   || 1024,
+            duration:     meta.duration * 1000,
+            ttl:          500_000,
+          }, event.threadId, event.type);
+          global.logInfo?.("[vd] sendVideo (Release) thành công.");
+          sentAsVideo = true;
+        }
+      } catch (e) {
+        global.logWarn?.(`[vd] Release upload/sendVideo thất bại: ${e.message}`);
       }
-    } catch (e) {
-      global.logWarn?.(`[vd] uploadAttachment/sendVideo thất bại: ${e.message}`);
     }
 
     // Bước 4: Fallback → sendMessage + attachments (file local)

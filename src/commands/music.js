@@ -300,7 +300,34 @@ module.exports = {
       if (!results.length) return send("❌ Hết dữ liệu. Vui lòng tìm lại.");
       if (isNaN(choice) || choice < 1 || choice > 5 || !results[choice - 1]) return send("⚠️ Chọn số từ 1-5.");
       const r = results[choice - 1];
-      await send(`✅ Bạn đã chọn:\n🎵 ${r.name}\n👤 ${r.owner.displayName}\n🔗 https://www.mixcloud.com/${r.owner.username}/${r.slug}`);
+      const mixUrl = `https://www.mixcloud.com/${r.owner.username}/${r.slug}`;
+      try {
+        const _raw = event?.data ?? {};
+        const _mid = _raw?.msgId ?? _raw?.cliMsgId ?? _raw?.clientMsgId ?? null;
+        const _cid = _raw?.cliMsgId ?? _raw?.clientMsgId ?? _mid ?? null;
+        if (_mid || _cid) await api.addReaction(Reactions.WOW, { type: event.type, threadId: event.threadId, data: { msgId: _mid, cliMsgId: _cid } });
+      } catch (_) {}
+      try {
+        const mediaRes = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(mixUrl)}`, { timeout: 120000 });
+        const audioUrl = mediaRes.data?.download_audio_url || mediaRes.data?.download_url;
+        if (!audioUrl) return send(`❌ Không lấy được link tải.\n🔗 Nghe trực tiếp: ${mixUrl}`);
+        let cardPath;
+        try {
+          cardPath = await drawNowPlayingCard({
+            platform: "mix",
+            title:    r.name,
+            artist:   r.owner.displayName,
+            duration: formatDuration(r.audioLength),
+          });
+        } catch (_) {}
+        if (cardPath) {
+          await api.sendMessage({ msg: "", attachments: [cardPath] }, event.threadId, event.type);
+          try { fs.unlinkSync(cardPath); } catch (_) {}
+        } else {
+          await send(`🎵 ${r.name}\n👤 ${r.owner.displayName}\n⏳ ${formatDuration(r.audioLength)}`);
+        }
+        await api.sendVoice({ voiceUrl: audioUrl }, event.threadId, event.type);
+      } catch (err) { return send(`❌ Lỗi tải nhạc: ${err.message}\n🔗 Nghe trực tiếp: ${mixUrl}`); }
     }
   },
 };

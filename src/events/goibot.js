@@ -1029,7 +1029,15 @@ async function handleGoibot({ api, event }) {
     if (botMsg?.sticker?.status) {
       const keyword = botMsg.sticker.keyword || "cute";
       const sent    = await sendStickerByKeyword(api, keyword, threadId, event.type);
-      if (!sent) await send("😅 Mizai không tìm được sticker phù hợp!");
+      if (!sent) {
+        await handleCustomStickerAction(
+          api,
+          { mode: "text", text: keyword, emotion: keyword, aiPrompt: keyword },
+          threadId,
+          event.type,
+          send
+        );
+      }
     }
 
     // ── Reaction ───────────────────────────────────────────────────────────────

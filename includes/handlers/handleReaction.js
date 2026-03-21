@@ -7,6 +7,31 @@
 
 const { ThreadType, Reactions } = require("zca-js");
 
+// ── Icon reaction constants ────────────────────────────────────────────────────
+const ICON_ERROR   = "❎";
+const ICON_SUCCESS = "✅";
+const ICON_LOADING = "⏳";
+
+/**
+ * React icon lên tin nhắn của người dùng (event.data)
+ * @param {object} api
+ * @param {object} event  – event chứa type, threadId, data
+ * @param {string} icon   – emoji icon
+ */
+async function reactToEvent(api, event, icon) {
+  try {
+    await api.addReaction(icon, {
+      type    : event.type,
+      threadId: event.threadId,
+      data    : event.data,
+    });
+  } catch (_) {}
+}
+
+const reactError   = (api, event) => reactToEvent(api, event, ICON_ERROR);
+const reactSuccess = (api, event) => reactToEvent(api, event, ICON_SUCCESS);
+const reactLoading = (api, event) => reactToEvent(api, event, ICON_LOADING);
+
 const { createTtlStore } = require('./ttlStore');
 
 const DEFAULT_TTL_MS  = 10 * 60 * 1000;
@@ -149,4 +174,13 @@ async function handleReaction({ api, reaction, commands }) {
   }
 }
 
-module.exports = { handleReaction, registerReaction };
+module.exports = {
+  handleReaction,
+  registerReaction,
+  reactError,
+  reactSuccess,
+  reactLoading,
+  ICON_ERROR,
+  ICON_SUCCESS,
+  ICON_LOADING,
+};

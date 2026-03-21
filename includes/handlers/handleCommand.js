@@ -4,7 +4,7 @@ const { isBotAdmin, isGroupAdmin } = require("../../utils/bot/botManager");
 const { extractBody } = require("../../utils/bot/messageUtils");
 const stringSimilarity = require("string-similarity");
 const { registerReply } = require("./handleReply");
-const { registerReaction } = require("./handleReaction");
+const { registerReaction, reactError, reactSuccess, reactLoading } = require("./handleReaction");
 const { registerUndo } = require("./handleUndo");
 const fs = require("fs");
 const path = require("path");
@@ -305,7 +305,10 @@ async function handleCommand({ api, event, commands, prefix }) {
       isGroupAdmin,
       registerReply,
       registerReaction,
-      registerUndo
+      registerUndo,
+      reactError,
+      reactSuccess,
+      reactLoading,
     });
     const execTime = Date.now() - startTime;
 

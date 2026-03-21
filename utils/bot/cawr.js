@@ -394,7 +394,6 @@ async function bulkAdd(tipName, query, limit = 8, onProgress = null) {
       data.push(finalUrl);
       addHistory(item.id);
       success++;
-      global.logInfo?.(`[cawr.tt] ✅ ${i + 1}/${results.length}: ${finalUrl}`);
       onProgress?.(i + 1, results.length, "ok");
     } catch (e) {
       failed++;

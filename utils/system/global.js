@@ -402,57 +402,5 @@ function setApi(apiInstance) {
   };
 })();
 
-// ─── Video HTTP Server (serve video local với Content-Type: video/mp4) ───────
-// Zalo server cần URL trả về đúng Content-Type để sendVideo hoạt động.
-// GitHub/catbox/transfer.sh đều trả về application/octet-stream → Zalo reject.
-// Server này chạy nội bộ trên Replit và expose qua REPLIT_DEV_DOMAIN.
-(function startVideoServer() {
-  const http   = require("http");
-  const fs     = require("fs");
-  const path   = require("path");
-  const crypto = require("crypto");
-
-  const SERVE_DIR  = path.join(process.cwd(), "includes", "cache", "serve");
-  const PORT       = 3000;
-  const BASE_DOMAIN = process.env.REPLIT_DEV_DOMAIN || `localhost:${PORT}`;
-  const BASE_URL    = `https://${BASE_DOMAIN}`;
-
-  if (!fs.existsSync(SERVE_DIR)) fs.mkdirSync(SERVE_DIR, { recursive: true });
-
-  const server = http.createServer((req, res) => {
-    if (!req.url.startsWith("/vd/")) {
-      res.writeHead(404); res.end("Not found"); return;
-    }
-    const filename = path.basename(req.url.split("?")[0]);
-    const filePath = path.join(SERVE_DIR, filename);
-    if (!fs.existsSync(filePath)) {
-      res.writeHead(404); res.end("File not found"); return;
-    }
-    const stat = fs.statSync(filePath);
-    res.writeHead(200, {
-      "Content-Type":        "video/mp4",
-      "Content-Length":      stat.size,
-      "Content-Disposition": "inline",
-      "Accept-Ranges":       "bytes",
-      "Cache-Control":       "no-cache",
-    });
-    fs.createReadStream(filePath).pipe(res);
-  });
-
-  server.listen(PORT, () => {
-    logInfo?.(`[VideoServer] Đang chạy trên port ${PORT} | URL: ${BASE_URL}`);
-  });
-  server.on("error", e => logWarn?.(`[VideoServer] Lỗi: ${e.message}`));
-
-  global.serveVideoFile = (localPath, ttlMs = 5 * 60 * 1000) => {
-    const ext      = path.extname(localPath) || ".mp4";
-    const token    = crypto.randomBytes(8).toString("hex");
-    const filename = `${token}${ext}`;
-    const dest     = path.join(SERVE_DIR, filename);
-    fs.copyFileSync(localPath, dest);
-    setTimeout(() => { try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch {} }, ttlMs);
-    return `${BASE_URL}/vd/${filename}`;
-  };
-})();
 
 module.exports = { setApi };

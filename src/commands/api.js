@@ -485,22 +485,23 @@ module.exports = {
       // Parse số lượng — hỗ trợ cả 2 dạng:
       //   .api tt gai ten -n 50
       //   .api tt gai ten 50      (số ở cuối, không cần -n)
-      // Giới hạn max 50 cho tìm kiếm text. @username thì lấy full không giới hạn.
-      let limit = 8;
+      // limit = 0 → không giới hạn (dùng cho @user khi không có -n)
+      let limit = 0;
+      let limitSet = false;
       let queryArgs = args.slice(2);
 
       // Dạng -n <số>
       const nIdx = queryArgs.findIndex(a => a === "-n");
       if (nIdx !== -1 && queryArgs[nIdx + 1]) {
         const parsed = parseInt(queryArgs[nIdx + 1], 10);
-        if (!isNaN(parsed) && parsed >= 1) limit = Math.min(parsed, 50);
+        if (!isNaN(parsed) && parsed >= 1) { limit = parsed; limitSet = true; }
         queryArgs.splice(nIdx, 2);
       } else {
         // Dạng số cuối không có -n
         const last = queryArgs[queryArgs.length - 1];
         const parsed = parseInt(last, 10);
         if (!isNaN(parsed) && parsed >= 1 && String(parsed) === last) {
-          limit = Math.min(parsed, 50);
+          limit = parsed; limitSet = true;
           queryArgs = queryArgs.slice(0, -1);
         }
       }
@@ -515,8 +516,11 @@ module.exports = {
       const isUserMode = query.startsWith("@");
 
       if (isUserMode) {
-        await send(`👤 Đang lấy toàn bộ video từ TikTok: ${query}\n⏳ Sẽ tải & upload lần lượt lên GitHub (không giới hạn số lượng)...`);
+        const limitNote = limitSet ? `(tối đa ${limit} video)` : "(toàn bộ)";
+        await send(`👤 Đang lấy video TikTok: ${query} ${limitNote}\n⏳ Sẽ tải & upload lần lượt lên GitHub...`);
       } else {
+        const safeLimit = limitSet ? limit : 8;
+        limit = Math.min(safeLimit, 50);
         await send(`🔍 Đang tìm TikTok: "${query}" (tối đa ${limit} video)...\n⏳ Sẽ tải & upload lần lượt lên GitHub.`);
       }
 

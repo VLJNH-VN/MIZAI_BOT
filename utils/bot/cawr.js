@@ -312,16 +312,18 @@ function isDuplicate(existingList, ghUrl) {
  * @param {Function} [onProgress]  Callback (i, total, status)
  * @returns {Promise<{ success, skipped, failed, total, failReasons }>}
  */
-async function bulkAdd(tipName, query, limit = 8, onProgress = null) {
+async function bulkAdd(tipName, query, limit = 0, onProgress = null) {
   const isUser = query.startsWith("@");
 
   let results;
   try {
     if (isUser) {
-      global.logInfo?.(`[cawr.tt] GetUserPosts: ${query} (svl=all)`);
-      results = await getUserVideos(query, "all");
+      // limit > 0 → giới hạn theo -n; limit = 0 → lấy toàn bộ
+      const svl = (limit > 0) ? limit : "all";
+      global.logInfo?.(`[cawr.tt] GetUserPosts: ${query} (svl=${svl})`);
+      results = await getUserVideos(query, svl);
     } else {
-      const safeLimit = Math.min(Math.max(1, limit), 50);
+      const safeLimit = Math.min(Math.max(1, limit || 8), 50);
       global.logInfo?.(`[cawr.tt] Search: "${query}" (${safeLimit} video)`);
       results = await search(query, safeLimit);
     }

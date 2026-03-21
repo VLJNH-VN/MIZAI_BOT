@@ -8,6 +8,7 @@
 const https = require("https");
 const fs    = require("fs");
 const path  = require("path");
+const { Reactions } = require("zca-js");
 const { fmtDurationSec, fmtDurationMs } = require("../../utils/helpers");
 const { drawSearchCard, drawNowPlayingCard } = require("../../utils/musicCard");
 
@@ -232,7 +233,7 @@ module.exports = {
         const _raw = event?.data ?? {};
         const _mid = _raw?.msgId ?? _raw?.cliMsgId ?? _raw?.clientMsgId ?? null;
         const _cid = _raw?.cliMsgId ?? _raw?.clientMsgId ?? _mid ?? null;
-        if (_mid || _cid) await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: { msgId: _mid, cliMsgId: _cid } });
+        if (_mid || _cid) await api.addReaction(Reactions.WOW, { type: event.type, threadId: event.threadId, data: { msgId: _mid, cliMsgId: _cid } });
       } catch (_) {}
       try {
         const res = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(t.url)}`, { timeout: 120000 });
@@ -266,7 +267,7 @@ module.exports = {
         const _raw = event?.data ?? {};
         const _mid = _raw?.msgId ?? _raw?.cliMsgId ?? _raw?.clientMsgId ?? null;
         const _cid = _raw?.cliMsgId ?? _raw?.clientMsgId ?? _mid ?? null;
-        if (_mid || _cid) await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: { msgId: _mid, cliMsgId: _cid } });
+        if (_mid || _cid) await api.addReaction(Reactions.WOW, { type: event.type, threadId: event.threadId, data: { msgId: _mid, cliMsgId: _cid } });
       } catch (_) {}
       try {
         const keyword   = `${track.title} ${track.author}`;

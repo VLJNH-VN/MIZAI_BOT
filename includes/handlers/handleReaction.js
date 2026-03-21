@@ -7,10 +7,10 @@
 
 const { ThreadType, Reactions } = require("zca-js");
 
-// ── Icon reaction constants ────────────────────────────────────────────────────
-const ICON_ERROR   = "❎";
-const ICON_SUCCESS = "✅";
-const ICON_LOADING = "⏳";
+// ── Icon reaction constants (must use zca-js Reactions codes, not Unicode emoji) ──
+const ICON_LOADING = Reactions.WOW;      // ":o"      → 😮 processing/wait
+const ICON_SUCCESS = Reactions.LIKE;     // "/-strong" → 👍 done
+const ICON_ERROR   = Reactions.DISLIKE;  // "/-weak"   → 👎 failed
 
 /**
  * React icon lên tin nhắn của người dùng (event.data)

@@ -10,7 +10,7 @@ const fs    = require("fs");
 const path  = require("path");
 const { Reactions } = require("zca-js");
 const { fmtDurationSec, fmtDurationMs } = require("../../utils/helpers");
-const { drawSearchCard, drawNowPlayingCard } = require("../../utils/musicCard");
+const { drawSearchCard, drawNowPlayingCard } = require("../../utils/canvas");
 
 const os = require("os");
 

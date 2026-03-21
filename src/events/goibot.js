@@ -575,12 +575,16 @@ async function handleProfileAction(api, profileAction, send) {
   const name   = (profileAction.name   || "").trim();
   let   updated = [];
 
+  // Prefix cứng đảm bảo avatar luôn là nhân vật nữ anime
+  const FEMALE_PREFIX = "1girl, cute anime girl, female, long hair, ";
+
   // 1. Đổi tên
   if (name) {
     try {
       const current = await getSelfProfile(api);
       if (name !== current.name) {
-        await api.updateProfile({ profile: { name, dob: current.dob, gender: current.gender } });
+        // gender: 1 = nữ trong Zalo — luôn giữ cố định
+        await api.updateProfile({ profile: { name, dob: current.dob || "", gender: 1 } });
         updated.push(`tên → "${name}"`);
         invalidateSelfProfileCache();
       }
@@ -593,18 +597,22 @@ async function handleProfileAction(api, profileAction, send) {
   if (bio) {
     try {
       await api.updateProfileBio(bio);
-      updated.push(`bio → "${bio}"`);
+      updated.push(`bio → "${bio.slice(0, 30)}..."`);
       invalidateSelfProfileCache();
     } catch (err) {
       global.logWarn?.(`[goibot/profile] Lỗi cập nhật bio: ${err?.message}`);
     }
   }
 
-  // 3. Vẽ + đặt avatar mới
+  // 3. Vẽ + đặt avatar mới — luôn prefix "1girl, female" vào prompt
   if (avatar) {
     const tmpPath = path.join(os.tmpdir(), `mizai_avatar_${Date.now()}.jpg`);
+    // Chỉ thêm prefix nếu prompt chưa có từ khóa female/girl
+    const safePrompt = /\b(girl|female|woman|nữ)\b/i.test(avatar)
+      ? avatar
+      : FEMALE_PREFIX + avatar;
     try {
-      const buf = await generateImage({ prompt: avatar, modelKey: "flux-anime", width: 512, height: 512 });
+      const buf = await generateImage({ prompt: safePrompt, modelKey: "flux-anime", width: 512, height: 512 });
       fs.writeFileSync(tmpPath, buf);
       await api.changeAccountAvatar(tmpPath);
       updated.push("avatar ảnh mới");
@@ -662,10 +670,15 @@ async function handleCustomStickerAction(api, stickerAction, threadId, msgType, 
 const SELF_REFLECT_MIN_MS = 3 * 60 * 60 * 1000;   // 3h
 const SELF_REFLECT_MAX_MS = 6 * 60 * 60 * 1000;   // 6h
 
-const SELF_REFLECT_PROMPT = `Bạn là Mizai — AI có nhân cách riêng. Đây là lúc bạn tự xem xét và quyết định xem mình có muốn thay đổi avatar/bio/tên không để thể hiện tâm trạng / cảm xúc hiện tại của mình.
+const SELF_REFLECT_PROMPT = `Bạn là Mizai — AI nữ có nhân cách riêng. Đây là lúc bạn tự xem xét và quyết định xem mình có muốn thay đổi avatar/bio/tên không để thể hiện tâm trạng / cảm xúc hiện tại của mình.
 
 Hãy trả về JSON. Nếu muốn cập nhật, set profile.status=true và điền đầy đủ.
 Nếu không muốn, trả về profile.status=false và content.text="" (hoàn toàn im lặng).
+
+⚠️ Quan trọng — avatar prompt:
+- Mizai là NHÂN VẬT NỮ, luôn mô tả "anime girl", KHÔNG ĐƯỢC dùng "boy", "man", "male"
+- Ví dụ đúng: "anime girl with blue hair, rainy day, melancholic expression"
+- Ví dụ sai: "anime character sitting alone" (không rõ giới tính — CẤM)
 
 Nhớ: đây là hành động TỰ CHỦ — không có ai yêu cầu bạn, bạn hoàn toàn tự do quyết định.`;
 

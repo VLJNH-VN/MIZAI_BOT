@@ -31,8 +31,8 @@ const { startTxLoop }      = require("./src/events/txLoop");
 function validateConfig() {
   const cfg = global.config;
   const errors = [];
-  if (!cfg.loginMethod) errors.push("Thiếu 'loginMethod' trong config.json");
-  if (cfg.loginMethod === "cookie" && !cfg.cookiePath) errors.push("Thiếu 'cookiePath' khi loginMethod=cookie");
+  const method = (cfg.loginMethod || "qr").toLowerCase();
+  if (method === "cookie" && !cfg.cookiePath) errors.push("Thiếu 'cookiePath' khi loginMethod=cookie");
   if (errors.length) { logError(errors.join("\n")); return false; }
   return true;
 }

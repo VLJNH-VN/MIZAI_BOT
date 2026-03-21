@@ -161,27 +161,26 @@ module.exports = {
 
       if (!videoUrl) return send("❌ Không lấy được link tải. Thử video khác.");
 
+      let tmpPath;
       try {
-        await api.sendVideo({ videoUrl }, event.threadId, event.type);
-      } catch {
-        let tmpPath;
-        try {
-          await send("⏳ File lớn, đang tải về để gửi...").catch(() => {});
-          const ext = "mp4";
-          tmpPath = path.join(os.tmpdir(), `mizai_tt_${Date.now()}.${ext}`);
-          const writer = fs.createWriteStream(tmpPath);
-          const fileRes = await global.axios.get(videoUrl, { responseType: "stream", timeout: 0 });
-          await new Promise((resolve, reject) => {
-            fileRes.data.pipe(writer);
-            writer.on("finish", resolve);
-            writer.on("error", reject);
-          });
-          await api.sendMessage({ attachments: [tmpPath] }, event.threadId, event.type);
-        } catch (dlErr) {
-          return send(`❌ Không gửi được video: ${dlErr?.message || "Lỗi không xác định"}\n🔗 ${videoUrl}`);
-        } finally {
-          if (tmpPath) try { fs.unlinkSync(tmpPath); } catch (_) {}
-        }
+        await send("⏳ Đang tải video về để gửi...").catch(() => {});
+        tmpPath = path.join(os.tmpdir(), `mizai_tt_${Date.now()}.mp4`);
+        const writer = fs.createWriteStream(tmpPath);
+        const fileRes = await global.axios.get(videoUrl, {
+          responseType: "stream",
+          timeout: 120000,
+          headers: { "User-Agent": global.userAgent || "Mozilla/5.0" },
+        });
+        await new Promise((resolve, reject) => {
+          fileRes.data.pipe(writer);
+          writer.on("finish", resolve);
+          writer.on("error", reject);
+        });
+        await api.sendVideo({ videoPath: tmpPath }, event.threadId, event.type);
+      } catch (dlErr) {
+        return send(`❌ Không gửi được video: ${dlErr?.message || "Lỗi không xác định"}\n🔗 ${videoUrl}`);
+      } finally {
+        if (tmpPath) try { fs.unlinkSync(tmpPath); } catch (_) {}
       }
     } catch (err) {
       return send(`❌ Lỗi tải video: ${err?.message || "Không xác định"}`);

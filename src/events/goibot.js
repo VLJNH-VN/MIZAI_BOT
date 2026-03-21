@@ -58,6 +58,12 @@ const isProcessing       = {};
 const lastAiCall         = {};
 const USER_AI_COOLDOWN_MS = 8000;
 
+// ── Tự đọc tin nhắn (watch mode) ────────────────────────────────────────────────
+const lastAutoReply      = {};
+const AUTO_REPLY_COOLDOWN_MS = 8 * 60 * 1000;  // 8 phút giữa 2 lần tự nhắn
+const AUTO_REPLY_CHANCE      = 0.18;             // 18% xác suất xem xét
+const AUTO_REPLY_MIN_LEN     = 8;                // tin nhắn ít nhất 8 ký tự mới xét
+
 // ════════════════════════════════════════════════════════════════════════════════
 //  TX — CONTEXT & ACTION
 // ════════════════════════════════════════════════════════════════════════════════
@@ -654,7 +660,17 @@ async function handleGoibot({ api, event }) {
   const isReplyToBot = !!botId && quoteUidFrom === botId;
   const isTriggered  = TRIGGER_KEYWORDS.some(kw => bodyLower.includes(kw));
 
-  if (!isTriggered && !isReplyToBot) return;
+  // ── Chế độ tự giám sát (watch mode) ────────────────────────────────────────
+  let isWatchMode = false;
+  if (!isTriggered && !isReplyToBot) {
+    // Chỉ xét nếu: tin đủ dài + chưa cooldown + may mắn qua xác suất
+    const lastAuto = lastAutoReply[threadId] || 0;
+    const passChance = Math.random() < AUTO_REPLY_CHANCE;
+    const passCooldown = Date.now() - lastAuto > AUTO_REPLY_COOLDOWN_MS;
+    const passLen = body.trim().length >= AUTO_REPLY_MIN_LEN;
+    if (!passChance || !passCooldown || !passLen) return;
+    isWatchMode = true;
+  }
 
   const quoteMsgId = raw?.quote?.msgId || raw?.quote?.globalMsgId || "";
   if (quoteMsgId && isTracked(String(quoteMsgId))) return;
@@ -664,7 +680,9 @@ async function handleGoibot({ api, event }) {
 
   const now      = Date.now();
   const lastCall = lastAiCall[userKey] || 0;
-  if (now - lastCall < USER_AI_COOLDOWN_MS) {
+
+  // Cooldown chỉ áp dụng cho triggered mode, không áp dụng watch mode
+  if (!isWatchMode && now - lastCall < USER_AI_COOLDOWN_MS) {
     const waitSec = Math.ceil((USER_AI_COOLDOWN_MS - (now - lastCall)) / 1000);
     try {
       await api.sendMessage({ msg: `⏳ Bạn gọi Mizai quá nhanh! Chờ ${waitSec}s nhé.`, quote: raw }, threadId, event.type);
@@ -675,7 +693,7 @@ async function handleGoibot({ api, event }) {
   }
 
   isProcessing[userKey] = true;
-  lastAiCall[userKey]   = now;
+  if (!isWatchMode) lastAiCall[userKey] = now;
 
   const send = async (msg) => {
     try {
@@ -740,12 +758,16 @@ async function handleGoibot({ api, event }) {
     // Cập nhật lastSeen cho user (không lưu note — chỉ update thời gian)
     saveUserNote(senderId, nameUser, null);
 
+    const watchModeNote = isWatchMode
+      ? "\n[WATCH_MODE] Mizai đang tự đọc tin nhắn này mà KHÔNG được gọi. Mizai tự quyết định có muốn chen vào không. Nếu tin nhắn không thú vị, không liên quan, hoặc Mizai không có gì để nói — hãy để content.text TRỐNG và KHÔNG làm gì. Chỉ phản hồi khi thật sự muốn. KHÔNG cần giải thích lý do im lặng."
+      : "";
+
     const userMessage = JSON.stringify({
       time: timenow, senderName: nameUser, content: body,
       threadID: threadId, senderID: senderId,
       id_cua_bot: botId, hasQuote, hasImage, hasUrl,
       SELF_PROFILE: selfProfile,
-    }) + "\n" + moodCtx + (memoryCtx ? "\n" + memoryCtx : "") + (isAdmin ? `\n${getTxContext(true)}` : "");
+    }) + "\n" + moodCtx + (memoryCtx ? "\n" + memoryCtx : "") + (isAdmin ? `\n${getTxContext(true)}` : "") + watchModeNote;
 
     const responseText = await sendToGroq(userMessage, threadId, {
       imageParts,
@@ -761,6 +783,47 @@ async function handleGoibot({ api, event }) {
       botMsg = JSON.parse(responseText.replace(/```json|```/g, "").trim());
     } catch {
       return send(responseText.trim() || "❌ Không có phản hồi.");
+    }
+
+    // ── Watch mode: nếu AI không có gì để nói → im lặng hoàn toàn ────────────
+    if (isWatchMode) {
+      const hasReply = (botMsg?.content?.text || "").trim().length > 0;
+      if (!hasReply || botMsg?.refuse?.status) {
+        // AI chọn im lặng — không làm gì
+        if (botMsg?.emotion?.status) {
+          updateMoodState({
+            mood      : botMsg.emotion.mood,
+            energy    : botMsg.emotion.energy,
+            moodScore : botMsg.emotion.moodScore,
+            episode   : botMsg.emotion.episode,
+          });
+        }
+        return;
+      }
+      // AI muốn chen vào — ghi nhận thời gian và gửi (không quote)
+      lastAutoReply[threadId] = Date.now();
+      const sendNoQuote = async (msg) => {
+        try { return await api.sendMessage({ msg }, threadId, event.type); } catch {}
+      };
+      await sendNoQuote(botMsg.content.text);
+      if (botMsg?.emotion?.status) {
+        updateMoodState({
+          mood      : botMsg.emotion.mood,
+          energy    : botMsg.emotion.energy,
+          moodScore : botMsg.emotion.moodScore,
+          episode   : botMsg.emotion.episode,
+        });
+      }
+      if (botMsg?.memory?.status) {
+        if (botMsg.memory.userNote) saveUserNote(senderId, nameUser, botMsg.memory.userNote);
+        if (botMsg.memory.diary)    saveDiaryEntry(botMsg.memory.diary);
+        if (botMsg.memory.globalNote) saveGlobalNote(botMsg.memory.globalNote);
+      }
+      if (botMsg?.sticker?.status) {
+        const kw = botMsg.sticker.keyword || "cute";
+        await sendStickerByKeyword(api, kw, threadId, event.type);
+      }
+      return;
     }
 
     // ── Từ chối — xử lý trước, nếu từ chối thì dừng mọi action khác ──────────

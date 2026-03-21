@@ -114,12 +114,24 @@ function addHistory(videoId) {
  * @returns {Promise<Array<{ id, videoUrl, tiktokUrl, title, author }>>}
  */
 async function search(query, limit = 8) {
-  const cookie = global.config?.tiktokCookie;
-  if (!cookie) throw new Error("Chưa có tiktokCookie trong config.json");
+  let cookie = global.config?.tiktokCookie;
+  if (!cookie) {
+    const username = global.config?.tiktokUsername;
+    const password = global.config?.tiktokPassword;
+    if (!username || !password) throw new Error("Chưa có tiktokCookie trong config.json");
+    global.logInfo?.("[TikTok] Chưa có cookie, đang tự đăng nhập...");
+    try {
+      const { refreshCookie } = require("../system/tiktokLogin");
+      cookie = await refreshCookie();
+    } catch (e) {
+      throw new Error(`Không lấy được cookie TikTok: ${e.message}`);
+    }
+  }
 
   const safeLimit = Math.min(Math.max(1, limit), 50);
   const results   = [];
   let page = 1;
+  let retried = false;
 
   while (results.length < safeLimit) {
     let res;
@@ -128,6 +140,23 @@ async function search(query, limit = 8) {
     } catch (e) {
       global.logWarn?.(`[cawr.tt] search page ${page} lỗi: ${e.message}`);
       break;
+    }
+
+    // Cookie hết hạn → thử refresh 1 lần
+    if (!retried && (res.status !== "success") && /cookie|invalid|auth|login/i.test(res.message || "")) {
+      retried = true;
+      const username = global.config?.tiktokUsername;
+      const password = global.config?.tiktokPassword;
+      if (username && password) {
+        global.logWarn?.("[TikTok] Cookie hết hạn, đang lấy lại...");
+        try {
+          const { refreshCookie } = require("../system/tiktokLogin");
+          cookie = await refreshCookie();
+          continue;
+        } catch (e) {
+          global.logWarn?.(`[TikTok] Không thể refresh cookie: ${e.message}`);
+        }
+      }
     }
 
     if (res.status !== "success" || !Array.isArray(res.result) || res.result.length === 0) {

@@ -3,15 +3,16 @@
 /**
  * src/commands/sechtt.js
  * Tìm kiếm video TikTok qua fown API (tikwm backend)
- * Hỗ trợ: xem kết quả + tải video theo số thứ tự
+ * Gửi video đúng format — dùng githubUpload → raw.githubusercontent.com URL
  */
 
 const fs   = require("fs");
 const path = require("path");
-const os   = require("os");
 const { Reactions } = require("zca-js");
+const axios = require("axios");
 
 const FOWN_API = "https://fown.onrender.com";
+const TEMP_DIR = path.join(process.cwd(), "includes", "cache");
 
 function fmtNum(n) {
   if (!n) return "0";
@@ -25,6 +26,29 @@ function fmtDuration(sec) {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}:${r.toString().padStart(2, "0")}`;
+}
+
+function uniqueId() {
+  return `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function cleanup(...files) {
+  setTimeout(() => {
+    files.forEach(f => {
+      try { if (f && fs.existsSync(f)) fs.unlinkSync(f); } catch (_) {}
+    });
+  }, 10000);
+}
+
+async function downloadFile(url, filePath) {
+  const res = await axios.get(url, {
+    responseType:      "arraybuffer",
+    timeout:           180000,
+    maxContentLength:  500 * 1024 * 1024,
+    headers: { "User-Agent": global.userAgent || "Mozilla/5.0" },
+  });
+  fs.writeFileSync(filePath, Buffer.from(res.data));
+  return res.headers["content-type"] || "";
 }
 
 async function searchTikTok(query, limit = 8) {
@@ -52,11 +76,30 @@ function buildResultList(results) {
   return lines.join("\n");
 }
 
+// ── Lấy video URL không watermark từ tikwm ──────────────────────────────────
+async function getTikwmVideoUrl(tiktokUrl) {
+  const body = new URLSearchParams({ url: tiktokUrl }).toString();
+  const res  = await axios.post("https://www.tikwm.com/api/", body, {
+    timeout: 30000,
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  });
+  if (res.data?.code !== 0) throw new Error(`tikwm lỗi code ${res.data?.code}`);
+  const d = res.data.data;
+  return {
+    videoUrl:  d.play || d.wmplay || null,
+    thumbnail: d.cover   || "",
+    duration:  d.duration || 0,
+    width:     d.width   || 576,
+    height:    d.height  || 1024,
+    images:    Array.isArray(d.images) ? d.images : null,
+  };
+}
+
 module.exports = {
   config: {
     name:            "sechtt",
     aliases:         ["searchtiktok", "timtt", "tiktoksearch", "ttfind"],
-    version:         "1.0.0",
+    version:         "2.0.0",
     hasPermssion:    0,
     credits:         "MiZai",
     description:     "Tìm kiếm video TikTok và tải về",
@@ -116,7 +159,7 @@ module.exports = {
   },
 
   onReply: async ({ api, event, data, send }) => {
-    const { results = [], query = "" } = data || {};
+    const { results = [] } = data || {};
     const raw      = event?.data ?? {};
     const body     = typeof raw.content === "string" ? raw.content : (raw.content?.text || raw.content?.msg || "");
     const numMatch = body.trim().replace(/@\S*/g, "").trim().match(/\d+/);
@@ -130,9 +173,8 @@ module.exports = {
     const video = results[choice - 1];
 
     try {
-      const _raw = event?.data ?? {};
-      const _mid = _raw?.msgId ?? _raw?.cliMsgId ?? _raw?.clientMsgId ?? null;
-      const _cid = _raw?.cliMsgId ?? _raw?.clientMsgId ?? _mid ?? null;
+      const _mid = raw?.msgId ?? raw?.cliMsgId ?? raw?.clientMsgId ?? null;
+      const _cid = raw?.cliMsgId ?? raw?.clientMsgId ?? _mid ?? null;
       if (_mid || _cid) await api.addReaction(Reactions.WOW, { type: event.type, threadId: event.threadId, data: { msgId: _mid, cliMsgId: _cid } });
     } catch (_) {}
 
@@ -140,80 +182,79 @@ module.exports = {
     const uploader = video.uploader || "Ẩn danh";
     const dur      = video.duration ? fmtDuration(video.duration) : "?:??";
     const views    = video.view_count ? fmtNum(video.view_count) : "0";
+    const caption  = `📄 ${title}\n👤 ${uploader} · ⏱ ${dur} · 👁 ${views}`;
 
-    await send(`⏳ Đang tải video...\n🎬 ${title}\n👤 ${uploader} · ⏱ ${dur} · 👁 ${views}`);
+    await send(`⏳ Đang xử lý...\n🎬 ${title}\n👤 ${uploader}`);
+
+    const uid     = uniqueId();
+    const rawPath = path.join(TEMP_DIR, `tt_raw_${uid}.mp4`);
 
     try {
-      // Lấy link video từ fown API
-      const downloadRes = await global.axios.get(
-        `${FOWN_API}/api/download?url=${encodeURIComponent(video.url)}&format=best`,
-        { timeout: 120000 }
-      );
+      if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
-      // raw_url là link GitHub/CDN trực tiếp (có thể null nếu chưa cấu hình GitHub)
-      let videoUrl = downloadRes.data?.raw_url || null;
-
-      if (!videoUrl) {
-        // Dùng fown download endpoint trực tiếp làm video URL
-        videoUrl = `${FOWN_API}/api/download?url=${encodeURIComponent(video.url)}&format=best`;
+      // ── Bước 1: Lấy direct URL từ tikwm ──────────────────────────────────
+      let tikInfo;
+      try {
+        tikInfo = await getTikwmVideoUrl(video.url);
+      } catch (e) {
+        return send(`❌ Không lấy được video: ${e.message}`);
       }
 
-      // Nếu là URL tương đối, thêm base
-      if (videoUrl && videoUrl.startsWith("/")) {
-        videoUrl = FOWN_API + videoUrl;
-      }
-
-      if (!videoUrl) return send("❌ Không lấy được link tải. Thử video khác.");
-
-      // Resolve redirect nếu là GitHub releases URL (trả về URL CDN thực)
-      let finalVideoUrl = videoUrl;
-      try {
-        const headRes = await global.axios.head(videoUrl, {
-          maxRedirects: 10,
-          timeout: 15000,
-          validateStatus: () => true,
-        });
-        const resolved = headRes.request?.res?.responseUrl || headRes.request?.responseURL || null;
-        if (resolved && resolved.startsWith("http")) finalVideoUrl = resolved;
-      } catch (_) {}
-
-      try {
-        await api.sendVideo(
-          {
-            videoUrl:     finalVideoUrl,
-            duration:     video.duration || 0,
-            width:        1280,
-            height:       720,
-          },
-          event.threadId,
-          event.type
-        );
-      } catch (sendErr) {
-        // Fallback: tải về rồi gửi qua sendMessage attachments
-        await send("⏳ Đang tải về để gửi...").catch(() => {});
-        let tmpPath;
+      // Slideshow ảnh
+      if (tikInfo.images?.length) {
+        const imgPaths = [];
         try {
-          tmpPath = path.join(os.tmpdir(), `mizai_tt_${Date.now()}.mp4`);
-          const writer = fs.createWriteStream(tmpPath);
-          const fileRes = await global.axios.get(finalVideoUrl, {
-            responseType: "stream",
-            timeout:      120000,
-            headers:      { "User-Agent": global.userAgent || "Mozilla/5.0" },
-          });
-          await new Promise((resolve, reject) => {
-            fileRes.data.pipe(writer);
-            writer.on("finish", resolve);
-            writer.on("error", reject);
-          });
-          await api.sendMessage({ msg: "", attachments: [tmpPath] }, event.threadId, event.type);
-        } catch (dlErr) {
-          return send(`❌ Không gửi được video: ${dlErr?.message || "Lỗi không xác định"}\n🔗 ${finalVideoUrl}`);
+          for (const imgUrl of tikInfo.images.slice(0, 6)) {
+            const p = path.join(TEMP_DIR, `tt_img_${uniqueId()}.jpg`);
+            try { await downloadFile(imgUrl, p); imgPaths.push(p); } catch (_) {}
+          }
+          if (imgPaths.length) {
+            await api.sendMessage({ msg: caption, attachments: imgPaths }, event.threadId, event.type);
+          }
         } finally {
-          if (tmpPath) try { fs.unlinkSync(tmpPath); } catch (_) {}
+          cleanup(...imgPaths);
+        }
+        return;
+      }
+
+      if (!tikInfo.videoUrl) return send("❌ Không tìm được link video. Thử bài khác.");
+
+      // ── Bước 2: Tải video về local ────────────────────────────────────────
+      await downloadFile(tikInfo.videoUrl, rawPath);
+      const fileSize = fs.statSync(rawPath).size;
+
+      // ── Bước 3: Upload GitHub → sendVideo với raw URL ─────────────────────
+      if (typeof global.githubUpload === "function" && fileSize < 50 * 1024 * 1024) {
+        try {
+          const ghUrl = await global.githubUpload(rawPath, `sechtt/vid_${uid}.mp4`);
+          if (ghUrl) {
+            await api.sendVideo({
+              videoUrl:     ghUrl,
+              thumbnailUrl: tikInfo.thumbnail || "",
+              msg:          caption,
+              width:        tikInfo.width  || 576,
+              height:       tikInfo.height || 1024,
+              duration:     (tikInfo.duration || 0) * 1000,
+              ttl:          500_000,
+            }, event.threadId, event.type);
+            logInfo?.("[sechtt] sendVideo (GitHub) thành công.");
+            return;
+          }
+        } catch (ghErr) {
+          logWarn?.(`[sechtt] githubUpload/sendVideo thất bại: ${ghErr.message}`);
         }
       }
+
+      // ── Bước 4: Fallback — gửi file MP4 ──────────────────────────────────
+      await api.sendMessage(
+        { msg: caption, attachments: [rawPath], ttl: 500_000 },
+        event.threadId, event.type
+      );
+
     } catch (err) {
       return send(`❌ Lỗi tải video: ${err?.message || "Không xác định"}`);
+    } finally {
+      cleanup(rawPath);
     }
   },
 };

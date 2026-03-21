@@ -234,7 +234,7 @@ module.exports = {
             else if (item.info.isDirectory())  { rmSync(item.dest, { recursive: true, force: true }); deleted.push(`🗂️ ${idxStr}. ${name}`); }
           }
 
-          send(deleted.length
+          await send(deleted.length
             ? `✅ Đã xóa:\n${deleted.join("\n")}`
             : "❌ Không có mục nào được xóa."
           );
@@ -278,7 +278,7 @@ module.exports = {
 
           const content = readFileSync(item.dest, "utf8");
           const link = await pastebinUpload(content);
-          send(link ? `🔗 Link nội dung file:\n${link}` : "❌ Upload lên pastebin thất bại.");
+          await send(link ? `🔗 Link nội dung file:\n${link}` : "❌ Upload lên pastebin thất bại.");
           break;
         }
 
@@ -293,12 +293,12 @@ module.exports = {
 
           if (isDir) {
             mkdirSync(fullPath, { recursive: true });
-            send(`✅ Đã tạo folder: ${nameArg}`);
+            await send(`✅ Đã tạo folder: ${nameArg}`);
           } else {
             const content = parts.slice(2).join(" ");
             if (!existsSync(path.dirname(fullPath))) mkdirSync(path.dirname(fullPath), { recursive: true });
             fs.writeFileSync(fullPath, content, "utf8");
-            send(`✅ Đã tạo file: ${nameArg}`);
+            await send(`✅ Đã tạo file: ${nameArg}`);
           }
           break;
         }
@@ -313,7 +313,7 @@ module.exports = {
           const base    = path.basename(item.dest, ext);
           const destCopy = path.join(path.dirname(item.dest), `${base} (COPY)${ext}`);
           copyFileSync(item.dest, destCopy);
-          send(`✅ Đã sao chép → ${path.basename(destCopy)}`);
+          await send(`✅ Đã sao chép → ${path.basename(destCopy)}`);
           break;
         }
 
@@ -326,7 +326,7 @@ module.exports = {
 
           const newPath = path.join(path.dirname(item.dest), newName);
           renameSync(item.dest, newPath);
-          send(`✅ Đã đổi tên → ${newName}`);
+          await send(`✅ Đã đổi tên → ${newName}`);
           break;
         }
 
@@ -340,19 +340,19 @@ module.exports = {
           try {
             const repoPath = `files/${path.basename(item.dest)}`;
             const url = await global.githubUpload(item.dest, repoPath);
-            send(url
+            await send(url
               ? `✅ Đã upload lên GitHub!\n☁️ ${url}`
               : "❌ Upload thành công nhưng không lấy được URL."
             );
           } catch (err) {
-            send(`❌ Upload GitHub thất bại:\n${err.message}`);
+            await send(`❌ Upload GitHub thất bại:\n${err.message}`);
           }
           break;
         }
 
         // ── Lệnh không hợp lệ ────────────────────────────────────────────────
         default:
-          send(
+          await send(
             "❌ Lệnh không hợp lệ.\n" +
             "📌 Các lệnh hỗ trợ:\n" +
             "  open <stt>            — Mở thư mục\n" +
@@ -367,7 +367,7 @@ module.exports = {
       }
     } catch (err) {
       logError(`[file] onReply lỗi: ${err.message}`);
-      send(`❌ Lỗi xử lý:\n${err.message}`);
+      await send(`❌ Lỗi xử lý:\n${err.message}`);
     }
   }
 };

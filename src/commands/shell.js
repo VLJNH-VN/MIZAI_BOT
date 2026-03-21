@@ -1,4 +1,6 @@
 const { exec } = require("child_process");
+const { promisify } = require("util");
+const execAsync = promisify(exec);
 
 module.exports = {
   config: {
@@ -12,13 +14,7 @@ module.exports = {
     cooldowns: 5
   },
 
-  run: async ({
-    args,
-    send,
-    event,
-    isBotAdmin
-  }) => {
-
+  run: async ({ args, send, event, isBotAdmin }) => {
     const senderId = String(event.data?.uidFrom || "");
 
     if (!isBotAdmin(senderId)) {
@@ -26,32 +22,23 @@ module.exports = {
     }
 
     const command = args.join(" ");
-
     if (!command) {
       return send("⚠️ Nhập lệnh cần chạy.\nVí dụ: .shell ls");
     }
 
-    send("💻 Đang chạy lệnh...");
+    await send("💻 Đang chạy lệnh...");
 
-    exec(command, { timeout: 20000 }, (error, stdout, stderr) => {
-
-      if (error) {
-        return send("❌ Lỗi:\n" + error.message);
-      }
+    try {
+      const { stdout, stderr } = await execAsync(command, { timeout: 20000 });
 
       if (stderr) {
-        return send("⚠️ STDERR:\n" + stderr);
+        return send("⚠️ STDERR:\n" + stderr.substring(0, 1900));
       }
 
       const result = stdout || "Không có output.";
-
-      if (result.length > 2000) {
-        return send("📄 Output quá dài.");
-      }
-
-      send("📟 Kết quả:\n" + result);
-
-    });
-
+      return send("📟 Kết quả:\n" + result.substring(0, 1900));
+    } catch (error) {
+      return send("❌ Lỗi:\n" + (error.message || String(error)).substring(0, 1900));
+    }
   }
 };

@@ -1,16 +1,8 @@
 "use strict";
 
-/**
- * src/commands/uptime.js
- * ─────────────────────────────────────────────────────────────────────────────
- * Xem thời gian hoạt động + thông số hệ thống.
- * Nếu có video trong includes/cache/videos/ sẽ gửi kèm video ngẫu nhiên.
- */
-
 const fs   = require("fs");
 const path = require("path");
 const os   = require("os");
-
 const { execSync } = require("child_process");
 
 const ROOT      = process.cwd();
@@ -38,21 +30,19 @@ function getRandomVideo() {
 }
 
 function getSystemInfo() {
-  const uptime  = process.uptime();
+  const uptime = process.uptime();
   const d  = Math.floor(uptime / 86400);
   const h  = Math.floor((uptime % 86400) / 3600);
   const m  = Math.floor((uptime % 3600) / 60);
   const s  = Math.floor(uptime % 60);
-  const pad = (n) => String(n).padStart(2, "0");
+  const pad = n => String(n).padStart(2, "0");
   const uptimeStr = d > 0 ? `${d}d ${pad(h)}h ${pad(m)}m ${pad(s)}s` : `${pad(h)}h ${pad(m)}m ${pad(s)}s`;
 
   const totalMem = os.totalmem() / (1024 * 1024);
   const freeMem  = os.freemem()  / (1024 * 1024);
   const usedMem  = totalMem - freeMem;
   const cpuLoad  = os.loadavg()[0];
-
-  const now = new Date();
-  const vnTime = now.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour12: false });
+  const vnTime   = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour12: false });
 
   return (
     `🚀 Hệ thống bot:\n` +
@@ -69,21 +59,29 @@ function getSystemInfo() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
 module.exports = {
   config: {
     name:            "uptime",
-    version:         "1.1.0",
+    aliases:         ["ping"],
+    version:         "1.2.0",
     hasPermssion:    0,
-    credits:         "Nguyễn Trương Thiện Phát (converted MiZai)",
-    description:     "Xem thời gian hoạt động và thông tin hệ thống",
+    credits:         "MiZai",
+    description:     "Xem thời gian hoạt động, thông tin hệ thống và đo độ trễ",
     commandCategory: "Hệ Thống",
-    usages:          "uptime",
+    usages:          "uptime | ping",
     cooldowns:       5,
   },
 
-  run: async ({ api, event, send, threadID }) => {
+  run: async ({ api, event, send, threadID, commandName }) => {
+    // ── Ping mode ────────────────────────────────────────────────────────────
+    if (commandName === "ping") {
+      const start = Date.now();
+      await send("🏓 Pong!");
+      const latency = Date.now() - start;
+      return send(`⏱ Độ trễ: ${latency}ms`);
+    }
+
+    // ── Uptime / system info ─────────────────────────────────────────────────
     const info      = getSystemInfo();
     const videoPath = getRandomVideo();
 
@@ -108,7 +106,7 @@ module.exports = {
         }, threadID, event.type);
       }
     } catch (err) {
-      global.logError?.(`[uptime] video lỗi: ${err?.message || err}`);
+      logError?.(`[uptime] video lỗi: ${err?.message || err}`);
     }
   },
 };

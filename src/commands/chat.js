@@ -12,27 +12,30 @@ function parseDurationToSeconds(str) {
 module.exports = {
   config: {
     name: "chat",
-    aliases: ["chatset", "cs"],
-    version: "1.0.0",
+    aliases: ["chatset", "cs", "undo"],
+    version: "1.1.0",
     hasPermssion: 0,
     credits: "MIZAI",
-    description: "Quản lý cài đặt cuộc trò chuyện",
+    description: "Quản lý cài đặt cuộc trò chuyện và thu hồi tin nhắn bot",
     commandCategory: "Tiện Ích",
     usages: [
-      "chatset pin            — Ghim cuộc trò chuyện hiện tại",
-      "chatset unpin          — Bỏ ghim cuộc trò chuyện",
-      "chatset hide           — Ẩn cuộc trò chuyện",
-      "chatset unhide         — Bỏ ẩn cuộc trò chuyện",
-      "chatset unread         — Đánh dấu chưa đọc",
-      "chatset read           — Bỏ đánh dấu chưa đọc",
-      "chatset autodelete <10m|1h|1d|off> — Tự xóa tin nhắn sau thời gian",
-      "chatset delete         — Xóa cuộc trò chuyện hiện tại (cẩn thận!)",
+      "chat pin            — Ghim cuộc trò chuyện hiện tại",
+      "chat unpin          — Bỏ ghim cuộc trò chuyện",
+      "chat hide           — Ẩn cuộc trò chuyện",
+      "chat unhide         — Bỏ ẩn cuộc trò chuyện",
+      "chat unread         — Đánh dấu chưa đọc",
+      "chat read           — Bỏ đánh dấu chưa đọc",
+      "chat autodelete <10m|1h|1d|off> — Tự xóa tin nhắn sau thời gian",
+      "chat delete         — Xóa cuộc trò chuyện hiện tại (cẩn thận!)",
+      "chat undo           — Thu hồi tin nhắn của bot (reply vào tin cần gỡ)",
     ].join("\n"),
     cooldowns: 3,
   },
 
-  run: async ({ api, event, args, send, threadID, prefix }) => {
-    const sub = (args[0] || "").toLowerCase();
+  run: async ({ api, event, args, send, threadID, prefix, commandName }) => {
+    // ── Khi gọi bằng alias .undo không có args → chuyển về sub undo ─────────
+    let sub = (args[0] || "").toLowerCase();
+    if (commandName === "undo" && !sub) sub = "undo";
 
     if (!sub) {
       return send(
@@ -44,11 +47,11 @@ module.exports = {
         `${prefix}chat unread        Đánh dấu chưa đọc\n` +
         `${prefix}chat read          Bỏ đánh dấu\n` +
         `${prefix}chat autodelete <thời gian|off>  Tự xóa\n` +
-        `${prefix}chat delete        Xóa hội thoại ⚠️`
+        `${prefix}chat delete        Xóa hội thoại ⚠️\n` +
+        `${prefix}chat undo          Thu hồi tin nhắn bot (reply)`
       );
     }
 
-    const isGroup = event.type === ThreadType.Group;
     const type = event.type;
 
     try {
@@ -95,35 +98,58 @@ module.exports = {
               `${prefix}chat autodelete off`
             );
           }
-
           if (param === "off") {
             await api.updateAutoDeleteChat({ threadId: threadID, type, duration: 0 });
             return send("✅ Đã tắt tự động xóa tin nhắn.");
           }
-
           const secs = parseDurationToSeconds(param);
-          if (!secs) {
-            return send("❌ Định dạng không hợp lệ. Dùng: 10m, 1h, 1d, hoặc off");
-          }
-
+          if (!secs) return send("❌ Định dạng không hợp lệ. Dùng: 10m, 1h, 1d, hoặc off");
           await api.updateAutoDeleteChat({ threadId: threadID, type, duration: secs });
           return send(`✅ Đã bật tự động xóa tin nhắn sau ${param}.`);
         }
 
         case "delete": {
-          const confirm = args[1];
-          if (confirm !== "xacnhan") {
+          if (args[1] !== "xacnhan") {
             return send(
               `⚠️ Lệnh này sẽ XÓA toàn bộ hội thoại hiện tại!\n` +
               `Nếu chắc chắn, gõ: ${prefix}chat delete xacnhan`
             );
           }
-          await api.deleteChat(
-            { msgId: "0", cliMsgId: "0" },
-            threadID,
-            type
-          );
+          await api.deleteChat({ msgId: "0", cliMsgId: "0" }, threadID, type);
           return send("🗑️ Đã xóa cuộc trò chuyện này.");
+        }
+
+        // ── Thu hồi tin nhắn bot ─────────────────────────────────────────────
+        case "undo": {
+          if (global.config?.["🔄 undoEnabled"] === false) {
+            return send("⛔ Tính năng thu hồi tin nhắn hiện đang bị tắt.");
+          }
+
+          const raw   = event?.data || {};
+          const quote = raw?.quote || raw?.replyMsg || null;
+
+          if (!quote || (!quote.globalMsgId && !quote.cliMsgId)) {
+            return send("⚠️ Vui lòng reply vào tin nhắn của bot cần gỡ, sau đó gõ .undo");
+          }
+
+          const msgId   = quote.globalMsgId || quote.msgId;
+          const cliId   = quote.cliMsgId || msgId;
+          const uidFrom = global.botId ? String(global.botId) : "";
+
+          try {
+            await api.undo({ msgId, cliMsgId: cliId }, threadID, type);
+            return send("✅ Đã gỡ tin nhắn thành công!");
+          } catch {
+            try {
+              await api.deleteMessage(
+                { data: { cliMsgId: cliId, msgId, uidFrom }, threadId: threadID, type },
+                true
+              );
+              return send("✅ Đã xóa tin nhắn thành công!");
+            } catch {
+              return send("❌ Không thể gỡ tin nhắn này. Bot chỉ có thể gỡ tin nhắn do chính bot gửi.");
+            }
+          }
         }
 
         default:

@@ -12,10 +12,40 @@ const { Reactions } = require("zca-js");
 const { fmtDurationSec, fmtDurationMs } = require("../../utils/helpers");
 const { drawSearchCard, drawNowPlayingCard } = require("../../utils/musicCard");
 
+const os = require("os");
+
 const FOWN_API = "https://fown.onrender.com";
 const SPT_ID     = "1530d567ec6542669896bc96efd370f3";
 const SPT_SECRET = "6e0241b124da40dfb98728b7f29cedfd";
 const MIXCLOUD_GRAPHQL_URL = "https://app.mixcloud.com/graphql";
+
+async function downloadToTmp(url) {
+  const ext = /\.(m4a|mp3|ogg|aac|flac|wav)(\?|$)/i.exec(url)?.[1] || "mp3";
+  const tmpPath = path.join(os.tmpdir(), `mizai_audio_${Date.now()}.${ext}`);
+  const writer = fs.createWriteStream(tmpPath);
+  const response = await global.axios.get(url, { responseType: "stream", timeout: 0 });
+  await new Promise((resolve, reject) => {
+    response.data.pipe(writer);
+    writer.on("finish", resolve);
+    writer.on("error", reject);
+  });
+  return tmpPath;
+}
+
+async function sendAudioSafe(api, audioUrl, threadId, type, notifyFn) {
+  try {
+    await api.sendVoice({ voiceUrl: audioUrl }, threadId, type);
+  } catch {
+    let tmpPath;
+    try {
+      if (notifyFn) await notifyFn("⏳ File dài, đang tải về để gửi...").catch(() => {});
+      tmpPath = await downloadToTmp(audioUrl);
+      await api.sendMessage({ attachments: [tmpPath] }, threadId, type);
+    } finally {
+      if (tmpPath) try { fs.unlinkSync(tmpPath); } catch (_) {}
+    }
+  }
+}
 
 function fmtNum(n) {
   if (!n) return "0";
@@ -256,7 +286,7 @@ module.exports = {
           const infoMsg = `✅ SoundCloud\n📝 ${t.title}\n👤 ${t.uploader}\n⏳ ${fmtDurationSec(t.duration)} · ▶️ ${fmtNum(t.view_count)}`;
           await api.sendMessage({ msg: infoMsg }, event.threadId, event.type);
         }
-        await api.sendVoice({ voiceUrl: audioUrl }, event.threadId, event.type);
+        await sendAudioSafe(api, audioUrl, event.threadId, event.type, send);
       } catch (err) { return send("❌ Lỗi tải nhạc: " + err.message); }
 
     } else if (platform === "spt") {
@@ -293,7 +323,7 @@ module.exports = {
           const infoMsg = `🎵 ${track.title}\n👤 ${track.author}\n⏳ ${fmtDurationMs(track.duration)}`;
           await send(infoMsg);
         }
-        await api.sendVoice({ voiceUrl: audioUrl }, event.threadId, event.type);
+        await sendAudioSafe(api, audioUrl, event.threadId, event.type, send);
       } catch (err) { return send(`❌ Lỗi tải nhạc: ${err.message}`); }
 
     } else if (platform === "mix") {
@@ -329,7 +359,7 @@ module.exports = {
         await send(fallbackText);
       }
       if (audioUrl) {
-        await api.sendVoice({ voiceUrl: audioUrl }, event.threadId, event.type);
+        await sendAudioSafe(api, audioUrl, event.threadId, event.type, send);
       }
     }
   },

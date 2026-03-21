@@ -86,7 +86,7 @@ function loadCommands(commandsDir) {
     }
   }
 
-  logInfo(`Loaded command: ${commands.size}`);
+  logInfo(`Loaded command: ${commands.size} (Load Cả Alias)`);
   return commands;
 }
 

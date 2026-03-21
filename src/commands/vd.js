@@ -13,10 +13,8 @@
 
 const fs   = require("fs");
 const path = require("path");
-const axios = require("axios");
 
 const LISTAPI_DIR = path.join(process.cwd(), "includes", "listapi");
-const TEMP_DIR    = path.join(process.cwd(), "includes", "cache");
 
 // ── Lấy danh sách file listapi đang có ────────────────────────────────────────
 function getListapiFiles() {
@@ -39,49 +37,17 @@ function pickRandN(arr, n) {
   return picks;
 }
 
-// ── Tải URL về file tạm, trả về đường dẫn ────────────────────────────────────
-async function downloadToTemp(url, uid) {
-  if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
-  const tmpPath = path.join(TEMP_DIR, `vd_${uid}.mp4`);
-  const res = await axios.get(url, {
-    responseType:     "arraybuffer",
-    timeout:          120000,
-    maxContentLength: 200 * 1024 * 1024,
-    headers: { "User-Agent": global.userAgent || "Mozilla/5.0" },
-  });
-  fs.writeFileSync(tmpPath, Buffer.from(res.data));
-  if (fs.statSync(tmpPath).size === 0) throw new Error("File tải về rỗng");
-  return tmpPath;
-}
-
-// ── Xoá file tạm sau 15 giây ─────────────────────────────────────────────────
-function cleanup(filePath) {
-  setTimeout(() => {
-    try { if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (_) {}
-  }, 15000);
-}
-
-// ── Gửi 1 video: tải về → upload Zalo → sendVideo ────────────────────────────
+// ── Gửi 1 video: dùng GitHub URL trực tiếp → sendVideo ───────────────────────
 async function sendOneVideo(api, event, ghUrl, caption) {
-  const uid     = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  const tmpPath = await downloadToTemp(ghUrl, uid);
-  try {
-    const uploaded = await api.uploadAttachment([tmpPath], event.threadId, event.type);
-    const fileUrl  = uploaded?.[0]?.fileUrl;
-    if (!fileUrl) throw new Error("uploadAttachment không trả về fileUrl");
-
-    await api.sendVideo({
-      videoUrl:     fileUrl,
-      thumbnailUrl: "",
-      msg:          caption || "",
-      width:        576,
-      height:       1024,
-      duration:     10000,
-      ttl:          500_000,
-    }, event.threadId, event.type);
-  } finally {
-    cleanup(tmpPath);
-  }
+  await api.sendVideo({
+    videoUrl:     ghUrl,
+    thumbnailUrl: "",
+    msg:          caption || "",
+    width:        576,
+    height:       1024,
+    duration:     10000,
+    ttl:          500_000,
+  }, event.threadId, event.type);
 }
 
 module.exports = {

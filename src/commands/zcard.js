@@ -26,7 +26,7 @@ module.exports = {
     }
 
     try {
-      await api.sendCard(targetId, threadID, event.type);
+      await api.sendCard({ userId: targetId }, threadID, event.type);
       return;
     } catch (err) {
       const msg = err?.response?.data?.error || err?.message || "Lỗi không xác định";

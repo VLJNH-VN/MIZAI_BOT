@@ -294,7 +294,7 @@ module.exports = {
         for (const n of stts) {
           const target = listSlice[n - 1];
           try {
-            await api.removeGroupMember(api.getSelfInfo?.()?.uid || "", target.t_id);
+            await api.leaveGroup(target.t_id);
           } catch {}
         }
         return send(`✅ Đã thoát ${stts.length} nhóm theo yêu cầu.`);

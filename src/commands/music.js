@@ -8,9 +8,8 @@
 const https = require("https");
 const fs    = require("fs");
 const path  = require("path");
-const os    = require("os");
 const { fmtDurationSec, fmtDurationMs } = require("../../utils/helpers");
-const { drawSearchCard, drawNowPlayingCard, drawLoadingCard } = require("../../utils/musicCard");
+const { drawSearchCard, drawNowPlayingCard } = require("../../utils/musicCard");
 
 const FOWN_API = "https://fown.onrender.com";
 const SPT_ID     = "1530d567ec6542669896bc96efd370f3";
@@ -229,13 +228,7 @@ module.exports = {
       if (!tracks.length) return send("❌ Hết dữ liệu. Vui lòng tìm lại.");
       if (isNaN(choice) || choice < 1 || choice > tracks.length) return send(`⚠️ Reply số từ 1 đến ${tracks.length}`);
       const t = tracks[choice - 1];
-      try {
-        const loadCard = await drawLoadingCard({ platform: "sc", title: t.title, artist: t.uploader, duration: fmtDurationSec(t.duration) });
-        await api.sendMessage({ msg: "", attachments: [loadCard] }, event.threadId, event.type);
-        try { fs.unlinkSync(loadCard); } catch (_) {}
-      } catch (_) {
-        try { await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: event.data }); } catch (_r) {}
-      }
+      try { await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: event.data }); } catch (_) {}
       try {
         const res = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(t.url)}`, { timeout: 120000 });
         const audioUrl = res.data?.download_audio_url || res.data?.download_url;
@@ -264,13 +257,7 @@ module.exports = {
       if (!tracks.length) return send("❌ Hết dữ liệu. Vui lòng tìm lại.");
       if (isNaN(choice) || choice < 1 || choice > tracks.length) return send(`⚠️ Nhập số từ 1 đến ${tracks.length}.`);
       const track = tracks[choice - 1];
-      try {
-        const loadCard = await drawLoadingCard({ platform: "spt", title: track.title, artist: track.author, duration: fmtDurationMs(track.duration) });
-        await api.sendMessage({ msg: "", attachments: [loadCard] }, event.threadId, event.type);
-        try { fs.unlinkSync(loadCard); } catch (_) {}
-      } catch (_) {
-        try { await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: event.data }); } catch (_r) {}
-      }
+      try { await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: event.data }); } catch (_) {}
       try {
         const keyword   = `${track.title} ${track.author}`;
         const searchRes = await global.axios.get(`${FOWN_API}/api/search?ytmsearch=${encodeURIComponent(keyword)}&svl=1`, { timeout: 30000 });

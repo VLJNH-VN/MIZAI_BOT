@@ -195,7 +195,9 @@ async function getUserVideos(username) {
   }
 
   if (res.status !== "success" || !Array.isArray(res.result)) {
-    throw new Error(res.message || "Không lấy được video từ profile");
+    const msg = res.message || "Không lấy được video từ profile";
+    global.logWarn?.(`[cawr.tt] GetUserPosts thất bại: ${msg}`);
+    throw new Error(msg);
   }
 
   const results = [];

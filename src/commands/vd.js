@@ -127,6 +127,7 @@ async function sendOneVideo(api, event, ghUrl, caption) {
     const fileSize = fs.statSync(uploadPath).size;
 
     // Bước 3: githubUpload → sendVideo (URL vĩnh cửu, Zalo stream được)
+    //         Truyền fileSize trực tiếp để bypass HEAD request (GitHub raw không trả content-length)
     if (typeof global.githubUpload === "function" && fileSize < 50 * 1024 * 1024) {
       try {
         const repoPath  = `listapi/vid_${id}.mp4`;
@@ -139,6 +140,7 @@ async function sendOneVideo(api, event, ghUrl, caption) {
             width:        meta.width,
             height:       meta.height,
             duration:     meta.duration * 1000,
+            fileSize:     fileSize,
             ttl:          500_000,
           }, event.threadId, event.type);
           global.logInfo?.("[vd] sendVideo (GitHub) thành công.");

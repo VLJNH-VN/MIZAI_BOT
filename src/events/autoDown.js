@@ -231,6 +231,7 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
                         width:        meta.width    || info.width  || 720,
                         height:       meta.height   || info.height || 1280,
                         duration:     meta.duration * 1000,
+                        fileSize:     fileSize,
                         ttl:          500_000,
                     }, threadId, threadType);
                     logInfo("[AutoDown] sendVideo (GitHub) thành công.");

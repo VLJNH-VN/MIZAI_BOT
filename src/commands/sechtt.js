@@ -246,6 +246,7 @@ module.exports = {
               width:        tikInfo.width  || 576,
               height:       tikInfo.height || 1024,
               duration:     (tikInfo.duration || 0) * 1000,
+              fileSize:     fileSize,
               ttl:          500_000,
             }, event.threadId, event.type);
             logInfo?.("[sechtt] sendVideo (GitHub) thành công.");

@@ -128,6 +128,7 @@ function startAutoSend(api) {
               try {
                 const uid = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
                 tmpPath = await downloadToTemp(ghUrl, uid);
+                const tmpSize  = fs.statSync(tmpPath).size;
                 const uploaded = await api.uploadAttachment([tmpPath], threadId, ThreadType.Group);
                 const fileUrl  = uploaded?.[0]?.fileUrl;
                 if (!fileUrl) throw new Error("uploadAttachment không trả về fileUrl");
@@ -138,6 +139,7 @@ function startAutoSend(api) {
                   width:        576,
                   height:       1024,
                   duration:     10000,
+                  fileSize:     tmpSize,
                   ttl:          500_000,
                 }, threadId, ThreadType.Group);
                 continue; // đã gửi video → bỏ qua local video
@@ -153,6 +155,7 @@ function startAutoSend(api) {
           const videoPath = pickRandomVideo();
           if (videoPath) {
             const meta     = getVideoMeta(videoPath);
+            const vidSize  = fs.statSync(videoPath).size;
             const uploaded = await api.uploadAttachment([videoPath], threadId, ThreadType.Group);
             const fileUrl  = uploaded?.[0]?.fileUrl;
             if (fileUrl) {
@@ -163,6 +166,7 @@ function startAutoSend(api) {
                 width:        meta.width    || 1280,
                 height:       meta.height   || 720,
                 duration:     Math.max(1000, (meta.duration || 1) * 1000),
+                fileSize:     vidSize,
                 ttl:          500_000,
               }, threadId, ThreadType.Group);
             }

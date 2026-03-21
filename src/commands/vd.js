@@ -128,12 +128,41 @@ async function sendOneVideo(api, event, ghUrl, caption) {
 
     global.logInfo?.(`[vd] threadId=${event.threadId} | type=${event.type} | size=${(fileSize/1024).toFixed(0)}KB | w=${meta.width} h=${meta.height} dur=${meta.duration}`);
 
-    // Gửi video qua sendMessage + attachments (file local)
-    await api.sendMessage(
-      { msg: caption || "", attachments: [uploadPath], ttl: 500_000 },
-      event.threadId, event.type
-    );
-    global.logInfo?.("[vd] sendMessage attachment thành công.");
+    // Bước 3: Upload lên Zalo CDN → lấy fileUrl → gửi inline video
+    let sentAsVideo = false;
+    try {
+      const uploaded = await api.uploadAttachment([uploadPath], event.threadId, event.type);
+      const videoData = uploaded?.[0];
+      const cdnUrl = videoData?.fileUrl;
+
+      global.logInfo?.(`[vd] uploadAttachment xong | fileUrl=${cdnUrl?.slice(0, 80)}`);
+
+      if (cdnUrl) {
+        await api.sendVideo({
+          videoUrl:     cdnUrl,
+          thumbnailUrl: "",
+          msg:          caption || "",
+          width:        meta.width   || 576,
+          height:       meta.height  || 1024,
+          duration:     meta.duration * 1000,
+          fileSize:     fileSize,
+          ttl:          500_000,
+        }, event.threadId, event.type);
+        global.logInfo?.("[vd] sendVideo CDN thành công.");
+        sentAsVideo = true;
+      }
+    } catch (e) {
+      global.logWarn?.(`[vd] sendVideo CDN thất bại: ${e.message}`);
+    }
+
+    // Bước 4: Fallback → sendMessage + attachments (file local)
+    if (!sentAsVideo) {
+      await api.sendMessage(
+        { msg: caption || "", attachments: [uploadPath], ttl: 500_000 },
+        event.threadId, event.type
+      );
+      global.logInfo?.("[vd] fallback sendMessage attachment thành công.");
+    }
 
   } finally {
     cleanup(rawPath, h264Path);

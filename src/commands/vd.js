@@ -7,7 +7,7 @@
  * Flow (theo chuẩn autoDown):
  *   1. Download GitHub URL về local
  *   2. Convert sang H264 (Zalo yêu cầu)
- *   3. githubUpload → api.sendVideo(raw URL) ← raw.githubusercontent.com, Zalo stream ổn định
+ *   3. uploadAttachment → lấy fileUrl Zalo → api.sendVideo (URL từ CDN Zalo, ổn định nhất)
  *   4. Fallback: sendMessage + attachments (file local)
  *
  * Cách dùng:
@@ -126,35 +126,27 @@ async function sendOneVideo(api, event, ghUrl, caption) {
     const meta     = probeStreams(uploadPath);
     const fileSize = fs.statSync(uploadPath).size;
 
-    // Bước 3: Upload lên GitHub repo → sendVideo (raw URL, Zalo stream ổn định)
     global.logInfo?.(`[vd] threadId=${event.threadId} | type=${event.type} | size=${(fileSize/1024).toFixed(0)}KB | w=${meta.width} h=${meta.height} dur=${meta.duration}`);
-    if (typeof global.githubUpload === "function" && fileSize < 50 * 1024 * 1024) {
-      let ghUrl = null;
-      try {
-        const repoPath = `vd/vd_${id}.mp4`;
-        ghUrl = await global.githubUpload(uploadPath, repoPath);
-        global.logInfo?.(`[vd] githubUpload URL: ${ghUrl}`);
-      } catch (e) {
-        global.logWarn?.(`[vd] githubUpload thất bại: ${e.message}`);
+
+    // Bước 3: uploadAttachment → lấy fileUrl Zalo → sendVideo
+    try {
+      const uploaded = await api.uploadAttachment([uploadPath], event.threadId, event.type);
+      const fileUrl  = uploaded?.[0]?.fileUrl;
+      if (fileUrl) {
+        await api.sendVideo({
+          videoUrl:     fileUrl,
+          thumbnailUrl: "",
+          msg:          caption || "",
+          width:        meta.width,
+          height:       meta.height,
+          duration:     Math.max(1000, meta.duration * 1000),
+          ttl:          500_000,
+        }, event.threadId, event.type);
+        global.logInfo?.("[vd] sendVideo (uploadAttachment) thành công.");
+        return;
       }
-      if (ghUrl) {
-        try {
-          await api.sendVideo({
-            videoUrl:     ghUrl,
-            thumbnailUrl: "",
-            msg:          caption || "",
-            width:        meta.width,
-            height:       meta.height,
-            duration:     meta.duration * 1000,
-            fileSize:     fileSize,
-            ttl:          500_000,
-          }, event.threadId, event.type);
-          global.logInfo?.("[vd] sendVideo (GitHub raw) thành công.");
-          return;
-        } catch (e) {
-          global.logWarn?.(`[vd] sendVideo thất bại: ${e.message} | url=${ghUrl?.slice(0,80)}`);
-        }
-      }
+    } catch (e) {
+      global.logWarn?.(`[vd] uploadAttachment/sendVideo thất bại: ${e.message}`);
     }
 
     // Bước 4: Fallback cuối → sendMessage + attachments

@@ -3,14 +3,26 @@
     "6024931307373526012": {
       "name": "Đặng Lịnh",
       "notes": [],
-      "lastSeen": "2026-03-21T08:26:47.125Z"
+      "lastSeen": "2026-03-21T08:33:13.677Z"
     },
     "6826850414793381853": {
       "name": "Quốc Lord",
+      "notes": [
+        "Quốc Lord rất thân thiện"
+      ],
+      "lastSeen": "2026-03-21T08:33:15.281Z"
+    },
+    "2817603034815564154": {
+      "name": "Phanh",
       "notes": [],
-      "lastSeen": "2026-03-21T08:26:48.775Z"
+      "lastSeen": "2026-03-21T08:33:16.353Z"
     }
   },
-  "diary": [],
+  "diary": [
+    {
+      "date": "2026-03-21T08:33:15.281Z",
+      "entry": "Ngày hôm nay, Mizai gặp Quốc Lord và cảm thấy rất vui"
+    }
+  ],
   "globalNotes": []
 }

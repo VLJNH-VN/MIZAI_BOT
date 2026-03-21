@@ -209,20 +209,55 @@ async function addReactionToQuote(api, reactionType, raw, threadId, type) {
   }
 }
 
-//  ẢNH AI — HuggingFace (chính) + Pollinations.ai (dự phòng)
+//  ẢNH AI — HuggingFace (chính) → Flux API (phụ) → Pollinations.ai (dự phòng cuối)
 // ════════════════════════════════════════════════════════════════════════════════
 const IMG_MODELS = {
-  flux:           { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux",         label: "Flux",         w: 1024, h: 1024 },
-  "flux-realism": { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-realism", label: "Flux Realism", w: 768,  h: 1024 },
-  "flux-anime":   { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-anime",   label: "Flux Anime",   w: 768,  h: 1024 },
-  "flux-3d":      { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-3d",      label: "Flux 3D",      w: 1024, h: 1024 },
-  "flux-pro":     { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-pro",     label: "Flux Pro",     w: 1024, h: 1024 },
-  turbo:          { hf: "black-forest-labs/FLUX.1-schnell", poll: "turbo",        label: "Turbo",        w: 512,  h: 512  },
-  sana:           { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux",         label: "Flux",         w: 1024, h: 1024 },
-  "any-dark":     { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-realism", label: "Flux Realism", w: 768,  h: 1024 },
+  flux:           { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux",         fluxStyle: "",               label: "Flux",         w: 1024, h: 1024 },
+  "flux-realism": { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-realism", fluxStyle: "photorealistic", label: "Flux Realism", w: 768,  h: 1024 },
+  "flux-anime":   { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-anime",   fluxStyle: "anime",          label: "Flux Anime",   w: 768,  h: 1024 },
+  "flux-3d":      { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-3d",      fluxStyle: "3D render",      label: "Flux 3D",      w: 1024, h: 1024 },
+  "flux-pro":     { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-pro",     fluxStyle: "digital art",    label: "Flux Pro",     w: 1024, h: 1024 },
+  turbo:          { hf: "black-forest-labs/FLUX.1-schnell", poll: "turbo",        fluxStyle: "",               label: "Turbo",        w: 512,  h: 512  },
+  sana:           { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux",         fluxStyle: "",               label: "Flux",         w: 1024, h: 1024 },
+  "any-dark":     { hf: "black-forest-labs/FLUX.1-schnell", poll: "flux-realism", fluxStyle: "cyberpunk",      label: "Any Dark",     w: 768,  h: 1024 },
 };
 
+// Flux API endpoint (từ flux.js command)
+const FLUX_API_BASE = "https://flux-image-gen-9rew.onrender.com";
+
+// Map kích thước sang ratio gần nhất cho Flux API
+function pickFluxSize(w, h) {
+  const ratio = w / h;
+  if (ratio > 1.5) return { width: 1360, height: 768  }; // 16:9
+  if (ratio < 0.7) return { width: 768,  height: 1360 }; // 9:16
+  if (ratio > 1.1) return { width: 1024, height: 768  }; // 4:3
+  if (ratio < 0.9) return { width: 768,  height: 1024 }; // 3:4
+  return { width: 1024, height: 1024 };                   // 1:1
+}
+
 const IMG_TIMEOUT  = 120000;
+
+async function tryFluxApi(prompt, style, w, h) {
+  const size = pickFluxSize(w, h);
+  // Bước 1: Enhance prompt bằng Gemini
+  const promptRes = await axios.post(
+    `${FLUX_API_BASE}/api/generate-prompt`,
+    { idea: prompt, style },
+    { timeout: 30000 }
+  );
+  const enhancedPrompt = promptRes.data?.prompt;
+  if (!enhancedPrompt) throw new Error("Flux API không trả về prompt");
+
+  // Bước 2: Tạo ảnh
+  const imageRes = await axios.post(
+    `${FLUX_API_BASE}/api/generate-image`,
+    { prompt: enhancedPrompt, width: size.width, height: size.height, steps: 4 },
+    { timeout: 90000 }
+  );
+  const { image } = imageRes.data;
+  if (!image) throw new Error("Flux API không trả về ảnh");
+  return Buffer.from(image, "base64");
+}
 
 async function generateImage({ prompt, modelKey = "flux", width, height }) {
   const m = IMG_MODELS[modelKey] || IMG_MODELS["flux"];
@@ -231,7 +266,7 @@ async function generateImage({ prompt, modelKey = "flux", width, height }) {
 
   const hfToken = global?.config?.hfToken || process.env.HF_TOKEN || "";
 
-  // ── Thử HuggingFace Inference SDK (tự đổi sang SDXL nếu model chính lỗi) ──
+  // ── 1. Thử HuggingFace ────────────────────────────────────────────────────
   if (hfToken) {
     const hf = new HfInference(hfToken);
     const hfModels = [m.hf, "stabilityai/stable-diffusion-xl-base-1.0"].filter(
@@ -250,13 +285,22 @@ async function generateImage({ prompt, modelKey = "flux", width, height }) {
       } catch (hfErr) {
         const status = hfErr?.status ?? hfErr?.response?.status;
         const isLast = hfModels.indexOf(hfModel) === hfModels.length - 1;
-        global.logWarn?.(`[goibot/img] HF ${hfModel} thất bại (${status || hfErr.message})${isLast ? ", thử Pollinations..." : ", thử model tiếp..."}`);
+        global.logWarn?.(`[goibot/img] HF ${hfModel} thất bại (${status || hfErr.message})${isLast ? ", thử Flux API..." : ", thử model tiếp..."}`);
         if (!status || status === 429 || status === 503) break;
       }
     }
   }
 
-  // ── Fallback: Pollinations.ai ──────────────────────────────────────────────
+  // ── 2. Fallback: Flux API (flux.js) — Gemini enhance + Flux AI ───────────
+  try {
+    global.logWarn?.("[goibot/img] Thử Flux API...");
+    const buf = await tryFluxApi(prompt, m.fluxStyle || "", w, h);
+    if (buf && buf.byteLength > 500) return buf;
+  } catch (fluxErr) {
+    global.logWarn?.(`[goibot/img] Flux API thất bại: ${fluxErr.message}, thử Pollinations...`);
+  }
+
+  // ── 3. Fallback cuối: Pollinations.ai ────────────────────────────────────
   const seed = Math.floor(Math.random() * 999999);
   const encodedPrompt = encodeURIComponent(prompt);
   const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${w}&height=${h}&model=${m.poll}&seed=${seed}&nologo=true&enhance=false`;

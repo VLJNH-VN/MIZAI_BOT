@@ -55,11 +55,14 @@ module.exports = {
       cfg.prefix = newPrefix;
       writeConfig(cfg);
 
+      global.prefix = newPrefix;
+      global.config.prefix = newPrefix;
+
       return send(
         `✅ Đã đổi prefix thành công!\n` +
         `  Cũ: ${old}\n` +
         `  Mới: ${newPrefix}\n` +
-        `⚠️ Cần reload bot để áp dụng toàn bộ.`
+        `✔️ Đã áp dụng ngay, không cần restart.`
       );
     }
 

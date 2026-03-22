@@ -46,11 +46,13 @@ module.exports = {
       const files = fs.readdirSync(CMD_DIR).filter(f => f.endsWith(".js") && f !== "example.js");
       let ok = 0, fail = 0;
       for (const file of files) {
-        const loaded = loadCommandFromFile(path.join(CMD_DIR, file));
+        const filePath = path.join(CMD_DIR, file);
+        delete require.cache[require.resolve(filePath)];
+        const loaded = loadCommandFromFile(filePath);
         if (!loaded) { fail++; continue; }
         commands.set(loaded.name, loaded.command);
         for (const alias of loaded.aliases || []) {
-          if (!commands.has(alias)) commands.set(alias, loaded.command);
+          commands.set(alias, loaded.command);
         }
         ok++;
       }
@@ -63,12 +65,13 @@ module.exports = {
     const filePath = path.join(CMD_DIR, `${name}.js`);
     if (!fs.existsSync(filePath)) return send(`❌ Không tìm thấy file: ${name}.js`);
 
+    delete require.cache[require.resolve(filePath)];
     const loaded = loadCommandFromFile(filePath);
     if (!loaded) return send(`❌ Lệnh "${name}" không hợp lệ hoặc lỗi cú pháp.`);
 
     commands.set(loaded.name, loaded.command);
     for (const alias of loaded.aliases || []) {
-      if (!commands.has(alias)) commands.set(alias, loaded.command);
+      commands.set(alias, loaded.command);
     }
     return send(`✅ Đã reload lệnh "${loaded.name}" thành công.`);
   },

@@ -294,38 +294,45 @@ function resolveFbUrlSync(url) {
     }
 }
 
-// ─── Facebook handler — resolve short/share link → fown ───────────────────────
+// ─── Facebook handler — resolve short/share link → fown (có cookie) ──────────
 async function handleFacebook(api, url, threadId, threadType) {
     logDebug(`[AutoDown] Facebook: ${url}`);
+    const cookies = getFbCookies();
 
     if (FB_RESOLVE_RX.test(url)) {
         const { url: resolved, isLogin, isStory } = resolveFbUrlSync(url);
 
-        // Story / nội dung cần đăng nhập → dừng sớm, báo user
-        if (isLogin || isStory) {
+        // Story / nội dung cần đăng nhập mà không có cookie → báo user
+        if ((isLogin || isStory) && !cookies) {
             return await api.sendMessage({
-                msg: "⚠️ AutoDown: Link Facebook này là Story hoặc yêu cầu đăng nhập — không thể tải.",
+                msg: "⚠️ AutoDown: Link Facebook này là Story hoặc yêu cầu đăng nhập.\nDùng >fbcookie set <cookie> để cấu hình cookie Facebook.",
                 ttl: 300_000,
             }, threadId, threadType);
         }
 
-        return await handleOther(api, resolved, threadId, threadType);
+        return await handleOther(api, resolved, threadId, threadType, cookies);
     }
 
-    await handleOther(api, url, threadId, threadType);
+    await handleOther(api, url, threadId, threadType, cookies);
 }
 
 // ─── fown (yt-dlp) handler ─────────────────────────────────────────────────────
-async function fetchInfo(url, retries = 3) {
+// Lấy FB cookies từ config (runtime-safe)
+function getFbCookies() {
+    return global.config?.fbCookies || require("../../config.json").fbCookies || "";
+}
+
+async function fetchInfo(url, retries = 3, cookies = "") {
     let last;
+    const cookieParam = cookies ? `&cookies=${encodeURIComponent(cookies)}` : "";
     for (let i = 1; i <= retries; i++) {
         try {
-            const r = await axios.get(`${FOWN}/api/media?url=${encodeURIComponent(url)}`, { timeout: 180_000 });
+            const r = await axios.get(`${FOWN}/api/media?url=${encodeURIComponent(url)}${cookieParam}`, { timeout: 180_000 });
             const d = r.data;
             if (!d || typeof d !== "object") throw new Error("API trả về không hợp lệ");
             if (d.error) {
                 const details = String(d.details || d.error || "");
-                // Phát hiện redirect đến login page (Story / nội dung riêng tư)
+                // Redirect đến login page → Story / nội dung riêng tư
                 if (details.includes("login.php") || details.includes("/login/"))
                     throw Object.assign(new Error("FB_LOGIN"), { fbLogin: true });
                 throw new Error(details.slice(0, 200) || String(d.error));
@@ -333,7 +340,7 @@ async function fetchInfo(url, retries = 3) {
             return d;
         } catch (e) {
             last = e;
-            if (e.fbLogin) break;                  // Không retry khi cần login
+            if (e.fbLogin) break;
             if (e?.response?.status < 500) break;
             if (i < retries) {
                 logWarn(`[AutoDown] Retry ${i} (${e.message})...`);
@@ -344,12 +351,14 @@ async function fetchInfo(url, retries = 3) {
     throw last;
 }
 
-const dlUrl = (pageUrl, fmt) =>
-    `${FOWN}/api/download?url=${encodeURIComponent(pageUrl)}&format=${encodeURIComponent(fmt)}`;
+const dlUrl = (pageUrl, fmt, cookies = "") => {
+    const c = cookies ? `&cookies=${encodeURIComponent(cookies)}` : "";
+    return `${FOWN}/api/download?url=${encodeURIComponent(pageUrl)}&format=${encodeURIComponent(fmt)}${c}`;
+};
 
-async function handleOther(api, url, threadId, threadType) {
+async function handleOther(api, url, threadId, threadType, cookies = "") {
     logDebug(`[AutoDown] fown: ${url}`);
-    const d = await fetchInfo(url);
+    const d = await fetchInfo(url, 3, cookies);
 
     const title    = d.title?.trim() || "Media";
     const author   = d.uploader || d.channel || "Unknown";
@@ -374,7 +383,7 @@ async function handleOther(api, url, threadId, threadType) {
                 return logInfo("[AutoDown] sendVoice (GitHub Releases) OK.");
             } catch (e) { logWarn(`[AutoDown] sendVoice Releases lỗi: ${e.message}`); }
         }
-        return await sendAudio(api, dlUrl(pageUrl, "audio"), { thumbnail: thumb, duration: dur }, caption, threadId, threadType);
+        return await sendAudio(api, dlUrl(pageUrl, "audio", cookies), { thumbnail: thumb, duration: dur }, caption, threadId, threadType);
     }
 
     // Ảnh slideshow
@@ -422,7 +431,7 @@ async function handleOther(api, url, threadId, threadType) {
             || fmts.find(f => f.quality === "video+audio")
             || fmts.find(f => f.vcodec && f.vcodec !== "none");
         return await sendVideo(api,
-            dlUrl(pageUrl, vidFmt?.format_id || "bestvideo+bestaudio/best"),
+            dlUrl(pageUrl, vidFmt?.format_id || "bestvideo+bestaudio/best", cookies),
             { thumbnail: thumb, duration: dur, width: w, height: h },
             caption, threadId, threadType);
     }
@@ -430,7 +439,7 @@ async function handleOther(api, url, threadId, threadType) {
     // Audio fallback
     if (hasAud) {
         return await sendAudio(api,
-            d.download_audio_url || dlUrl(pageUrl, "audio"),
+            d.download_audio_url || dlUrl(pageUrl, "audio", cookies),
             { thumbnail: thumb, duration: dur }, caption, threadId, threadType);
     }
 

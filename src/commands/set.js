@@ -39,7 +39,7 @@ module.exports = {
       }
 
       const newPrefix = args[1] ? String(args[1]).trim() : "";
-      if (!newPrefix) {
+if (!newPrefix) {
         return send(
           `❌ Thiếu ký tự prefix.\n` +
           `Dùng: ${prefix}set prefix <ký tự>\n` +

@@ -1,12 +1,12 @@
 "use strict";
 
 /**
- * src/commands/vdvideo.js
+ * src/commands/vd.js
  * Gửi video gái hoặc anime ngẫu nhiên từ global.Ljzi
  *
  * Cách dùng:
- *   .vdvideo         → video gái ngẫu nhiên
- *   .vdvideo anime   → video anime ngẫu nhiên
+ *   .vd         → video gái ngẫu nhiên
+ *   .vd anime   → video anime ngẫu nhiên
  */
 
 module.exports = {
@@ -17,24 +17,26 @@ module.exports = {
     credits:         "Ljzi",
     description:     "Gửi video gái hoặc anime ngẫu nhiên",
     commandCategory: "Giải Trí",
-    usages:          "vdvideo [anime]",
+    usages:          "vd [anime]",
     cooldowns:       5,
   },
 
-  run: async ({ api, event, send }) => {
-    const body    = (event.body || "").toLowerCase().trim();
-    const isAnime = body.includes("anime");
-    const tipName = isAnime ? "vdani" : "vdgai";
+  run: async function({ api, event, send }) {
+    var body    = (event.body || "").toLowerCase().trim();
+    var isAnime = body.includes("anime");
+    var tipName = isAnime ? "vdani" : "vdgai";
 
-    const list = global.Ljzi?.[tipName];
+    var ljzi = global.Ljzi;
+    var list  = ljzi && ljzi[tipName];
     if (!list || !list.length)
       return send("⏳ Đợi một lát nhé, video đang được chuẩn bị...");
 
     try {
-      await global.Ljzi.send(api, event, tipName);
+      await ljzi.send(api, event, tipName);
     } catch (err) {
-      global.logWarn?.(`[vdvideo] Lỗi: ${err?.message}`);
-      await send(`❌ Gửi video thất bại: ${err?.message || "Lỗi không xác định"}`);
+      var msg = err && err.message ? err.message : "Lỗi không xác định";
+      if (global.logWarn) global.logWarn("[vd] Lỗi: " + msg);
+      await send("❌ Gửi video thất bại: " + msg);
     }
   },
 };

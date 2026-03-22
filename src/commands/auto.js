@@ -60,8 +60,11 @@ module.exports = {
             "auto list                                    — Danh sách lịch gửi tự động",
             "auto add <HH:MM> <nội dung>                    — Thêm lịch gửi text",
             "auto add <HH:MM> --vd <key>                    — Thêm lịch gửi video",
-            "auto add <HH:MM> --joke                        — Thêm lịch gửi joke ngẫu nhiên",
-            "auto add <HH:MM> --joke --text <nội dung>      — Thêm lịch gửi joke + text",
+            "auto add <HH:MM> --joke                                  — Joke ngẫu nhiên",
+            "auto add <HH:MM> --joke --joke-cat Programming,Misc      — Joke theo category (có thể kết hợp)",
+            "auto add <HH:MM> --joke --joke-lang de                   — Joke theo ngôn ngữ (en/de/cs/es/fr/pt)",
+            "auto add <HH:MM> --joke --joke-flags nsfw,racist         — Blacklist nội dung không muốn",
+            "auto add <HH:MM> --joke --text <nội dung>                — Joke + text",
             "auto add <HH:MM> --vd <key> --text <nội dung>  — Thêm lịch gửi video + text",
             "auto on|off|remove <stt>                    — Bật/tắt/xoá lịch theo số thứ tự",
         ].join("\n"),
@@ -92,6 +95,9 @@ module.exports = {
                 `  ${prefix}auto add <HH:MM> <nội dung>\n` +
                 `  ${prefix}auto add <HH:MM> --vd <key>\n` +
                 `  ${prefix}auto add <HH:MM> --joke\n` +
+                `  ${prefix}auto add <HH:MM> --joke --joke-cat Programming,Misc\n` +
+                `  ${prefix}auto add <HH:MM> --joke --joke-lang de\n` +
+                `  ${prefix}auto add <HH:MM> --joke --joke-flags nsfw,racist\n` +
                 `  ${prefix}auto add <HH:MM> --joke --text <nội dung>\n` +
                 `  ${prefix}auto add <HH:MM> --vd <key> --text <nội dung>\n` +
                 `  ${prefix}auto on <STT>\n` +
@@ -157,7 +163,13 @@ module.exports = {
                 msg += `  ${st} [${i + 1}] ${c.time}`;
                 if (preview) msg += ` — 📝 ${preview}`;
                 if (c.listapi) msg += `\n       🎬 Video: ${c.listapi}`;
-                if (c.joke) msg += `\n       😂 Joke: bật`;
+                if (c.joke) {
+                    let jokeInfo = `😂 Joke: bật`;
+                    if (c.jokeCategory) jokeInfo += ` | 📂 ${c.jokeCategory}`;
+                    if (c.jokeLang) jokeInfo += ` | 🌐 ${c.jokeLang}`;
+                    if (c.jokeFlags) jokeInfo += ` | 🚫 ${c.jokeFlags}`;
+                    msg += `\n       ${jokeInfo}`;
+                }
                 msg += `\n       📡 ${targets}\n`;
             });
             msg += `╚════════════════════════╝\n`;
@@ -185,25 +197,64 @@ module.exports = {
                 return send(`❌ Giờ không hợp lệ: "${timeArg}".\nDùng định dạng HH:MM (24h), ví dụ: 08:00, 20:30`);
             }
 
-            // Parse --vd <key>, --text <nội dung>, --joke từ phần còn lại
+            // Parse flags từ phần còn lại
             const rest = args.slice(2);
-            let listapi = null;
-            let content = "";
-            let joke = false;
+            const VALID_CATS  = new Set(["Programming", "Misc", "Dark", "Pun", "Spooky", "Christmas"]);
+            const VALID_LANGS = new Set(["en", "de", "cs", "es", "fr", "pt"]);
+            const VALID_FLAGS = new Set(["nsfw", "religious", "political", "racist", "sexist", "explicit"]);
+            const ALL_FLAGS   = new Set(["--vd", "--text", "--joke", "--joke-cat", "--joke-lang", "--joke-flags"]);
 
-            const vdIdx   = rest.indexOf("--vd");
-            const textIdx = rest.indexOf("--text");
-            const jokeIdx = rest.indexOf("--joke");
+            let listapi      = null;
+            let content      = "";
+            let joke         = false;
+            let jokeCategory = null;
+            let jokeLang     = null;
+            let jokeFlags    = null;
+
+            const vdIdx        = rest.indexOf("--vd");
+            const textIdx      = rest.indexOf("--text");
+            const jokeIdx      = rest.indexOf("--joke");
+            const jokeCatIdx   = rest.indexOf("--joke-cat");
+            const jokeLangIdx  = rest.indexOf("--joke-lang");
+            const jokeFlagIdx  = rest.indexOf("--joke-flags");
 
             if (jokeIdx !== -1) joke = true;
 
             if (vdIdx !== -1) {
                 listapi = rest[vdIdx + 1] || null;
-                if (!listapi || listapi.startsWith("--")) return send(`❌ Thiếu tên key video sau --vd.\nVí dụ: ${prefix}auto add 08:00 --vd gaixinh`);
+                if (!listapi || ALL_FLAGS.has(listapi)) return send(`❌ Thiếu tên key video sau --vd.\nVí dụ: ${prefix}auto add 08:00 --vd gaixinh`);
+            }
+
+            if (jokeCatIdx !== -1) {
+                // Hỗ trợ nhiều category: Programming,Misc
+                const catRaw = rest[jokeCatIdx + 1] || null;
+                if (!catRaw || ALL_FLAGS.has(catRaw)) return send(`❌ Thiếu category sau --joke-cat.\nCác category: Programming, Misc, Dark, Pun, Spooky, Christmas\nVí dụ: --joke-cat Programming,Misc`);
+                const validCats = catRaw.split(",").map(c => c.trim()).filter(c => VALID_CATS.has(c));
+                if (!validCats.length) return send(`❌ Category không hợp lệ: "${catRaw}".\nCác category hợp lệ: Programming, Misc, Dark, Pun, Spooky, Christmas`);
+                jokeCategory = validCats.join(",");
+                joke = true;
+            }
+
+            if (jokeLangIdx !== -1) {
+                const lang = rest[jokeLangIdx + 1] || null;
+                if (!lang || ALL_FLAGS.has(lang)) return send(`❌ Thiếu ngôn ngữ sau --joke-lang.\nCác ngôn ngữ: en, de, cs, es, fr, pt`);
+                if (!VALID_LANGS.has(lang)) return send(`❌ Ngôn ngữ không hợp lệ: "${lang}".\nCác ngôn ngữ hợp lệ: en, de, cs, es, fr, pt`);
+                jokeLang = lang;
+                joke = true;
+            }
+
+            if (jokeFlagIdx !== -1) {
+                // Hỗ trợ blacklist flags: nsfw,racist,sexist,...
+                const flagRaw = rest[jokeFlagIdx + 1] || null;
+                if (!flagRaw || ALL_FLAGS.has(flagRaw)) return send(`❌ Thiếu flags sau --joke-flags.\nCác flags: nsfw, religious, political, racist, sexist, explicit\nVí dụ: --joke-flags nsfw,racist`);
+                const validFlags = flagRaw.split(",").map(f => f.trim()).filter(f => VALID_FLAGS.has(f));
+                if (!validFlags.length) return send(`❌ Flags không hợp lệ: "${flagRaw}".\nCác flags hợp lệ: nsfw, religious, political, racist, sexist, explicit`);
+                jokeFlags = validFlags.join(",");
+                joke = true;
             }
 
             if (textIdx !== -1) {
-                const STOP_FLAGS = new Set(["--vd", "--joke"]);
+                const STOP_FLAGS = new Set(["--vd", "--joke", "--joke-cat", "--joke-lang", "--joke-flags"]);
                 const textTokens = [];
                 for (let i = textIdx + 1; i < rest.length; i++) {
                     if (STOP_FLAGS.has(rest[i])) break;
@@ -211,7 +262,7 @@ module.exports = {
                 }
                 content = textTokens.join(" ").trim();
                 if (!content) return send(`❌ Thiếu nội dung sau --text.\nVí dụ: ${prefix}auto add 08:00 --text Chào buổi sáng!`);
-            } else if (vdIdx === -1 && jokeIdx === -1) {
+            } else if (vdIdx === -1 && !joke) {
                 // Không có flag nào → toàn bộ là text (hành vi cũ)
                 content = rest.join(" ").trim();
             }
@@ -222,7 +273,9 @@ module.exports = {
                     `  ${prefix}auto add ${timeArg} <nội dung>\n` +
                     `  ${prefix}auto add ${timeArg} --vd <key>\n` +
                     `  ${prefix}auto add ${timeArg} --joke\n` +
-                    `  ${prefix}auto add ${timeArg} --joke --text <nội dung>`
+                    `  ${prefix}auto add ${timeArg} --joke --joke-cat Programming,Misc\n` +
+                    `  ${prefix}auto add ${timeArg} --joke --joke-lang de\n` +
+                    `  ${prefix}auto add ${timeArg} --joke --joke-flags nsfw,racist`
                 );
             }
 
@@ -234,6 +287,9 @@ module.exports = {
             };
             if (listapi) newEntry.listapi = listapi;
             if (joke) newEntry.joke = true;
+            if (jokeCategory) newEntry.jokeCategory = jokeCategory;
+            if (jokeLang) newEntry.jokeLang = jokeLang;
+            if (jokeFlags) newEntry.jokeFlags = jokeFlags;
 
             configs.push(newEntry);
             writeAutoSend(configs);
@@ -241,7 +297,13 @@ module.exports = {
             let confirmMsg = `✅ Đã thêm lịch gửi tự động!\n  ⏰ Giờ: ${timeArg}\n  📌 Nhóm: nhóm này\n`;
             if (content) confirmMsg += `  📝 Text: ${content.slice(0, 60)}${content.length > 60 ? "..." : ""}\n`;
             if (listapi) confirmMsg += `  🎬 Video: ${listapi}\n`;
-            if (joke) confirmMsg += `  😂 Joke: bật\n`;
+            if (joke) {
+                confirmMsg += `  😂 Joke: bật`;
+                if (jokeCategory) confirmMsg += ` | 📂 ${jokeCategory}`;
+                if (jokeLang) confirmMsg += ` | 🌐 ${jokeLang}`;
+                if (jokeFlags) confirmMsg += ` | 🚫 ${jokeFlags}`;
+                confirmMsg += `\n`;
+            }
             confirmMsg += `  STT: [${configs.length}]`;
 
             return send(confirmMsg);

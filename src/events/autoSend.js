@@ -59,18 +59,61 @@ function pickRandomVideo() {
 const CONFIG_FILE = path.join(process.cwd(), "includes", "data", "config", "autoSend.json");
 const { getAllGroupIds } = require("../../includes/database/group/groupSettings");
 
-const JOKE_API = "https://v2.jokeapi.dev/joke/Any?type=single&safe-mode";
-const CATEGORY_EMOJI = {
+const VALID_JOKE_CATS  = new Set(["Programming", "Misc", "Dark", "Pun", "Spooky", "Christmas"]);
+const VALID_JOKE_LANGS = new Set(["en", "de", "cs", "es", "fr", "pt"]);
+const VALID_JOKE_FLAGS = new Set(["nsfw", "religious", "political", "racist", "sexist", "explicit"]);
+const CATEGORY_EMOJI   = {
   Programming: "💻", Misc: "🎲", Dark: "🌑", Pun: "😄", Spooky: "👻", Christmas: "🎄",
 };
 
-async function fetchJoke() {
+function buildJokeUrl(category, lang, flags) {
+  // category có thể là "Any", "Programming", hoặc "Programming,Misc" (nhiều loại)
+  const cats = String(category || "Any").split(",")
+    .map(c => c.trim())
+    .filter(c => VALID_JOKE_CATS.has(c));
+  const cat = cats.length > 0 ? cats.join(",") : "Any";
+
+  const l = VALID_JOKE_LANGS.has(lang) ? lang : "en";
+
+  const params = new URLSearchParams();
+  params.set("lang", l);
+
+  if (flags && flags.length) {
+    // flags là mảng hoặc string như "nsfw,racist"
+    const flagArr = (Array.isArray(flags) ? flags : String(flags).split(","))
+      .map(f => f.trim()).filter(f => VALID_JOKE_FLAGS.has(f));
+    if (flagArr.length) {
+      params.set("blacklistFlags", flagArr.join(","));
+    } else {
+      params.set("safe-mode", "");
+    }
+  } else {
+    params.set("safe-mode", "");
+  }
+
+  // Xây URL và xử lý safe-mode (không có value)
+  let qs = params.toString().replace("safe-mode=", "safe-mode");
+  return `https://v2.jokeapi.dev/joke/${cat}?${qs}`;
+}
+
+async function fetchJoke(category = "Any", lang = "en", flags = null) {
   try {
-    const res = await axios.get(JOKE_API, { timeout: 10000 });
+    const url  = buildJokeUrl(category, lang, flags);
+    const res  = await axios.get(url, { timeout: 10000 });
     const data = res.data;
-    if (data.error || !data.joke) return null;
+    if (data.error) return null;
+
+    let jokeText;
+    if (data.type === "twopart") {
+      if (!data.setup || !data.delivery) return null;
+      jokeText = `${data.setup}\n\n— ${data.delivery}`;
+    } else {
+      if (!data.joke) return null;
+      jokeText = data.joke;
+    }
+
     const emoji = CATEGORY_EMOJI[data.category] || "😂";
-    return `${emoji} Joke ngẫu nhiên\n━━━━━━━━━━━━━━━\n${data.joke}\n━━━━━━━━━━━━━━━\n📂 ${data.category}`;
+    return `${emoji} Joke ngẫu nhiên\n━━━━━━━━━━━━━━━\n${jokeText}\n━━━━━━━━━━━━━━━\n📂 ${data.category}`;
   } catch { return null; }
 }
 
@@ -133,13 +176,19 @@ function startAutoSend(api) {
 
           // ── Gửi Joke từ JokeAPI ───────────────────────────────────────────
           if (cfg.joke) {
-            const jokeText = await fetchJoke();
+            const jokeText = await fetchJoke(
+              cfg.jokeCategory || "Any",
+              cfg.jokeLang     || "en",
+              cfg.jokeFlags    || null
+            );
             if (jokeText) {
               await api.sendMessage(
                 { msg: jokeText, ttl: 600_000 },
                 threadId,
                 ThreadType.Group
               );
+            } else {
+              global.logWarn?.(`[AutoSend] Không lấy được joke cho lịch ${cfg.time}`);
             }
           }
 

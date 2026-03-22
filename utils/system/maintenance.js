@@ -109,6 +109,7 @@ async function _optimizeDb() {
       db.pragma("optimize");
       db.pragma("wal_checkpoint(PASSIVE)");
     }
+    // sql.js: tự lưu file định kỳ qua interval riêng, không cần pragma ở đây
   } catch (_) {}
 }
 

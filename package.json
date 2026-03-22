@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node --max-old-space-size=384 --gc-interval=100 index.js",
     "dev": "nodemon index.js",
+    "rebuild": "npm rebuild better-sqlite3 --update-binary",
     "new-cmd": "node scripts/new-cmd.js",
     "list-cmds": "node scripts/list-cmds.js",
     "move-cmd": "node scripts/move-cmd.js",
@@ -27,6 +28,7 @@
     "jsqr": "^1.4.0",
     "qrcode": "^1.5.4",
     "sharp": "^0.34.5",
+    "sql.js": "^1.14.1",
     "string-similarity": "^4.0.4",
     "zca-js": "^2.1.2"
   },

@@ -222,8 +222,8 @@ async function uploadVideo(videoUrl, tipName, uid) {
     });
     fs.writeFileSync(rawPath, Buffer.from(res.data));
     if (fs.statSync(rawPath).size === 0) throw new Error("File tải về rỗng");
-    const repoPath = `listapi/${tipName}/${uid}.mp4`;
-    const ghUrl = await global.githubUpload(rawPath, repoPath);
+    const fileName = `${tipName}_${uid}.mp4`;
+    const ghUrl = await global.githubReleaseUpload(rawPath, fileName);
     return ghUrl || null;
   } finally {
     try { if (fs.existsSync(rawPath)) fs.unlinkSync(rawPath); } catch (_) {}

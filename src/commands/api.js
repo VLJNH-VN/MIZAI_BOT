@@ -46,6 +46,9 @@ function extFromMagic(buf) {
   return null;
 }
 
+// ── Danh sách extension video để dùng Release Upload ─────────────────────────
+const VIDEO_EXTS = new Set(["mp4","webm","mkv","avi","mov","flv","m4v","3gp","ogv","wmv"]);
+
 // ── Helper: Tải URL về file tạm, phát hiện đúng định dạng, upload lên GitHub ─
 async function uploadToGithub(url, baseName) {
   const res = await global.axios.get(url, { responseType: "arraybuffer", timeout: 60000 });
@@ -71,8 +74,15 @@ async function uploadToGithub(url, baseName) {
 
   try {
     fs.writeFileSync(tmpPath, buf);
-    const repoPath    = `listapi/${Date.now()}_${fileName}`;
-    const downloadUrl = await global.githubUpload(tmpPath, repoPath);
+    // Video dùng Release Upload (không giới hạn kích thước, Zalo chấp nhận tốt hơn)
+    // Ảnh/audio dùng Content API thông thường
+    let downloadUrl;
+    if (VIDEO_EXTS.has(ext)) {
+      downloadUrl = await global.githubReleaseUpload(tmpPath, fileName);
+    } else {
+      const repoPath = `listapi/${Date.now()}_${fileName}`;
+      downloadUrl    = await global.githubUpload(tmpPath, repoPath);
+    }
     return downloadUrl;
   } finally {
     if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);

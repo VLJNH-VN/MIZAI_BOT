@@ -170,12 +170,12 @@ async function handleCommand({ api, event, commands, prefix }) {
     const commandName = parts.shift().toLowerCase();
     const args        = parts;
 
-    if (!commandName || !/[a-z0-9]/i.test(commandName)) return;
+    if (commandName && !/[a-z0-9]/i.test(commandName)) return;
 
     // ── Ghi nhớ nhóm cho broadcast (async, không block) ──────────────────
     if (isGroup && threadID) trackGroupForBroadcast(threadID).catch(() => {});
 
-    const command = commands.get(commandName);
+    const command = commandName ? commands.get(commandName) : undefined;
 
     // ── Lệnh không tồn tại → gợi ý ───────────────────────────────────────
     if (!command) {
@@ -187,7 +187,9 @@ async function handleCommand({ api, event, commands, prefix }) {
       }
       if (!mainNames.length) return;
 
-      const { bestMatch } = stringSimilarity.findBestMatch(commandName, mainNames);
+      const { bestMatch } = commandName
+        ? stringSimilarity.findBestMatch(commandName, mainNames)
+        : { bestMatch: { rating: 0, target: "help" } };
       const suggestion    = bestMatch.rating >= 0.3
         ? `${effectivePrefix}${bestMatch.target}`
         : `${effectivePrefix}help`;

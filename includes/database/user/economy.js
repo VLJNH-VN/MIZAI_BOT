@@ -1,4 +1,4 @@
-const { getDb, run, get, all } = require("./sqlite");
+const { getDb, run, get, all } = require("../core/sqlite");
 
 const DAILY_BASE = 50000;
 const DAILY_BONUS_MAX = 50000;

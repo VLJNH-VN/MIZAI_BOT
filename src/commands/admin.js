@@ -1,6 +1,6 @@
 const { ThreadType } = require("zca-js");
 const { readConfig, writeConfig } = require('../../utils/media/helpers');
-const { getAllGroupIds } = require('../../includes/database/groupSettings');
+const { getAllGroupIds } = require('../../includes/database/group/groupSettings');
 
 // ── Lấy UID từ mention hoặc args ─────────────────────────────────────────────
 function isNumericUid(uid) {

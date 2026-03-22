@@ -3,8 +3,8 @@
  * Gộp: money + daily + rank
  */
 
-const { getUserData, getUserMoney, getTopUsers, formatMoney, formatTime, getLevel, claimDaily } = require("../../includes/database/economy");
-const { resolveSenderName } = require("../../includes/database/infoCache");
+const { getUserData, getUserMoney, getTopUsers, formatMoney, formatTime, getLevel, claimDaily } = require("../../includes/database/user/economy");
+const { resolveSenderName } = require("../../includes/database/message/infoCache");
 const { getGroupSetting } = require("../../utils/bot/botManager");
 const { ThreadType } = require("zca-js");
 

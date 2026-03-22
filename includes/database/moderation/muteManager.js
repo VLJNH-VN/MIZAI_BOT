@@ -48,7 +48,7 @@ async function _migrateToSqlite() {
   if (_migrated) return;
   _migrated = true;
   try {
-    const { getDb, run, all } = require("./sqlite");
+    const { getDb, run, all } = require("../core/sqlite");
     const db  = await getDb();
     const now = Date.now();
 
@@ -98,7 +98,7 @@ setInterval(() => {
 // ── Async write helpers ───────────────────────────────────────────────────────
 async function _dbUpsert(groupId, userId, name, mutedAt, expireAt) {
   try {
-    const { getDb, run } = require("./sqlite");
+    const { getDb, run } = require("../core/sqlite");
     const db = await getDb();
     await run(db,
       `INSERT INTO group_muted (group_id, user_id, name, muted_at, expire_at) VALUES (?, ?, ?, ?, ?)
@@ -110,7 +110,7 @@ async function _dbUpsert(groupId, userId, name, mutedAt, expireAt) {
 
 async function _dbDelete(groupId, userId) {
   try {
-    const { getDb, run } = require("./sqlite");
+    const { getDb, run } = require("../core/sqlite");
     const db = await getDb();
     await run(db, "DELETE FROM group_muted WHERE group_id = ? AND user_id = ?", [String(groupId), String(userId)]);
   } catch {}

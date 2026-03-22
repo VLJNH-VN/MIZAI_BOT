@@ -6,7 +6,7 @@
  * Storage: SQLite (via includes/database/taixiu.js)
  */
 
-const tx = require('../../includes/database/taixiu');
+const tx = require('../../includes/database/game/taixiu');
 
 function generateResultForSide(side) {
   let dice1, dice2, dice3, attempts = 0;

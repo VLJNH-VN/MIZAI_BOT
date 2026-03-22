@@ -6,11 +6,11 @@
  * Storage: SQLite (via includes/database/taixiu.js)
  */
 
-const { getUserMoney, updateUserMoney } = require('../../includes/database/economy');
-const { resolveSenderName }             = require('../../includes/database/infoCache');
+const { getUserMoney, updateUserMoney } = require('../../includes/database/user/economy');
+const { resolveSenderName }             = require('../../includes/database/message/infoCache');
 const { isBotAdmin, isGroupAdmin }      = require('../../utils/bot/botManager');
 const { fmtMoney, fmtTimeNow }          = require('../../utils/media/helpers');
-const tx = require('../../includes/database/taixiu');
+const tx = require('../../includes/database/game/taixiu');
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function fmtTimeFull(ts) { return new Date(ts).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }); }

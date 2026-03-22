@@ -1,6 +1,6 @@
 const { ThreadType } = require("zca-js");
 const { parseMentionIds } = require('../../utils/bot/messageUtils');
-const { isMuted, muteUser, unmuteUser, getMutedList } = require('../../includes/database/muteManager');
+const { isMuted, muteUser, unmuteUser, getMutedList } = require('../../includes/database/moderation/muteManager');
 
 function parseDuration(str) {
   const match = str.match(/^(\d+)(s|m|h|d|giây|phút|giờ|ngày)$/i);

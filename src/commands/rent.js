@@ -3,7 +3,7 @@ const {
   getRentInfo, setRentInfo, removeRentInfo, listRentInfo,
   addKey, useKey, isKeyUsed, isKeyExists, listUnusedKeys,
   isRentExpired, parseDateVN, addDays, todayStr,
-} = require("../../includes/database/rent");
+} = require("../../includes/database/moderation/rent");
 
 function genKey(days) {
   const cfg    = readConfig();

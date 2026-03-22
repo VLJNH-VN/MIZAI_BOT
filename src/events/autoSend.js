@@ -57,7 +57,7 @@ function pickRandomVideo() {
 }
 
 const CONFIG_FILE = path.join(process.cwd(), "includes", "data", "config", "autoSend.json");
-const { getAllGroupIds } = require("../../includes/database/groupSettings");
+const { getAllGroupIds } = require("../../includes/database/group/groupSettings");
 
 const INTERVAL_MS = 60 * 1000;
 let lastCheckedMinute = "";

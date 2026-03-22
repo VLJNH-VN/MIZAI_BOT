@@ -1,5 +1,5 @@
 const { ThreadType } = require("zca-js");
-const { resolveSenderName, resolveGroupName } = require("../database/infoCache");
+const { resolveSenderName, resolveGroupName } = require("../database/message/infoCache");
 const { isBotAdmin, isGroupAdmin } = require("../../utils/bot/botManager");
 const { extractBody } = require("../../utils/bot/messageUtils");
 const stringSimilarity = require("string-similarity");
@@ -7,14 +7,14 @@ const { registerReply } = require("./handleReply");
 const { registerReaction, reactError, reactSuccess, reactLoading } = require("./handleReaction");
 const { registerUndo } = require("./handleUndo");
 const { readConfig } = require("../../utils/media/helpers");
-const { getRentInfo, isRentExpired } = require("../database/rent");
-const { checkAndSet: checkCooldownDb } = require("../database/cooldown");
+const { getRentInfo, isRentExpired } = require("../database/moderation/rent");
+const { checkAndSet: checkCooldownDb } = require("../database/user/cooldown");
 
 // ── Ghi nhớ nhóm vào bảng groups (SQLite, thay cho groupsCache.json) ─────────
 async function trackGroupForBroadcast(threadID) {
   if (!threadID) return;
   try {
-    const { getDb, run } = require("../database/sqlite");
+    const { getDb, run } = require("../database/core/sqlite");
     const db  = await getDb();
     const now = Date.now();
     await run(db,

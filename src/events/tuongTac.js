@@ -6,7 +6,7 @@
  */
 
 const { ThreadType } = require("zca-js");
-const db = require('../../includes/database/tuongtac');
+const db = require('../../includes/database/moderation/tuongtac');
 
 async function sendTopForAllGroups(api, period, title) {
   const groups = await db.getAllGroups();

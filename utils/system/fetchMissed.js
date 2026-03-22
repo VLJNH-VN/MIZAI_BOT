@@ -11,7 +11,7 @@ const fs = require("fs");
 const path = require("path");
 const { loadLastSeen } = require("./lastSeen");
 
-const { getAllGroupIds } = require("../../includes/database/groupSettings");
+const { getAllGroupIds } = require("../../includes/database/group/groupSettings");
 const MAX_FETCH = 50;
 
 const GROUP_DELAY_MS = 800;

@@ -82,7 +82,7 @@ function isTikTokUrl(url) {
 // ─── Settings (dùng groups.settings SQLite) ───────────────────────────────────
 async function isAutoDownEnabled(threadId) {
     try {
-        const { getSetting } = require("../../includes/database/groupSettings");
+        const { getSetting } = require("../../includes/database/group/groupSettings");
         return await getSetting(String(threadId), "autodown", true);
     } catch { return true; }
 }

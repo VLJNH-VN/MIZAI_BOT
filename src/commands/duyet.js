@@ -20,9 +20,9 @@ const {
   getRequestByMsgId,
   getPendingList,
   resolveRequest
-} = require('../../includes/database/requestQueue');
-const { updateUserMoney, formatMoney } = require('../../includes/database/economy');
-const { resolveSenderName } = require('../../includes/database/infoCache');
+} = require('../../includes/database/core/requestQueue');
+const { updateUserMoney, formatMoney } = require('../../includes/database/user/economy');
+const { resolveSenderName } = require('../../includes/database/message/infoCache');
 const { ThreadType } = require("zca-js");
 
 // ── Xử lý khi yêu cầu được duyệt ─────────────────────────────────────────────
@@ -152,7 +152,7 @@ module.exports = {
 
     let adminName = senderId;
     try {
-      const { resolveSenderName } = require('../../includes/database/infoCache');
+      const { resolveSenderName } = require('../../includes/database/message/infoCache');
       adminName = await resolveSenderName({ api, userId: senderId });
     } catch {}
 

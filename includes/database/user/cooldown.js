@@ -10,7 +10,7 @@
  *   cleanupExpired()                          → Promise<void>
  */
 
-const { getDb, run, get } = require("./sqlite");
+const { getDb, run, get } = require("../core/sqlite");
 
 /**
  * Kiểm tra cooldown + đặt lại nếu ok.

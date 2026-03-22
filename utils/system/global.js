@@ -95,19 +95,19 @@
  */
 
 const axios   = require("axios");
-const { getDb }                               = require("../../includes/database/sqlite");
-const economy                                 = require("../../includes/database/economy");
-const { resolveSenderName, resolveGroupName } = require("../../includes/database/infoCache");
+const { getDb }                               = require("../../includes/database/core/sqlite");
+const economy                                 = require("../../includes/database/user/economy");
+const { resolveSenderName, resolveGroupName } = require("../../includes/database/message/infoCache");
 const { getBotAdminIds, isBotAdmin, isGroupAdmin } = require("../bot/botManager");
 const { logInfo, logWarn, logError, logEvent, logDebug } = require("./logger");
 const { checkGroqKey, setAutoCheck }          = require("./maintenance");
 const { processGaiData, resolveQuote }        = require("../bot/messageUtils");
 const cawr                                    = require("../bot/cawr");
-const msgCache                                = require("../../includes/database/messageCache");
-const groupLoader                             = require("../../includes/database/groupLoader");
-const dataManager                             = require("../../includes/database/dataManager");
-const userController                          = require("../../includes/database/userController");
-const groupSettings                           = require("../../includes/database/groupSettings");
+const msgCache                                = require("../../includes/database/message/messageCache");
+const groupLoader                             = require("../../includes/database/group/groupLoader");
+const dataManager                             = require("../../includes/database/core/dataManager");
+const userController                          = require("../../includes/database/user/userController");
+const groupSettings                           = require("../../includes/database/group/groupSettings");
 
 // ── Logger ────────────────────────────────────────────────────────────────────
 global.logInfo   = logInfo;

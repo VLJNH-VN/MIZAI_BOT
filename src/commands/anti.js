@@ -1,6 +1,6 @@
 const { ThreadType } = require("zca-js");
 const { getGroupAnti, setGroupAnti, getAllAntiGroupIds } = require('../../utils/bot/botManager');
-const { getGroupAnti: _getAntiDirect } = require('../../includes/database/antiManager');
+const { getGroupAnti: _getAntiDirect } = require('../../includes/database/moderation/antiManager');
 
 const FEATURES = {
   link: { field: "antiLink", label: "Anti-Link",  icon: "🔗", desc: "xoá tin nhắn có link lạ" },

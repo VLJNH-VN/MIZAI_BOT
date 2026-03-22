@@ -13,7 +13,7 @@
  */
 
 // Dùng dataManager thay vì viết SQL trực tiếp — tránh duplicate logic
-const { saveGroup, getGroup, getAllGroups, saveSnapshot } = require("./dataManager");
+const { saveGroup, getGroup, getAllGroups, saveSnapshot } = require("../core/dataManager");
 const { getAllGroupIds } = require("./groupSettings");
 
 const BATCH_SIZE     = 5;
@@ -31,7 +31,7 @@ async function getGroupIds() {
 /** Đảm bảo nhóm tồn tại trong bảng groups (SQLite) */
 async function trackGroup(groupId) {
   try {
-    const { getDb, run } = require("./sqlite");
+    const { getDb, run } = require("../core/sqlite");
     const db  = await getDb();
     const now = Date.now();
     await run(db,

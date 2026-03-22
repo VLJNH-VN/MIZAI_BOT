@@ -8,7 +8,7 @@
 
 const fs   = require("fs");
 const path = require("path");
-const { getDb, run, get, all } = require("./sqlite");
+const { getDb, run, get, all } = require("../core/sqlite");
 
 const MEMORY_FILE  = path.join(process.cwd(), "includes", "data", "runtime", "mizai_memory.json");
 const STATE_FILE   = path.join(process.cwd(), "includes", "data", "runtime", "mizai_state.json");

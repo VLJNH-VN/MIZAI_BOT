@@ -15,7 +15,7 @@
  *         Tin nhắn của bot sẽ bị bỏ qua.
  */
 
-const { getDb, run, get, all } = require("./sqlite");
+const { getDb, run, get, all } = require("../core/sqlite");
 
 const MAX_CONTENT_LEN = 2000; // cắt nội dung nếu quá dài
 

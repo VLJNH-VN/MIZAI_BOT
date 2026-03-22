@@ -13,7 +13,7 @@ const {
   buildMemoryContext, saveUserNote, saveDiaryEntry, saveGlobalNote,
   getMoodContext, updateMoodState, decayEnergy, loadState,
   isEnabled: _isEnabledDb, setEnabled: _setEnabledDb,
-} = require("../../includes/database/aiMemory");
+} = require("../../includes/database/moderation/aiMemory");
 
 // ════════════════════════════════════════════════════════════════════════════════
 //  SYSTEM PROMPT

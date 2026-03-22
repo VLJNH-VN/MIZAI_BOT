@@ -7,7 +7,7 @@ const fs   = require("fs");
 const path = require("path");
 const { ThreadType } = require("zca-js");
 const { setEnabled, isEnabled } = require('../../utils/ai/goibot');
-const { setSetting, getSetting } = require('../../includes/database/groupSettings');
+const { setSetting, getSetting } = require('../../includes/database/group/groupSettings');
 
 const AUTOSEND_FILE = path.join(process.cwd(), "includes", "data", "config", "autoSend.json");
 const AUTO_JSON     = path.join(process.cwd(), "includes", "data", "config", "auto.json");

@@ -1,4 +1,4 @@
-const { getDb, run, get } = require("./sqlite");
+const { getDb, run, get } = require("../core/sqlite");
 
 const USER_TTL_MS  = 7 * 24 * 60 * 60 * 1000; // 7 ngày
 const GROUP_TTL_MS = 24 * 60 * 60 * 1000;      // 1 ngày

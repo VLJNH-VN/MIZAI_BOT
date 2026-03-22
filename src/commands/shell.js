@@ -1,7 +1,7 @@
 const { promisify } = require("util");
 const { exec }     = require("child_process");
 const { ThreadType } = require("zca-js");
-const { resolveSenderName, resolveGroupName } = require("../../includes/database/infoCache");
+const { resolveSenderName, resolveGroupName } = require("../../includes/database/message/infoCache");
 const { extractBody } = require("../../utils/bot/messageUtils");
 
 const execAsync = promisify(exec);

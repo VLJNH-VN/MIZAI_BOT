@@ -3,9 +3,9 @@
  * Gộp: naptien + transfer
  */
 
-const { transferMoney, getUserMoney, formatMoney } = require("../../includes/database/economy");
-const { addRequest, setNotifyMsgId } = require("../../includes/database/requestQueue");
-const { resolveSenderName } = require("../../includes/database/infoCache");
+const { transferMoney, getUserMoney, formatMoney } = require("../../includes/database/user/economy");
+const { addRequest, setNotifyMsgId } = require("../../includes/database/core/requestQueue");
+const { resolveSenderName } = require("../../includes/database/message/infoCache");
 const { parseMentionIds } = require("../../utils/bot/messageUtils");
 
 module.exports = {

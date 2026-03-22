@@ -60,12 +60,14 @@ MIZAI_BOT/
 │
 ├── includes/
 │   ├── handlers/               # Xử lý lệnh, reply, reaction, undo
-│   ├── database/               # SQLite wrapper + các module DB:
-│   │   ├── sqlite.js           # Core engine (sqlite3/better-sqlite3/sql.js)
-│   │   ├── economy.js          # Ví tiền người dùng
-│   │   ├── taixiu.js           # Game Tài Xỉu (money, bets, rounds, config, groups)
-│   │   ├── tuongtac.js         # Tương tác người dùng theo ngày/tuần/tháng
-│   │   └── aiMemory.js         # AI memory, mood/state, bot group toggle
+│   ├── database/               # SQLite wrapper + các module DB (phân theo nhóm)
+│   │   ├── core/               # Lõi: sqlite.js, dataManager.js, requestQueue.js
+│   │   ├── user/               # Người dùng: userController.js, economy.js, cooldown.js
+│   │   ├── group/              # Nhóm chat: groupLoader.js, groupSettings.js
+│   │   ├── message/            # Tin nhắn: messageCache.js, messageLog.js, infoCache.js
+│   │   ├── game/               # Game: taixiu.js
+│   │   ├── moderation/         # Kiểm duyệt: antiManager.js, muteManager.js, rent.js, aiMemory.js, tuongtac.js
+│   │   └── data/               # mizai.sqlite (file DB thực tế)
 │   ├── data/                   # Dữ liệu JSON phân theo mục đích
 │   │   ├── config/             # Cấu hình tĩnh: anti.json, auto.json, autoSend.json, auto_xo_so.json
 │   │   ├── runtime/            # Dữ liệu hoạt động: users, groups, key, rentKey, lastSeen, muted...

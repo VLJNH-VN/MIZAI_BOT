@@ -17,7 +17,7 @@
  *   getTopExp(limit?)             → Promise<array>
  */
 
-const { getDb, run, get, all } = require("./sqlite");
+const { getDb, run, get, all } = require("../core/sqlite");
 
 async function _ensureUser(db, uid, name, gender) {
   const now = Date.now();

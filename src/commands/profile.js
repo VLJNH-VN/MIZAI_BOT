@@ -1,5 +1,5 @@
-const { getUserData, formatMoney, getLevel } = require('../../includes/database/economy');
-const { resolveSenderName } = require('../../includes/database/infoCache');
+const { getUserData, formatMoney, getLevel } = require('../../includes/database/user/economy');
+const { resolveSenderName } = require('../../includes/database/message/infoCache');
 const { parseMentionIds } = require('../../utils/bot/messageUtils');
 
 module.exports = {

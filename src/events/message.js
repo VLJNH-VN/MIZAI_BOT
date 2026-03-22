@@ -46,12 +46,12 @@ async function handleListen({ api, event, commands, prefix }) {
     }
   }
 }
-const { autoSaveFromEvent } = require("../../includes/database/dataManager");
+const { autoSaveFromEvent } = require("../../includes/database/core/dataManager");
 const { isBotAdmin, isGroupAdmin } = require("../../utils/bot/botManager");
 const { getGroupAnti, recordMessage, clearSpam } = require("../../utils/bot/botManager");
 const { extractBody } = require("../../utils/bot/messageUtils");
-const { store: storeMsgCache } = require("../../includes/database/messageCache");
-const { logMessage }           = require("../../includes/database/messageLog");
+const { store: storeMsgCache } = require("../../includes/database/message/messageCache");
+const { logMessage }           = require("../../includes/database/message/messageLog");
 const { ThreadType } = require("zca-js");
 let _tuongTacRecord = null;
 function getTuongTacRecord() {

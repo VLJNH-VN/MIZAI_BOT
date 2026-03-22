@@ -72,7 +72,7 @@ async function _migrateToSqlite() {
   if (_migrated) return;
   _migrated = true;
   try {
-    const { getDb, run, all } = require("./sqlite");
+    const { getDb, run, all } = require("../core/sqlite");
     const db = await getDb();
 
     const dbRentRows = await all(db, "SELECT group_id FROM rent_groups").catch(() => []);
@@ -135,7 +135,7 @@ setTimeout(() => _migrateToSqlite().catch(() => {}), 3000);
 // ── Async write helper ────────────────────────────────────────────────────────
 async function _dbUpsertRent(info) {
   try {
-    const { getDb, run } = require("./sqlite");
+    const { getDb, run } = require("../core/sqlite");
     const db = await getDb();
     await run(db,
       `INSERT INTO rent_groups (group_id, owner_id, time_start, time_end, created_at, updated_at)
@@ -150,7 +150,7 @@ async function _dbUpsertRent(info) {
 
 async function _dbDeleteRent(groupId) {
   try {
-    const { getDb, run } = require("./sqlite");
+    const { getDb, run } = require("../core/sqlite");
     const db = await getDb();
     await run(db, "DELETE FROM rent_groups WHERE group_id = ?", [groupId]);
   } catch {}
@@ -158,7 +158,7 @@ async function _dbDeleteRent(groupId) {
 
 async function _dbUpsertKey(keyStr, isUsed) {
   try {
-    const { getDb, run } = require("./sqlite");
+    const { getDb, run } = require("../core/sqlite");
     const db = await getDb();
     const days = _parseDaysFromKey(keyStr);
     await run(db,

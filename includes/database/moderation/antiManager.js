@@ -80,7 +80,7 @@ async function _migrateToSqlite() {
   if (_migrated) return;
   _migrated = true;
   try {
-    const { getDb, run, all } = require("./sqlite");
+    const { getDb, run, all } = require("../core/sqlite");
     const db = await getDb();
 
     const dbRows = await all(db, "SELECT group_id FROM group_anti").catch(() => []);
@@ -110,7 +110,7 @@ setTimeout(() => _migrateToSqlite().catch(() => {}), 3500);
 // ── Async write helper ────────────────────────────────────────────────────────
 async function _dbSave(groupId, cfg) {
   try {
-    const { getDb, run } = require("./sqlite");
+    const { getDb, run } = require("../core/sqlite");
     const db = await getDb();
     await run(db,
       `INSERT INTO group_anti (group_id, cfg_json, updated_at) VALUES (?, ?, ?)

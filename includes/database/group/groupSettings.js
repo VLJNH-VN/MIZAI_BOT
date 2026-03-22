@@ -18,7 +18,7 @@
  *   getData(threadId, name?)                → Promise<object>  row đầy đủ
  */
 
-const { getDb, run, get, all } = require("./sqlite");
+const { getDb, run, get, all } = require("../core/sqlite");
 
 // Cache prefix trong bộ nhớ để tránh hit DB mỗi tin nhắn
 const _prefixCache = new Map();

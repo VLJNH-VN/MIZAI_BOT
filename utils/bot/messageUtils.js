@@ -5,7 +5,7 @@ const path = require("path");
 const axios = require("axios");
 const { execSync } = require("child_process");
 const { ThreadType } = require("zca-js");
-const messageCache   = require("../../includes/database/messageCache");
+const messageCache   = require("../../includes/database/message/messageCache");
 
 // ── Extract Body ──────────────────────────────────────────────────────────────
 

@@ -8,7 +8,7 @@
 
 const fs   = require("fs");
 const path = require("path");
-const { getDb, run, get, all } = require("./sqlite");
+const { getDb, run, get, all } = require("../core/sqlite");
 
 const DATA_FILE = path.join(process.cwd(), "includes", "data", "tuongtac.json");
 

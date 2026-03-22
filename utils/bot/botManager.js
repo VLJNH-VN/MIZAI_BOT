@@ -59,7 +59,7 @@ const {
   setGroupAnti,
   isAntiUndoEnabled,
   getAllAntiGroupIds,
-} = require("../../includes/database/antiManager");
+} = require("../../includes/database/moderation/antiManager");
 
 // ── AntiOut tracking (in-memory — không cần persist) ─────────────────────────
 const _antiOutStore = new Map();
@@ -121,7 +121,7 @@ const _settingsCache = new Map();
 // Async write sang SQLite (không block)
 async function _persistSetting(groupId, key, value) {
   try {
-    const { setSetting } = require("../../includes/database/groupSettings");
+    const { setSetting } = require("../../includes/database/group/groupSettings");
     await setSetting(String(groupId), key, value);
   } catch {}
 }

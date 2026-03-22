@@ -9,7 +9,7 @@
 
 const fs   = require("fs");
 const path = require("path");
-const { getDb, run, get, all } = require("./sqlite");
+const { getDb, run, get, all } = require("../core/sqlite");
 
 // ── Migrate dữ liệu từ JSON cũ (chỉ chạy 1 lần) ──────────────────────────────
 const TX_DIR   = path.join(process.cwd(), "includes", "data", "game", "taixiu");

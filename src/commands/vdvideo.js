@@ -24,7 +24,7 @@ module.exports = {
 
   run: async ({ api, event }) => {
     const send = (msg) => new Promise(resolve =>
-      api.sendMessage(msg, event.threadID, (err, res) => resolve(res || err), event.type)
+      api.sendMessage(msg, event.threadId, (err, res) => resolve(res || err), event.type)
     );
 
     const body = (event.body || "").toLowerCase().trim();

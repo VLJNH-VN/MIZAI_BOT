@@ -15,12 +15,47 @@
  *   Khi khởi động, tự động tải sẵn CACHE_SIZE video về local (download + H264).
  *   Khi send() lấy 1 video từ cache, tự động bổ sung 1 video mới vào cache ngầm.
  *   Nếu cache trống (lần đầu hoặc chưa kịp tải), fallback download on-demand.
+ *
+ * Throttle:
+ *   DOWNLOAD_SPEED_LIMIT — giới hạn tốc độ tải video (bytes/s). 0 = không giới hạn.
+ *   Mặc định: 1MB/s để phù hợp hosting Node 24 bộ nhớ thấp (384MB RAM).
  */
 
-const fs           = require("fs");
-const path         = require("path");
-const axios        = require("axios");
+const fs            = require("fs");
+const path          = require("path");
+const axios         = require("axios");
+const { Transform } = require("stream");
 const { spawnSync } = require("child_process");
+
+// ── Cấu hình tốc độ tải ──────────────────────────────────────────────────────
+// 0 = không giới hạn | 1048576 = 1MB/s | 524288 = 512KB/s
+const DOWNLOAD_SPEED_LIMIT = 1 * 1024 * 1024; // 1 MB/s
+
+/**
+ * Tạo Transform stream giới hạn tốc độ (bytes/s).
+ * Nếu limit <= 0, trả về null (không throttle).
+ */
+function createThrottle(bytesPerSec) {
+  if (!bytesPerSec || bytesPerSec <= 0) return null;
+  let lastTime = Date.now();
+  let accumulated = 0;
+
+  return new Transform({
+    transform(chunk, _enc, callback) {
+      accumulated += chunk.length;
+      const elapsed = (Date.now() - lastTime) / 1000;
+      const expected = accumulated / bytesPerSec;
+      const delay = Math.max(0, (expected - elapsed) * 1000);
+
+      if (delay > 0) {
+        setTimeout(() => { this.push(chunk); callback(); }, delay);
+      } else {
+        this.push(chunk);
+        callback();
+      }
+    },
+  });
+}
 
 const LISTAPI_DIR = path.join(__dirname, "../../includes/listapi");
 const TEMP_DIR    = path.join(__dirname, "../../includes/cache");
@@ -42,14 +77,28 @@ function cleanup(...files) {
 
 async function downloadFile(url, filePath) {
   if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+
   const res = await axios.get(url, {
-    responseType:     "arraybuffer",
-    timeout:          120000,
+    responseType:     "stream",
+    timeout:          180000,
     maxContentLength: 200 * 1024 * 1024,
     headers: { "User-Agent": global.userAgent || "Mozilla/5.0" },
   });
-  fs.writeFileSync(filePath, Buffer.from(res.data));
-  if (fs.statSync(filePath).size === 0) throw new Error("File tải về rỗng");
+
+  await new Promise((resolve, reject) => {
+    const writer   = fs.createWriteStream(filePath);
+    const throttle = createThrottle(DOWNLOAD_SPEED_LIMIT);
+    if (throttle) res.data.pipe(throttle).pipe(writer);
+    else          res.data.pipe(writer);
+
+    writer.on("finish", resolve);
+    writer.on("error", reject);
+    res.data.on("error", reject);
+    if (throttle) throttle.on("error", reject);
+  });
+
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).size === 0)
+    throw new Error("File tải về rỗng");
 }
 
 function probeStreams(filePath) {
@@ -229,15 +278,17 @@ async function _sendFromFile(api, event, filePath, meta, caption, releaseUrl) {
 
   if (finalReleaseUrl) {
     try {
-      await api.sendVideo({
-        videoUrl:     finalReleaseUrl,
-        thumbnailUrl: thumbnailUrl || "",
-        msg:          caption || "",
-        width:        meta.width,
-        height:       meta.height,
-        duration:     meta.duration * 1000,
-        ttl:          500_000,
-      }, event.threadId, event.type);
+      const videoOpts = {
+        videoUrl: finalReleaseUrl,
+        msg:      caption || "",
+        width:    meta.width  || 576,
+        height:   meta.height || 1024,
+        duration: Math.max(1, meta.duration || 10) * 1000,
+        ttl:      500_000,
+      };
+      if (thumbnailUrl) videoOpts.thumbnailUrl = thumbnailUrl;
+
+      await api.sendVideo(videoOpts, event.threadId, event.type);
       sentAsVideo = true;
     } catch (e) {
       global.logWarn?.(`[Ljzi] sendVideo thất bại: ${e.message}`);

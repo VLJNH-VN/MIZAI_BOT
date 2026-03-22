@@ -3,10 +3,30 @@
  * Gộp: getlink + sendmedia
  */
 
-const path  = require("path");
-const os    = require("os");
-const fs    = require("fs");
-const axios = require("axios");
+const path          = require("path");
+const os            = require("os");
+const fs            = require("fs");
+const axios         = require("axios");
+const { Transform } = require("stream");
+
+// Giới hạn tốc độ tải video: 1MB/s (phù hợp hosting Node 24 RAM thấp)
+const DOWNLOAD_SPEED_LIMIT = 1 * 1024 * 1024;
+
+function createThrottle(bytesPerSec) {
+  if (!bytesPerSec || bytesPerSec <= 0) return null;
+  let lastTime = Date.now();
+  let accumulated = 0;
+  return new Transform({
+    transform(chunk, _enc, callback) {
+      accumulated += chunk.length;
+      const elapsed  = (Date.now() - lastTime) / 1000;
+      const expected = accumulated / bytesPerSec;
+      const delay    = Math.max(0, (expected - elapsed) * 1000);
+      if (delay > 0) setTimeout(() => { this.push(chunk); callback(); }, delay);
+      else           { this.push(chunk); callback(); }
+    },
+  });
+}
 
 module.exports = {
   config: {
@@ -84,8 +104,17 @@ module.exports = {
         case "video": {
           try { await api.addReaction("⏳", { type: event.type, threadId: event.threadId, data: event.data }); } catch (_r) {}
           const tmpPath = path.join(os.tmpdir(), `video_${Date.now()}.mp4`);
-          const res = await axios.get(url, { responseType: "arraybuffer", timeout: 120000, headers: { "User-Agent": "Mozilla/5.0" } });
-          fs.writeFileSync(tmpPath, Buffer.from(res.data));
+          const res = await axios.get(url, { responseType: "stream", timeout: 180000, headers: { "User-Agent": "Mozilla/5.0" } });
+          await new Promise((resolve, reject) => {
+            const writer   = fs.createWriteStream(tmpPath);
+            const throttle = createThrottle(DOWNLOAD_SPEED_LIMIT);
+            if (throttle) res.data.pipe(throttle).pipe(writer);
+            else          res.data.pipe(writer);
+            writer.on("finish", resolve);
+            writer.on("error", reject);
+            res.data.on("error", reject);
+            if (throttle) throttle.on("error", reject);
+          });
           await api.sendVideo({ videoPath: tmpPath }, threadID, event.type);
           try { fs.unlinkSync(tmpPath); } catch {}
           return;

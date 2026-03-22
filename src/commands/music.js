@@ -7,85 +7,13 @@
 
 const https = require("https");
 const fs    = require("fs");
-const path  = require("path");
 const { Reactions } = require("zca-js");
 const { fmtDurationSec, fmtDurationMs } = require("../../utils/media/helpers");
 const { drawSearchCard, drawNowPlayingCard } = require("../../utils/media/canvas");
-
-const os = require("os");
+const { zaloSendVoice } = require("../../utils/media/zaloMedia");
 
 const FOWN_API = "https://fown.onrender.com";
 const MIXCLOUD_GRAPHQL_URL = "https://app.mixcloud.com/graphql";
-
-async function downloadToTmp(url) {
-  const ext = /\.(m4a|mp3|ogg|aac|flac|wav)(\?|$)/i.exec(url)?.[1] || "mp3";
-  const tmpPath = path.join(os.tmpdir(), `mizai_audio_${Date.now()}.${ext}`);
-  const writer = fs.createWriteStream(tmpPath);
-  const response = await global.axios.get(url, { responseType: "stream", timeout: 0 });
-  await new Promise((resolve, reject) => {
-    response.data.pipe(writer);
-    writer.on("finish", resolve);
-    writer.on("error", reject);
-  });
-  return tmpPath;
-}
-
-// Upload file lên Zalo CDN qua uploadAttachment → lấy URL
-// zca-js trả về: image → normalUrl/hdUrl | video/others → fileUrl/fileName
-async function uploadToZaloAndGetUrl(api, filePath, threadId, type) {
-  try {
-    const uploaded = await api.uploadAttachment([filePath], threadId, type);
-    const file = uploaded?.[0];
-    if (!file) return null;
-    if (file.fileType === "image") return file.hdUrl || file.normalUrl || null;
-    if (file.fileUrl && file.fileName) return `${file.fileUrl}/${file.fileName}`;
-  } catch (_) {}
-  return null;
-}
-
-// Gửi voice:
-//   1. sendVoice(direct URL) — nhanh nhất
-//   2. Fallback: download → convert AAC → uploadAttachment → sendVoice(Zalo CDN URL)
-async function sendAudioSafe(api, audioUrl, threadId, type, notifyFn) {
-  // Bước 1: thử sendVoice trực tiếp với URL gốc
-  try {
-    await api.sendVoice({ voiceUrl: audioUrl, ttl: 900_000 }, threadId, type);
-    return;
-  } catch (_) {}
-
-  // Bước 2: download → convert AAC → upload CDN → sendVoice
-  let tmpPath;
-  let aacPath;
-  try {
-    if (notifyFn) await notifyFn("⏳ Đang xử lý âm thanh...").catch(() => {});
-    tmpPath = await downloadToTmp(audioUrl);
-
-    const convPath = tmpPath.replace(/\.[^.]+$/, "") + "_conv.aac";
-    try {
-      const { execSync } = require("child_process");
-      execSync(`ffmpeg -y -i "${tmpPath}" -vn -c:a aac -b:a 128k "${convPath}"`,
-        { timeout: 120000, stdio: "pipe" });
-      aacPath = convPath;
-    } catch {
-      aacPath = tmpPath;
-    }
-
-    const voiceUrl = await uploadToZaloAndGetUrl(api, aacPath, threadId, type);
-    if (voiceUrl) {
-      await api.sendVoice({ voiceUrl, ttl: 900_000 }, threadId, type);
-      return;
-    }
-
-    // Thử lần cuối với URL gốc sau khi download xong
-    await api.sendVoice({ voiceUrl: audioUrl, ttl: 900_000 }, threadId, type);
-
-  } catch (err) {
-    if (notifyFn) await notifyFn(`❌ Không thể gửi voice: ${err?.message || "Lỗi không xác định"}`).catch(() => {});
-  } finally {
-    if (tmpPath && tmpPath !== aacPath) try { fs.unlinkSync(tmpPath); } catch (_) {}
-    if (aacPath) try { fs.unlinkSync(aacPath); } catch (_) {}
-  }
-}
 
 function fmtNum(n) {
   if (!n) return "0";
@@ -308,7 +236,7 @@ module.exports = {
           const infoMsg = `✅ SoundCloud\n📝 ${t.title}\n👤 ${t.uploader}\n⏳ ${fmtDurationSec(t.duration)} · ▶️ ${fmtNum(t.view_count)}`;
           await api.sendMessage({ msg: infoMsg }, event.threadId, event.type);
         }
-        await sendAudioSafe(api, audioUrl, event.threadId, event.type, send);
+        await zaloSendVoice(api, audioUrl, event.threadId, event.type);
       } catch (err) { return send("❌ Lỗi tải nhạc: " + err.message); }
 
     } else if (platform === "spt") {
@@ -358,7 +286,7 @@ module.exports = {
           const infoMsg = `🎵 ${track.title}\n👤 ${track.author}\n⏳ ${durStr}`;
           await send(infoMsg);
         }
-        await sendAudioSafe(api, audioUrl, event.threadId, event.type, send);
+        await zaloSendVoice(api, audioUrl, event.threadId, event.type);
       } catch (err) { return send(`❌ Lỗi tải nhạc: ${err.message}`); }
 
     } else if (platform === "mix") {
@@ -394,7 +322,7 @@ module.exports = {
         await send(fallbackText);
       }
       if (audioUrl) {
-        await sendAudioSafe(api, audioUrl, event.threadId, event.type, send);
+        await zaloSendVoice(api, audioUrl, event.threadId, event.type);
       }
     }
   },

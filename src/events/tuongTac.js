@@ -2,62 +2,16 @@
  * src/events/tuongTac.js
  * Theo dõi tương tác người dùng theo ngày/tuần/tháng
  * Tự động gửi bảng xếp hạng top tương tác nhóm.
+ * Storage: SQLite (via includes/database/tuongtac.js)
  */
 
-const fs   = require("fs");
-const path = require("path");
 const { ThreadType } = require("zca-js");
-
-const DATA_FILE = path.join(process.cwd(), "includes", "data", "tuongtac.json");
-
-function readData() {
-  try {
-    if (!fs.existsSync(DATA_FILE)) { fs.writeFileSync(DATA_FILE, "{}"); return {}; }
-    return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
-  } catch { return {}; }
-}
-
-function saveData(data) {
-  try { fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2)); } catch {}
-}
-
-function recordMessage(groupId, userId, name) {
-  const data = readData();
-  if (!data[groupId]) data[groupId] = {};
-  if (!data[groupId][userId]) data[groupId][userId] = { name, day: 0, week: 0, month: 0, total: 0 };
-  const u = data[groupId][userId];
-  u.name   = name || u.name;
-  u.day   += 1;
-  u.week  += 1;
-  u.month += 1;
-  u.total += 1;
-  saveData(data);
-}
-
-function resetPeriod(period) {
-  const data = readData();
-  for (const gid of Object.keys(data))
-    for (const uid of Object.keys(data[gid]))
-      data[gid][uid][period] = 0;
-  saveData(data);
-  logInfo(`[TuongTac] Đã reset ${period}`);
-}
-
-function getTopForGroup(groupId, period = "day", limit = 10) {
-  const data = readData();
-  if (!data[groupId]) return [];
-  return Object.entries(data[groupId])
-    .map(([uid, u]) => ({ uid, name: u.name || uid, count: u[period] || 0 }))
-    .filter(u => u.count > 0)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, limit);
-}
+const db = require('../../includes/database/tuongtac');
 
 async function sendTopForAllGroups(api, period, title) {
-  const data   = readData();
-  const groups = Object.keys(data);
+  const groups = await db.getAllGroups();
   for (const gid of groups) {
-    const top = getTopForGroup(gid, period);
+    const top = await db.getTopForGroup(gid, period);
     if (!top.length) continue;
     const lines = [`╭─────「 ${title} 」─────⭓`];
     top.forEach((u, i) => lines.push(`│ ${i + 1}. ${u.name} – ${u.count} tin nhắn`));
@@ -96,8 +50,11 @@ function startTuongTac(api) {
     dayMin = Math.round(ms / 60000);
     setTimeout(async () => {
       await sendTopForAllGroups(api, "day", "TOP TƯƠNG TÁC NGÀY");
-      resetPeriod("day");
-      setInterval(async () => { await sendTopForAllGroups(api, "day", "TOP TƯƠNG TÁC NGÀY"); resetPeriod("day"); }, DAY_MS);
+      await db.resetPeriod("day");
+      setInterval(async () => {
+        await sendTopForAllGroups(api, "day", "TOP TƯƠNG TÁC NGÀY");
+        await db.resetPeriod("day");
+      }, DAY_MS);
     }, ms);
   };
 
@@ -106,8 +63,11 @@ function startTuongTac(api) {
     weekH = Math.round(ms / 3600000);
     setTimeout(async () => {
       await sendTopForAllGroups(api, "week", "TOP TƯƠNG TÁC TUẦN");
-      resetPeriod("week");
-      setInterval(async () => { await sendTopForAllGroups(api, "week", "TOP TƯƠNG TÁC TUẦN"); resetPeriod("week"); }, WEEK_MS);
+      await db.resetPeriod("week");
+      setInterval(async () => {
+        await sendTopForAllGroups(api, "week", "TOP TƯƠNG TÁC TUẦN");
+        await db.resetPeriod("week");
+      }, WEEK_MS);
     }, ms);
   };
 
@@ -116,8 +76,11 @@ function startTuongTac(api) {
     monthH = Math.round(ms / 3600000);
     setTimeout(async () => {
       await sendTopForAllGroups(api, "month", "TOP TƯƠNG TÁC THÁNG");
-      resetPeriod("month");
-      setInterval(async () => { await sendTopForAllGroups(api, "month", "TOP TƯƠNG TÁC THÁNG"); resetPeriod("month"); }, MONTH_MS);
+      await db.resetPeriod("month");
+      setInterval(async () => {
+        await sendTopForAllGroups(api, "month", "TOP TƯƠNG TÁC THÁNG");
+        await db.resetPeriod("month");
+      }, MONTH_MS);
     }, ms);
   };
 
@@ -128,4 +91,8 @@ function startTuongTac(api) {
   return `DAY: ${dayMin}p | WEEK: ${weekH}h | MTH: ${monthH}h`;
 }
 
-module.exports = { startTuongTac, recordMessage, getTopForGroup };
+module.exports = {
+  startTuongTac,
+  recordMessage: db.recordMessage,
+  getTopForGroup: db.getTopForGroup,
+};

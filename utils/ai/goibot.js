@@ -3,148 +3,17 @@ const axios = require("axios");
 const fs    = require("fs");
 const path  = require("path");
 
-const DATA_FILE    = path.join(__dirname, "..", "..", "includes", "data", "goibot.json");
-const MEMORY_FILE  = path.join(__dirname, "..", "..", "includes", "data", "mizai_memory.json");
-const STATE_FILE   = path.join(__dirname, "..", "..", "includes", "data", "mizai_state.json");
-const CACHE_DIR    = path.join(__dirname, "..", "..", "includes", "cache");
-
-if (!fs.existsSync(DATA_FILE))   fs.writeFileSync(DATA_FILE,   JSON.stringify({}));
-if (!fs.existsSync(CACHE_DIR))   fs.mkdirSync(CACHE_DIR, { recursive: true });
+const CACHE_DIR = path.join(__dirname, "..", "..", "includes", "cache");
+if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
 
 // ════════════════════════════════════════════════════════════════════════════════
-//  MEMORY SYSTEM
+//  MEMORY SYSTEM & EMOTION STATE — delegated to SQLite module
 // ════════════════════════════════════════════════════════════════════════════════
-const MEMORY_MAX_DIARY   = 30;
-const MEMORY_MAX_NOTES   = 10;
-const MEMORY_MAX_GLOBAL  = 20;
-
-function loadMemory() {
-  try { return JSON.parse(fs.readFileSync(MEMORY_FILE, "utf-8")); }
-  catch { return { users: {}, diary: [], globalNotes: [] }; }
-}
-
-function saveMemory(data) {
-  try { fs.writeFileSync(MEMORY_FILE, JSON.stringify(data, null, 2), "utf-8"); } catch {}
-}
-
-function getUserMemory(userId) {
-  const mem = loadMemory();
-  return mem.users?.[userId] || null;
-}
-
-function saveUserNote(userId, userName, note) {
-  const mem = loadMemory();
-  if (!mem.users) mem.users = {};
-  if (!mem.users[userId]) mem.users[userId] = { name: userName, notes: [], lastSeen: "" };
-  mem.users[userId].name     = userName;
-  mem.users[userId].lastSeen = new Date().toISOString();
-  if (note) {
-    mem.users[userId].notes.unshift(note);
-    if (mem.users[userId].notes.length > MEMORY_MAX_NOTES)
-      mem.users[userId].notes = mem.users[userId].notes.slice(0, MEMORY_MAX_NOTES);
-  }
-  saveMemory(mem);
-}
-
-function saveDiaryEntry(entry) {
-  const mem = loadMemory();
-  if (!mem.diary) mem.diary = [];
-  mem.diary.unshift({ date: new Date().toISOString(), entry });
-  if (mem.diary.length > MEMORY_MAX_DIARY)
-    mem.diary = mem.diary.slice(0, MEMORY_MAX_DIARY);
-  saveMemory(mem);
-}
-
-function saveGlobalNote(note) {
-  const mem = loadMemory();
-  if (!mem.globalNotes) mem.globalNotes = [];
-  mem.globalNotes.unshift({ date: new Date().toISOString(), note });
-  if (mem.globalNotes.length > MEMORY_MAX_GLOBAL)
-    mem.globalNotes = mem.globalNotes.slice(0, MEMORY_MAX_GLOBAL);
-  saveMemory(mem);
-}
-
-function buildMemoryContext(userId) {
-  const mem  = loadMemory();
-  const user = mem.users?.[userId];
-  const lines = [];
-
-  if (user) {
-    lines.push(`[USER_MEMORY] Mizai nhớ về ${user.name || userId}:`);
-    if (user.notes?.length) {
-      lines.push("- Ghi chú: " + user.notes.slice(0, 5).join(" | "));
-    }
-    if (user.lastSeen) lines.push(`- Gặp lần cuối: ${user.lastSeen}`);
-  }
-
-  const recentDiary = (mem.diary || []).slice(0, 3).map(d => d.entry).join(" | ");
-  if (recentDiary) lines.push(`[MIZAI_DIARY] ${recentDiary}`);
-
-  const globalNotes = (mem.globalNotes || []).slice(0, 3).map(n => n.note).join(" | ");
-  if (globalNotes) lines.push(`[MIZAI_NOTES] ${globalNotes}`);
-
-  return lines.join("\n");
-}
-
-// ════════════════════════════════════════════════════════════════════════════════
-//  EMOTION / MOOD STATE
-// ════════════════════════════════════════════════════════════════════════════════
-const DEFAULT_STATE = {
-  mood        : "bình thường",
-  energy      : 70,
-  moodScore   : 50,
-  episode     : null,
-  lastUpdated : null,
-};
-
-const VALID_MOODS = [
-  "vui", "rất vui", "phấn khích", "hạnh phúc",
-  "buồn", "rất buồn", "thất vọng",
-  "bình thường", "mơ màng", "lơ đãng",
-  "mệt", "rất mệt", "kiệt sức",
-  "lo lắng", "hoảng sợ", "căng thẳng",
-  "tức giận", "bực bội", "khó chịu",
-  "cô đơn", "nhớ nhà",
-  "hứng khởi", "sáng tạo",
-];
-
-function loadState() {
-  try { return Object.assign({}, DEFAULT_STATE, JSON.parse(fs.readFileSync(STATE_FILE, "utf-8"))); }
-  catch { return { ...DEFAULT_STATE }; }
-}
-
-function saveState(state) {
-  try { fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), "utf-8"); } catch {}
-}
-
-function getMoodContext() {
-  const s = loadState();
-  const episodeStr = s.episode ? ` | đang trải qua: ${s.episode}` : "";
-  return `[MIZAI_STATE] Tâm trạng hiện tại: ${s.mood} | Năng lượng: ${s.energy}/100 | Mood score: ${s.moodScore}/100${episodeStr}`;
-}
-
-function updateMoodState({ mood, energy, episode, moodScore }) {
-  const s = loadState();
-  if (mood      !== undefined && VALID_MOODS.includes(mood)) s.mood  = mood;
-  if (energy    !== undefined) s.energy    = Math.min(100, Math.max(0, Number(energy) || s.energy));
-  if (moodScore !== undefined) s.moodScore = Math.min(100, Math.max(0, Number(moodScore) || s.moodScore));
-  if (episode   !== undefined) s.episode   = episode || null;
-  s.lastUpdated = new Date().toISOString();
-  saveState(s);
-}
-
-// Tự nhiên hạ energy theo thời gian
-function decayEnergy() {
-  const s = loadState();
-  const now = Date.now();
-  const last = s.lastUpdated ? new Date(s.lastUpdated).getTime() : now;
-  const hoursElapsed = (now - last) / 3600000;
-  if (hoursElapsed > 1) {
-    s.energy = Math.max(10, s.energy - Math.floor(hoursElapsed * 3));
-    s.lastUpdated = new Date().toISOString();
-    saveState(s);
-  }
-}
+const {
+  buildMemoryContext, saveUserNote, saveDiaryEntry, saveGlobalNote,
+  getMoodContext, updateMoodState, decayEnergy, loadState,
+  isEnabled: _isEnabledDb, setEnabled: _setEnabledDb,
+} = require("../../includes/database/aiMemory");
 
 // ════════════════════════════════════════════════════════════════════════════════
 //  SYSTEM PROMPT
@@ -680,27 +549,15 @@ function extractUrls(text) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-//  DATA / TOGGLE HELPERS
+//  TOGGLE HELPERS (async — backed by SQLite)
 // ════════════════════════════════════════════════════════════════════════════════
-function readData() {
-  try { return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8")); } catch { return {}; }
-}
-
-function writeData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-}
-
-function setEnabled(threadId, value) {
-  const data = readData();
-  data[threadId] = value;
-  writeData(data);
+async function setEnabled(threadId, value) {
+  await _setEnabledDb(threadId, value);
   if (!value) clearChatHistory(threadId);
 }
 
-function isEnabled(threadId) {
-  const data = readData();
-  if (data[threadId] === undefined) { data[threadId] = true; writeData(data); }
-  return !!data[threadId];
+async function isEnabled(threadId) {
+  return _isEnabledDb(threadId);
 }
 
 function getBody(event) {
@@ -722,7 +579,7 @@ function getCurrentTimeInVietnam() {
 }
 
 async function handleNewUser({ api, threadId, userId }) {
-  if (!isEnabled(threadId)) return;
+  if (!(await isEnabled(threadId))) return;
   const name = await api.getUserInfo(userId)
     .then(info => info?.changed_profiles?.[userId]?.displayName || userId)
     .catch(() => userId);
@@ -734,8 +591,6 @@ module.exports = {
   getBody, getCurrentTimeInVietnam, TRIGGER_KEYWORDS,
   CACHE_DIR, handleNewUser,
   fetchImageAsBase64, extractImageUrl, extractUrls,
-  // Memory
   buildMemoryContext, saveUserNote, saveDiaryEntry, saveGlobalNote,
-  // Emotion/State
   getMoodContext, updateMoodState, decayEnergy, loadState,
 };

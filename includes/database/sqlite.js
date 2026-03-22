@@ -241,6 +241,86 @@ async function initSchema(db) {
   if (!cols.includes("daily_last")) await run(db, "ALTER TABLE users_money ADD COLUMN daily_last INTEGER DEFAULT 0").catch(() => {});
   if (!cols.includes("name"))       await run(db, "ALTER TABLE users_money ADD COLUMN name TEXT DEFAULT ''").catch(() => {});
 
+  // ── Taixiu ──────────────────────────────────────────────────────────────────
+  await run(db, `CREATE TABLE IF NOT EXISTS tx_game_money (
+    user_id TEXT PRIMARY KEY,
+    balance INTEGER DEFAULT 0
+  )`);
+  await run(db, `CREATE TABLE IF NOT EXISTS tx_rounds (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    phien   INTEGER UNIQUE,
+    result  TEXT,
+    dice1   INTEGER,
+    dice2   INTEGER,
+    dice3   INTEGER
+  )`);
+  await run(db, `CREATE TABLE IF NOT EXISTS tx_config (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+  )`);
+  await run(db, `CREATE TABLE IF NOT EXISTS tx_bets (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    TEXT,
+    phien      INTEGER,
+    choice     TEXT,
+    bet_amount INTEGER DEFAULT 0,
+    win_amount INTEGER DEFAULT 0,
+    ket_qua    TEXT    DEFAULT '',
+    time       INTEGER
+  )`);
+  await run(db, "CREATE INDEX IF NOT EXISTS idx_tx_bets_phien   ON tx_bets(phien);").catch(() => {});
+  await run(db, "CREATE INDEX IF NOT EXISTS idx_tx_bets_user    ON tx_bets(user_id, phien);").catch(() => {});
+  await run(db, `CREATE TABLE IF NOT EXISTS tx_transactions (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id        TEXT,
+    time           INTEGER,
+    amount         INTEGER,
+    balance_before INTEGER
+  )`);
+  await run(db, "CREATE INDEX IF NOT EXISTS idx_tx_trans_user ON tx_transactions(user_id);").catch(() => {});
+  await run(db, `CREATE TABLE IF NOT EXISTS tx_enabled_groups (
+    group_id TEXT PRIMARY KEY
+  )`);
+
+  // ── Tương tác ────────────────────────────────────────────────────────────────
+  await run(db, `CREATE TABLE IF NOT EXISTS tuongtac (
+    group_id TEXT,
+    user_id  TEXT,
+    name     TEXT,
+    day      INTEGER DEFAULT 0,
+    week     INTEGER DEFAULT 0,
+    month    INTEGER DEFAULT 0,
+    total    INTEGER DEFAULT 0,
+    PRIMARY KEY (group_id, user_id)
+  )`);
+  await run(db, "CREATE INDEX IF NOT EXISTS idx_tuongtac_group ON tuongtac(group_id);").catch(() => {});
+
+  // ── AI Memory & State ────────────────────────────────────────────────────────
+  await run(db, `CREATE TABLE IF NOT EXISTS ai_user_memory (
+    user_id    TEXT PRIMARY KEY,
+    name       TEXT,
+    notes_json TEXT DEFAULT '[]',
+    last_seen  TEXT DEFAULT ''
+  )`);
+  await run(db, `CREATE TABLE IF NOT EXISTS ai_diary (
+    id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    date  TEXT,
+    entry TEXT
+  )`);
+  await run(db, `CREATE TABLE IF NOT EXISTS ai_global_notes (
+    id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT,
+    note TEXT
+  )`);
+  await run(db, `CREATE TABLE IF NOT EXISTS ai_state (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+  )`);
+  await run(db, `CREATE TABLE IF NOT EXISTS ai_enabled_groups (
+    group_id TEXT PRIMARY KEY,
+    enabled  INTEGER DEFAULT 1
+  )`);
+
 }
 
 // ════════════════════════════════════════

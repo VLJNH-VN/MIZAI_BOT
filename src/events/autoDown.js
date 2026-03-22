@@ -14,6 +14,7 @@ const fs             = require("fs");
 const { execSync }   = require("child_process");
 const { Downloader } = require("@tobyg74/tiktok-api-dl");
 const { extractBody }            = require("../../utils/bot/messageUtils");
+const { sendReaction, REACT }    = require("../../includes/handlers/handleReaction");
 
 const TEMP     = path.join(process.cwd(), "includes", "cache");
 const FOWN     = "https://fown.onrender.com";
@@ -490,11 +491,14 @@ function startAutoDown(api) {
 
         try {
             fs.mkdirSync(TEMP, { recursive: true });
-            if (isTT)        await handleTikTok(api, url, threadId, threadType);
+            await sendReaction(api, msg, REACT.LOADING);
+            if (isTT)           await handleTikTok(api, url, threadId, threadType);
             else if (isFB(url)) await handleFacebook(api, url, threadId, threadType);
-            else             await handleOther(api, url, threadId, threadType);
+            else                await handleOther(api, url, threadId, threadType);
+            await sendReaction(api, msg, REACT.SUCCESS);
         } catch (err) {
             logWarn(`[AutoDown] Lỗi: ${err.message}`);
+            await sendReaction(api, msg, REACT.ERROR).catch(() => {});
             const st  = err?.response?.status;
             let msg_;
             if (err.fbLogin)    msg_ = "⚠️ AutoDown: Link Facebook này là Story hoặc nội dung riêng tư — không thể tải.";

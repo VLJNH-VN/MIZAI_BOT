@@ -159,6 +159,8 @@ module.exports = {
     );
 
     let loginDone = false;
+    let qrCount   = 0;
+    const MAX_QR  = 3;
 
     const timer = setTimeout(async () => {
       if (!loginDone) {
@@ -183,13 +185,15 @@ module.exports = {
         const { type, data, actions } = qrEvent;
 
         if (type === 0) {
+          qrCount++;
           await actions.saveToFile(qrPath);
           try {
             await api.sendMessage(
               {
                 msg:
                   `📱 Quét mã QR để đăng nhập Zalo` +
-                  (saveName ? ` (lưu thành "${saveName}")` : "") + `:\n` +
+                  (saveName ? ` (lưu thành "${saveName}")` : "") +
+                  (qrCount > 1 ? ` (lần ${qrCount}/${MAX_QR})` : "") + `:\n` +
                   `📌 Zalo → Cá nhân → Đăng nhập thiết bị khác → Quét mã\n` +
                   `⏱️ Mã hết hạn sau ~60 giây`,
                 attachments: [qrPath],
@@ -199,11 +203,25 @@ module.exports = {
             );
           } catch {}
         } else if (type === 1) {
+          if (qrCount >= MAX_QR) {
+            clearTimeout(timer);
+            loginDone = true;
+            await send(`❌ Đã tạo QR ${MAX_QR} lần nhưng không được quét. Vui lòng thử lại lệnh login.`).catch(() => {});
+            actions.abort?.();
+            return;
+          }
           actions.retry();
-          await send("🔄 Mã QR đã hết hạn, đang tạo mã mới...").catch(() => {});
+          await send(`🔄 Mã QR đã hết hạn, đang tạo mã mới... (${qrCount}/${MAX_QR})`).catch(() => {});
         } else if (type === 2) {
           await send("✅ Đã quét mã QR!\n📲 Vui lòng xác nhận trên điện thoại...").catch(() => {});
         } else if (type === 3) {
+          if (qrCount >= MAX_QR) {
+            clearTimeout(timer);
+            loginDone = true;
+            await send(`❌ Đăng nhập bị từ chối ${MAX_QR} lần. Vui lòng thử lại lệnh login.`).catch(() => {});
+            actions.abort?.();
+            return;
+          }
           await send("❌ Đăng nhập bị từ chối. Đang thử lại...").catch(() => {});
           actions.retry();
         } else if (type === 4) {

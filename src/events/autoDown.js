@@ -55,6 +55,33 @@ const SUPPORTED = [
 
 const AUDIO_ONLY = new Set(["soundcloud","spotify","mixcloud","zingmp3","bandcamp","audiomack"]);
 
+// ─── Format helpers ────────────────────────────────────────────────────────────
+function fmtDur(sec) {
+    if (!sec || sec <= 0) return "";
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = Math.floor(sec % 60);
+    return h > 0
+        ? `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`
+        : `${m}:${String(s).padStart(2,"0")}`;
+}
+function fmtNum(n) {
+    if (!n || n <= 0) return "";
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
+    return String(n);
+}
+function buildCaption(platform, title, author, extra = {}) {
+    const lines = [`/-li 𝐀𝐮𝐭𝐨𝐃𝐨𝐰𝐧: ${platform}`, `📄 ${title}`, `👤 ${author}`];
+    const dur = fmtDur(extra.duration);
+    const views = fmtNum(extra.views);
+    const likes = fmtNum(extra.likes);
+    if (dur)   lines.push(`⏱ ${dur}`);
+    if (views) lines.push(`👁 ${views} lượt xem`);
+    if (likes) lines.push(`❤️ ${likes} lượt thích`);
+    return lines.join("\n");
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 const uid  = () => `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -221,9 +248,12 @@ async function handleTikTok(api, url, threadId, threadType) {
             { timeout: 30_000, headers: { "Content-Type": "application/x-www-form-urlencoded" } });
         if (r.data?.code !== 0) throw new Error(`code ${r.data?.code}`);
         const d = r.data.data;
-        const cap = `/-li AUTODOWN: TIKTOK\n📄 ${d.title?.trim() || "TikTok"}\n` +
-            `👤 ${d.author?.nickname || ""}${d.author?.unique_id ? ` (@${d.author.unique_id})` : ""}\n` +
-            `❤️ ${Number(d.digg_count || 0).toLocaleString("vi-VN")} lượt thích`;
+        const cap = buildCaption(
+            "TIKTOK",
+            d.title?.trim() || "TikTok",
+            `${d.author?.nickname || ""}${d.author?.unique_id ? ` (@${d.author.unique_id})` : ""}`,
+            { duration: d.duration, likes: d.digg_count, views: d.play_count },
+        );
         if (Array.isArray(d.images) && d.images.length)
             return await sendImages(api, d.images, cap, threadId, threadType);
         if (d.play || d.wmplay)
@@ -238,7 +268,7 @@ async function handleTikTok(api, url, threadId, threadType) {
     if (res.status !== "success" || !res.result)
         throw new Error(`TikTok fallback thất bại: ${res.message || "unknown"}`);
     const r   = res.result;
-    const cap = `/-li AutoDown: TIKTOK\n📄 ${r.desc?.trim() || "TikTok"}\n👤 ${r.author?.nickname || ""}`;
+    const cap = buildCaption("TIKTOK", r.desc?.trim() || "TikTok", r.author?.nickname || "");
     if (r.type === "image" && Array.isArray(r.images) && r.images.length)
         return await sendImages(api, r.images, cap, threadId, threadType);
     const vurl = r.videoSD || r.videoNoWatermark || r.videoHD || r.video?.noWatermark || r.video?.watermark;
@@ -341,7 +371,11 @@ async function handleOther(api, url, threadId, threadType, cookies = "") {
     const pageUrl  = d.webpage_url || url;
     const fmts     = Array.isArray(d.formats) ? d.formats : [];
     const source   = (d.platform || "").toLowerCase();
-    const caption  = `/-li 𝐀𝐮𝐭𝐨𝐃𝐨𝐰𝐧: ${platform}\n📄 ${title}\n👤 ${author}`;
+    const caption  = buildCaption(platform, title, author, {
+        duration: dur,
+        views:    d.view_count,
+        likes:    d.like_count,
+    });
 
     const hasVid = fmts.some(f => f.quality === "video+audio" || (f.vcodec && f.vcodec !== "none"));
     const hasAud = fmts.some(f => f.quality === "audio" || (f.acodec && f.acodec !== "none" && !f.vcodec));

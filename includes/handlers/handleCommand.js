@@ -170,7 +170,7 @@ async function handleCommand({ api, event, commands, prefix }) {
     const commandName = parts.shift().toLowerCase();
     const args        = parts;
 
-    if (!commandName) return;
+    if (!commandName || !/[a-z0-9]/i.test(commandName)) return;
 
     // ── Ghi nhớ nhóm cho broadcast (async, không block) ──────────────────
     if (isGroup && threadID) trackGroupForBroadcast(threadID).catch(() => {});

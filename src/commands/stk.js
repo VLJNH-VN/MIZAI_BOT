@@ -73,12 +73,34 @@ async function getMediaUrl({ event, api, threadID, acceptVideo = false }) {
 
 // ── Gửi sticker Zalo thật qua searchSticker + sendSticker ────────────────────
 
+function extractStickerList(results) {
+  if (!results) return [];
+  // Nếu là mảng trực tiếp
+  if (Array.isArray(results)) return results;
+  // Nếu là object có data là mảng
+  if (Array.isArray(results.data)) return results.data;
+  // Nếu là object có items là mảng
+  if (Array.isArray(results.items)) return results.items;
+  // Nếu là object có stickers là mảng
+  if (Array.isArray(results.stickers)) return results.stickers;
+  return [];
+}
+
 async function sendZaloSticker(api, keyword, threadID, threadType) {
-  const results = await api.searchSticker(keyword, 10);
-  if (!results || results.length === 0) return false;
-  const sticker = results[Math.floor(Math.random() * results.length)];
+  const raw = await api.searchSticker(keyword, 10);
+  const list = extractStickerList(raw);
+  if (!list.length) return false;
+
+  const sticker = list[Math.floor(Math.random() * list.length)];
+
+  const stickerId = sticker.id || sticker.sticker_id;
+  const cateId    = sticker.cateId ?? sticker.cate_id ?? 0;
+  const type      = sticker.type || 1;
+
+  if (!stickerId) return false;
+
   await api.sendSticker(
-    { id: sticker.sticker_id, cateId: sticker.cate_id, type: sticker.type || 1 },
+    { id: stickerId, cateId, type },
     threadID,
     threadType
   );
@@ -90,17 +112,20 @@ async function sendZaloSticker(api, keyword, threadID, threadType) {
 async function imageToStickerWebp(inputPath, outputPath, size = 512) {
   const meta = await sharp(inputPath).metadata();
 
+  // GIF hoặc ảnh nhiều frame → dùng ffmpeg → animated webp
   if (meta.format === "gif" || (meta.pages && meta.pages > 1)) {
     const r = spawnSync("ffmpeg", [
       "-y", "-i", inputPath,
       "-vf", `scale=${size}:${size}:force_original_aspect_ratio=decrease,pad=${size}:${size}:(ow-iw)/2:(oh-ih)/2:color=white@0`,
       "-loop", "0", "-compression_level", "6",
+      "-c:v", "libwebp_anim",
       outputPath,
     ], { encoding: "utf-8" });
-    if (r.status !== 0) throw new Error("ffmpeg GIF thất bại");
+    if (r.status !== 0) throw new Error(`ffmpeg GIF thất bại: ${r.stderr?.slice(0, 200)}`);
     return;
   }
 
+  // Ảnh tĩnh → sharp → rounded webp
   const mask = Buffer.from(
     `<svg><rect x="0" y="0" width="${size}" height="${size}" rx="${Math.floor(size / 10)}" ry="${Math.floor(size / 10)}" fill="white"/></svg>`
   );
@@ -133,7 +158,7 @@ async function videoToStickerWebp(videoPath, outputPath, size = 512) {
     "-y", "-ss", at, "-i", videoPath,
     "-frames:v", "1", "-q:v", "2", framePath,
   ], { encoding: "utf-8" });
-  if (r1.status !== 0) throw new Error("ffmpeg lấy frame thất bại");
+  if (r1.status !== 0) throw new Error(`ffmpeg lấy frame thất bại: ${r1.stderr?.slice(0, 200)}`);
 
   await imageToStickerWebp(framePath, outputPath, size);
   cleanup(framePath);
@@ -288,7 +313,7 @@ module.exports = {
   config: {
     name:            "stk",
     aliases:         ["sticker", "nhanhstk"],
-    version:         "2.0.0",
+    version:         "2.1.0",
     hasPermssion:    0,
     credits:         "MIZAI",
     description:     "Gửi sticker Zalo / tạo sticker từ ảnh+video+text bằng sharp+ffmpeg",
@@ -310,7 +335,7 @@ module.exports = {
         await textToStickerWebp(content, out);
         await send({ msg: "", attachments: [out] });
       } catch (e) {
-        await send(`❌ Lỗi: ${e.message}`);
+        await send(`❌ Lỗi tạo sticker text: ${e.message}`);
       } finally { cleanup(out); }
       return;
     }
@@ -324,7 +349,7 @@ module.exports = {
         await babgwfToStickerWebp(content, out);
         await send({ msg: "", attachments: [out] });
       } catch (e) {
-        await send(`❌ Lỗi: ${e.message}`);
+        await send(`❌ Lỗi tạo sticker wave: ${e.message}`);
       } finally { cleanup(out); }
       return;
     }
@@ -341,7 +366,7 @@ module.exports = {
         await videoToStickerWebp(vidPath, out);
         await send({ msg: "", attachments: [out] });
       } catch (e) {
-        await send(`❌ Lỗi: ${e.message}`);
+        await send(`❌ Lỗi xử lý video: ${e.message}`);
       } finally { cleanup(vidPath, out); }
       return;
     }
@@ -354,31 +379,32 @@ module.exports = {
         return send("❌ Reply vào tin nhắn có ảnh để dùng lệnh này!");
       }
       await send("⚙️ Đang xử lý ảnh bằng sharp...");
-      const isGif  = media.url.toLowerCase().includes(".gif");
-      const inp    = tmpPath(isGif ? "gif" : "jpg");
-      const out    = tmpPath(isGif ? "gif" : "webp");
+      // Luôn dùng .webp làm output — imageToStickerWebp luôn tạo file WebP
+      const isGif = media.url.toLowerCase().includes(".gif");
+      const inp   = tmpPath(isGif ? "gif" : "jpg");
+      const out   = tmpPath("webp");
       try {
         await downloadUrl(media.url, inp);
         await imageToStickerWebp(inp, out);
         await send({ msg: "", attachments: [out] });
       } catch (e) {
-        await send(`❌ Lỗi: ${e.message}`);
+        await send(`❌ Lỗi xử lý ảnh: ${e.message}`);
       } finally { cleanup(inp, out); }
       return;
     }
 
     // ── stk <url> → từ URL ───────────────────────────────────────────────────
     if (sub.startsWith("http")) {
-      await send("⏳ Đang tải ảnh...");
+      await send("⏳ Đang tải ảnh từ URL...");
       const isGif = sub.toLowerCase().includes(".gif");
       const inp   = tmpPath(isGif ? "gif" : "jpg");
-      const out   = tmpPath(isGif ? "gif" : "webp");
+      const out   = tmpPath("webp");
       try {
         await downloadUrl(sub, inp);
         await imageToStickerWebp(inp, out);
         await send({ msg: "", attachments: [out] });
       } catch (e) {
-        await send(`❌ Lỗi: ${e.message}`);
+        await send(`❌ Lỗi tải ảnh URL: ${e.message}`);
       } finally { cleanup(inp, out); }
       return;
     }
@@ -390,7 +416,11 @@ module.exports = {
     try {
       const ok = await sendZaloSticker(api, keyword, threadID, event.type);
       if (!ok) {
-        const fallback = await sendZaloSticker(api, keyword.split(" ")[0], threadID, event.type);
+        // Thử lại với từ đầu tiên
+        const firstWord = keyword.split(" ")[0];
+        const fallback  = firstWord !== keyword
+          ? await sendZaloSticker(api, firstWord, threadID, event.type)
+          : false;
         if (!fallback) await send(`❌ Không tìm thấy sticker nào cho: "${keyword}"`);
       }
     } catch (e) {

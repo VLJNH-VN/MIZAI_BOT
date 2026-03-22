@@ -185,6 +185,7 @@ async function checkAndConvertFile(filePath, fileName, send) {
 
   let live = 0, dead = 0, converted = 0, failed = 0;
   const newLinks = [];
+  let convertIdx = 0;
 
   for (const link of links) {
     // 1. Kiểm tra link còn sống không
@@ -204,7 +205,7 @@ async function checkAndConvertFile(filePath, fileName, send) {
       try {
         const ext      = extFromUrl(link);
         const baseName = path.basename(fileName, ".json");
-        const ghUrl    = await uploadToGithub(link, `${baseName}_${Date.now()}.${ext}`);
+        const ghUrl    = await uploadToGithub(link, `${baseName}_${Date.now()}_${convertIdx++}.${ext}`);
         if (ghUrl) {
           newLinks.push(ghUrl);
           converted++;
@@ -238,7 +239,7 @@ module.exports = {
     name: "api",
     version: "2.3.0",
     hasPermssion: 2,
-    credits: "DongDev (converted by MiZai)",
+    credits: "MiZai",
     description: "Quản lý link media trong listapi (GitHub / link trực tiếp / JSON khác)",
     commandCategory: "Quản Trị",
     usages: [
@@ -304,9 +305,6 @@ module.exports = {
         await send(`⏳ Đang phân tích URL...\n🔍 ${thirdArg}`);
 
         const mediaLinks = await extractMediaLinks(thirdArg);
-        if (mediaLinks.length === 0) {
-          return send("⚠️ Không tìm thấy link video/ảnh nào trong URL đó.");
-        }
 
         await send(`🎬 Tìm thấy ${mediaLinks.length} link media, đang upload lên GitHub...`);
 
@@ -314,11 +312,12 @@ module.exports = {
         let success = 0, failed = 0;
         const addedUrls = [];
         const failReasons2 = [];
+        let uploadIdx2 = 0;
 
         for (const mUrl of mediaLinks) {
           if (data.includes(mUrl)) continue;
           try {
-            const ghUrl = await uploadToGithub(mUrl, `${tipName}_${Date.now()}`);
+            const ghUrl = await uploadToGithub(mUrl, `${tipName}_${Date.now()}_${uploadIdx2++}`);
             if (ghUrl && !data.includes(ghUrl)) {
               data.push(ghUrl);
               addedUrls.push(ghUrl);
@@ -379,10 +378,6 @@ module.exports = {
       // Fetch URL → thử parse JSON array → nếu có link bên trong thì convert từng cái
       const mediaLinks = await extractMediaLinks(replyUrl);
 
-      if (mediaLinks.length === 0) {
-        return send("⚠️ Không tìm thấy link video/ảnh nào trong nội dung đó.");
-      }
-
       // Nếu chỉ có 1 link và chính là replyUrl (file media trực tiếp) → upload thẳng
       const isDirectMedia = mediaLinks.length === 1 && mediaLinks[0] === replyUrl;
 
@@ -397,10 +392,11 @@ module.exports = {
       const addedUrls = [];
 
       const failReasons = [];
+      let uploadIdx = 0;
       for (const mUrl of mediaLinks) {
         if (data.includes(mUrl)) continue;
         try {
-          const ghUrl = await uploadToGithub(mUrl, `${tipName}_${Date.now()}`);
+          const ghUrl = await uploadToGithub(mUrl, `${tipName}_${Date.now()}_${uploadIdx++}`);
           if (ghUrl && !data.includes(ghUrl)) {
             data.push(ghUrl);
             addedUrls.push(ghUrl);
@@ -528,7 +524,8 @@ module.exports = {
       let lastProgressSent = 0;
       const onProgress = async (i, total, status) => {
         const now = Date.now();
-        if (i === total || now - lastProgressSent >= 20000 || i % 10 === 0) {
+        const step = Math.max(1, Math.ceil(total / 5));
+        if (i === 1 || i === total || now - lastProgressSent >= 20000 || i % step === 0) {
           lastProgressSent = now;
           const pct = total > 0 ? Math.round((i / total) * 100) : 0;
           const icon = status === "ok" ? "✅" : status === "fail" ? "❌" : "⏭";

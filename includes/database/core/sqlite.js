@@ -1,10 +1,7 @@
 const fs   = require("fs");
 const path = require("path");
 
-let _mode     = null; // "sqlite3" | "better-sqlite3" | "sqljs"
-let _db3      = null;
-let _bsql     = null;
-let _sqljsDb  = null;
+let _db       = null;
 let _dbPromise = null;
 
 function getDbPath() {
@@ -13,369 +10,226 @@ function getDbPath() {
   return path.join(dataDir, "mizai.sqlite");
 }
 
-// ════════════════════════════════════════
-//  sqlite3 (async)
-// ════════════════════════════════════════
-function runSqlite3(db, sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err); else resolve(this);
-    });
-  });
-}
-function getSqlite3(db, sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err); else resolve(row);
-    });
-  });
-}
-function allSqlite3(db, sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err); else resolve(rows);
-    });
-  });
-}
-
-// ════════════════════════════════════════
-//  better-sqlite3 (sync → wrapped async)
-// ════════════════════════════════════════
-function runBetter(db, sql, params = []) {
+function run(db, sql, params = []) {
   try {
     const info = db.prepare(sql).run(...params);
     return Promise.resolve({ lastID: info.lastInsertRowid, changes: info.changes });
   } catch (e) { return Promise.reject(e); }
 }
-function getBetter(db, sql, params = []) {
+
+function get(db, sql, params = []) {
   try { return Promise.resolve(db.prepare(sql).get(...params)); }
   catch (e) { return Promise.reject(e); }
 }
-function allBetter(db, sql, params = []) {
+
+function all(db, sql, params = []) {
   try { return Promise.resolve(db.prepare(sql).all(...params)); }
   catch (e) { return Promise.reject(e); }
 }
 
-// ════════════════════════════════════════
-//  sql.js (pure JS / WebAssembly)
-// ════════════════════════════════════════
-const _sqlJsSaveInterval = 5000; // ms
-let   _sqlJsSaveTimer    = null;
-
-function _sqlJsSave(db, dbPath) {
-  try {
-    const data = db.export();
-    fs.writeFileSync(dbPath, Buffer.from(data));
-  } catch (_) {}
-}
-
-async function openSqlJs(dbPath) {
-  const initSqlJs = require("sql.js");
-  const SQL = await initSqlJs();
-  let db;
-  if (fs.existsSync(dbPath)) {
-    db = new SQL.Database(fs.readFileSync(dbPath));
-  } else {
-    db = new SQL.Database();
-  }
-  // Tự lưu định kỳ
-  _sqlJsSaveTimer = setInterval(() => _sqlJsSave(db, dbPath), _sqlJsSaveInterval);
-  process.on("exit", () => { clearInterval(_sqlJsSaveTimer); _sqlJsSave(db, dbPath); });
-  process.on("SIGINT", () => { _sqlJsSave(db, dbPath); process.exit(0); });
-  _sqljsDb = db;
-  return db;
-}
-
-function runSqlJs(db, sql, params = []) {
-  try {
-    db.run(sql, params);
-    const lastId = db.exec("SELECT last_insert_rowid()");
-    const lastID = lastId[0]?.values[0][0] ?? 0;
-    return Promise.resolve({ lastID, changes: 0 });
-  } catch (e) { return Promise.reject(e); }
-}
-function getSqlJs(db, sql, params = []) {
-  try {
-    const stmt = db.prepare(sql);
-    stmt.bind(params);
-    const row = stmt.step() ? stmt.getAsObject() : undefined;
-    stmt.free();
-    return Promise.resolve(row);
-  } catch (e) { return Promise.reject(e); }
-}
-function allSqlJs(db, sql, params = []) {
-  try {
-    const stmt = db.prepare(sql);
-    stmt.bind(params);
-    const rows = [];
-    while (stmt.step()) rows.push(stmt.getAsObject());
-    stmt.free();
-    return Promise.resolve(rows);
-  } catch (e) { return Promise.reject(e); }
-}
-
-// ════════════════════════════════════════
-//  Public API
-// ════════════════════════════════════════
-function run(db, sql, params = []) {
-  if (_mode === "better-sqlite3") return runBetter(db, sql, params);
-  if (_mode === "sqljs")          return runSqlJs(db, sql, params);
-  return runSqlite3(db, sql, params);
-}
-function get(db, sql, params = []) {
-  if (_mode === "better-sqlite3") return getBetter(db, sql, params);
-  if (_mode === "sqljs")          return getSqlJs(db, sql, params);
-  return getSqlite3(db, sql, params);
-}
-function all(db, sql, params = []) {
-  if (_mode === "better-sqlite3") return allBetter(db, sql, params);
-  if (_mode === "sqljs")          return allSqlJs(db, sql, params);
-  return allSqlite3(db, sql, params);
-}
-
-// ════════════════════════════════════════
-//  Mở database (tự chọn engine)
-// ════════════════════════════════════════
-async function openDb() {
-  const dbPath = getDbPath();
-
-  // 1. sqlite3
-  try {
-    if (!_db3) _db3 = require("sqlite3").verbose();
-    _mode = "sqlite3";
-    return await new Promise((resolve, reject) => {
-      const db = new _db3.Database(dbPath, err => err ? reject(err) : resolve(db));
-    });
-  } catch (_) {}
-
-  // 2. better-sqlite3
-  try {
-    if (!_bsql) _bsql = require("better-sqlite3");
-    _mode = "better-sqlite3";
-    return _bsql(dbPath);
-  } catch (_) {}
-
-  // 3. sql.js (pure JS — luôn hoạt động)
-  try {
-    _mode = "sqljs";
-    return await openSqlJs(dbPath);
-  } catch (e) {}
-
-  throw new Error("[sqlite] Không tìm thấy engine nào! Chạy: npm install sql.js");
-}
-
-// ════════════════════════════════════════
-//  Schema
-// ════════════════════════════════════════
 async function initSchema(db) {
-  await run(db, "PRAGMA journal_mode = WAL;").catch(() => {});
-  await run(db, "PRAGMA synchronous = NORMAL;").catch(() => {});
-  await run(db, "PRAGMA busy_timeout = 5000;").catch(() => {});
-  await run(db, "PRAGMA foreign_keys = ON;").catch(() => {});
+  db.pragma("journal_mode = WAL");
+  db.pragma("synchronous = NORMAL");
+  db.pragma("busy_timeout = 5000");
+  db.pragma("foreign_keys = ON");
+  db.pragma("cache_size = -4096");
+  db.pragma("temp_store = MEMORY");
+  db.pragma("mmap_size = 67108864");
 
-  await run(db, `CREATE TABLE IF NOT EXISTS users (
-    user_id      TEXT PRIMARY KEY,
-    name         TEXT,
-    profile_json TEXT,
-    first_seen   INTEGER DEFAULT 0,
-    msg_count    INTEGER DEFAULT 0,
-    profile_at   INTEGER DEFAULT 0,
-    updated_at   INTEGER
-  )`);
-  await run(db, `CREATE TABLE IF NOT EXISTS groups (
-    group_id             TEXT PRIMARY KEY,
-    name                 TEXT,
-    info_json            TEXT,
-    mem_ver_list_json    TEXT,
-    pending_approve_json TEXT,
-    member_count         INTEGER DEFAULT 0,
-    first_seen           INTEGER DEFAULT 0,
-    profile_at           INTEGER DEFAULT 0,
-    updated_at           INTEGER
-  )`);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      user_id      TEXT PRIMARY KEY,
+      name         TEXT,
+      profile_json TEXT,
+      first_seen   INTEGER DEFAULT 0,
+      msg_count    INTEGER DEFAULT 0,
+      profile_at   INTEGER DEFAULT 0,
+      updated_at   INTEGER,
+      gender       TEXT    DEFAULT 'Unknown'
+    );
+    CREATE TABLE IF NOT EXISTS groups (
+      group_id             TEXT PRIMARY KEY,
+      name                 TEXT,
+      info_json            TEXT,
+      mem_ver_list_json    TEXT,
+      pending_approve_json TEXT,
+      member_count         INTEGER DEFAULT 0,
+      first_seen           INTEGER DEFAULT 0,
+      profile_at           INTEGER DEFAULT 0,
+      updated_at           INTEGER,
+      prefix               TEXT    DEFAULT '.',
+      rankup               INTEGER DEFAULT 0,
+      settings             TEXT
+    );
+    CREATE TABLE IF NOT EXISTS messages (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      msg_id      TEXT,
+      cli_msg_id  TEXT,
+      user_id     TEXT,
+      thread_id   TEXT,
+      is_group    INTEGER DEFAULT 0,
+      content     TEXT,
+      msg_type    TEXT,
+      attach_json TEXT,
+      ts          INTEGER,
+      saved_at    INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS users_money (
+      user_id    TEXT PRIMARY KEY,
+      name       TEXT    DEFAULT '',
+      money      INTEGER DEFAULT 100000,
+      exp        INTEGER DEFAULT 0,
+      daily_last INTEGER DEFAULT 0,
+      updated_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS tx_game_money (
+      user_id TEXT PRIMARY KEY,
+      balance INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS tx_rounds (
+      id     INTEGER PRIMARY KEY AUTOINCREMENT,
+      phien  INTEGER UNIQUE,
+      result TEXT,
+      dice1  INTEGER,
+      dice2  INTEGER,
+      dice3  INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS tx_config (
+      key   TEXT PRIMARY KEY,
+      value TEXT
+    );
+    CREATE TABLE IF NOT EXISTS tx_bets (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    TEXT,
+      phien      INTEGER,
+      choice     TEXT,
+      bet_amount INTEGER DEFAULT 0,
+      win_amount INTEGER DEFAULT 0,
+      ket_qua    TEXT    DEFAULT '',
+      time       INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS tx_transactions (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id        TEXT,
+      time           INTEGER,
+      amount         INTEGER,
+      balance_before INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS tx_enabled_groups (
+      group_id TEXT PRIMARY KEY
+    );
+    CREATE TABLE IF NOT EXISTS tuongtac (
+      group_id TEXT,
+      user_id  TEXT,
+      name     TEXT,
+      day      INTEGER DEFAULT 0,
+      week     INTEGER DEFAULT 0,
+      month    INTEGER DEFAULT 0,
+      total    INTEGER DEFAULT 0,
+      PRIMARY KEY (group_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS ai_user_memory (
+      user_id    TEXT PRIMARY KEY,
+      name       TEXT,
+      notes_json TEXT DEFAULT '[]',
+      last_seen  TEXT DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS ai_diary (
+      id    INTEGER PRIMARY KEY AUTOINCREMENT,
+      date  TEXT,
+      entry TEXT
+    );
+    CREATE TABLE IF NOT EXISTS ai_global_notes (
+      id   INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT,
+      note TEXT
+    );
+    CREATE TABLE IF NOT EXISTS ai_state (
+      key   TEXT PRIMARY KEY,
+      value TEXT
+    );
+    CREATE TABLE IF NOT EXISTS ai_enabled_groups (
+      group_id TEXT PRIMARY KEY,
+      enabled  INTEGER DEFAULT 1
+    );
+    CREATE TABLE IF NOT EXISTS group_anti (
+      group_id   TEXT PRIMARY KEY,
+      cfg_json   TEXT NOT NULL DEFAULT '{}',
+      updated_at INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS group_muted (
+      group_id TEXT,
+      user_id  TEXT,
+      name     TEXT    DEFAULT '',
+      muted_at INTEGER DEFAULT 0,
+      expire_at INTEGER DEFAULT 0,
+      PRIMARY KEY (group_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS rent_groups (
+      group_id   TEXT PRIMARY KEY,
+      owner_id   TEXT DEFAULT '',
+      time_start TEXT DEFAULT '',
+      time_end   TEXT DEFAULT '',
+      created_at INTEGER DEFAULT 0,
+      updated_at INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS rent_keys (
+      key_str    TEXT PRIMARY KEY,
+      days       INTEGER DEFAULT 30,
+      is_used    INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS cooldowns (
+      cmd_name  TEXT,
+      user_id   TEXT,
+      last_used INTEGER DEFAULT 0,
+      PRIMARY KEY (cmd_name, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_users_updated_at   ON users(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_groups_updated_at  ON groups(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_users_msg_count    ON users(msg_count);
+    CREATE INDEX IF NOT EXISTS idx_messages_user_id   ON messages(user_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_ts        ON messages(ts);
+    CREATE INDEX IF NOT EXISTS idx_tx_bets_phien      ON tx_bets(phien);
+    CREATE INDEX IF NOT EXISTS idx_tx_bets_user       ON tx_bets(user_id, phien);
+    CREATE INDEX IF NOT EXISTS idx_tx_trans_user      ON tx_transactions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_tuongtac_group     ON tuongtac(group_id);
+    CREATE INDEX IF NOT EXISTS idx_group_muted_gid    ON group_muted(group_id);
+  `);
 
-  // Migration: thêm cột mới nếu chưa có (tương thích DB cũ)
-  const userCols  = (await all(db, "PRAGMA table_info(users)")).map(c => c.name);
-  const groupCols = (await all(db, "PRAGMA table_info(groups)")).map(c => c.name);
-  if (!userCols.includes("first_seen"))    await run(db, "ALTER TABLE users  ADD COLUMN first_seen  INTEGER DEFAULT 0").catch(() => {});
-  if (!userCols.includes("msg_count"))     await run(db, "ALTER TABLE users  ADD COLUMN msg_count   INTEGER DEFAULT 0").catch(() => {});
-  if (!userCols.includes("profile_at"))    await run(db, "ALTER TABLE users  ADD COLUMN profile_at  INTEGER DEFAULT 0").catch(() => {});
-  if (!userCols.includes("gender"))        await run(db, "ALTER TABLE users  ADD COLUMN gender TEXT DEFAULT 'Unknown'").catch(() => {});
-  if (!groupCols.includes("member_count")) await run(db, "ALTER TABLE groups ADD COLUMN member_count INTEGER DEFAULT 0").catch(() => {});
-  if (!groupCols.includes("first_seen"))   await run(db, "ALTER TABLE groups ADD COLUMN first_seen  INTEGER DEFAULT 0").catch(() => {});
-  if (!groupCols.includes("profile_at"))   await run(db, "ALTER TABLE groups ADD COLUMN profile_at  INTEGER DEFAULT 0").catch(() => {});
-  if (!groupCols.includes("prefix"))       await run(db, "ALTER TABLE groups ADD COLUMN prefix TEXT DEFAULT '.'").catch(() => {});
-  if (!groupCols.includes("rankup"))       await run(db, "ALTER TABLE groups ADD COLUMN rankup INTEGER DEFAULT 0").catch(() => {});
-  if (!groupCols.includes("settings"))     await run(db, "ALTER TABLE groups ADD COLUMN settings TEXT").catch(() => {});
-
-  await run(db, "CREATE INDEX IF NOT EXISTS idx_users_updated_at  ON users(updated_at);").catch(() => {});
-  await run(db, "CREATE INDEX IF NOT EXISTS idx_groups_updated_at ON groups(updated_at);").catch(() => {});
-  await run(db, "CREATE INDEX IF NOT EXISTS idx_users_msg_count   ON users(msg_count);").catch(() => {});
-
-  // Bảng lưu lịch sử tin nhắn (persistent, tồn tại sau restart)
-  await run(db, `CREATE TABLE IF NOT EXISTS messages (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    msg_id      TEXT,
-    cli_msg_id  TEXT,
-    user_id     TEXT,
-    thread_id   TEXT,
-    is_group    INTEGER DEFAULT 0,
-    content     TEXT,
-    msg_type    TEXT,
-    attach_json TEXT,
-    ts          INTEGER,
-    saved_at    INTEGER
-  )`);
-  await run(db, "CREATE INDEX IF NOT EXISTS idx_messages_user_id   ON messages(user_id);").catch(() => {});
-  await run(db, "CREATE INDEX IF NOT EXISTS idx_messages_thread_id  ON messages(thread_id);").catch(() => {});
-  await run(db, "CREATE INDEX IF NOT EXISTS idx_messages_ts         ON messages(ts);").catch(() => {});
-
-  await run(db, `CREATE TABLE IF NOT EXISTS users_money (
-    user_id TEXT PRIMARY KEY, name TEXT DEFAULT '',
-    money INTEGER DEFAULT 100000, exp INTEGER DEFAULT 0,
-    daily_last INTEGER DEFAULT 0, updated_at INTEGER
-  )`);
-
-  const cols = (await all(db, "PRAGMA table_info(users_money)")).map(c => c.name);
-  if (!cols.includes("exp"))        await run(db, "ALTER TABLE users_money ADD COLUMN exp INTEGER DEFAULT 0").catch(() => {});
-  if (!cols.includes("daily_last")) await run(db, "ALTER TABLE users_money ADD COLUMN daily_last INTEGER DEFAULT 0").catch(() => {});
-  if (!cols.includes("name"))       await run(db, "ALTER TABLE users_money ADD COLUMN name TEXT DEFAULT ''").catch(() => {});
-
-  // ── Taixiu ──────────────────────────────────────────────────────────────────
-  await run(db, `CREATE TABLE IF NOT EXISTS tx_game_money (
-    user_id TEXT PRIMARY KEY,
-    balance INTEGER DEFAULT 0
-  )`);
-  await run(db, `CREATE TABLE IF NOT EXISTS tx_rounds (
-    id      INTEGER PRIMARY KEY AUTOINCREMENT,
-    phien   INTEGER UNIQUE,
-    result  TEXT,
-    dice1   INTEGER,
-    dice2   INTEGER,
-    dice3   INTEGER
-  )`);
-  await run(db, `CREATE TABLE IF NOT EXISTS tx_config (
-    key   TEXT PRIMARY KEY,
-    value TEXT
-  )`);
-  await run(db, `CREATE TABLE IF NOT EXISTS tx_bets (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id    TEXT,
-    phien      INTEGER,
-    choice     TEXT,
-    bet_amount INTEGER DEFAULT 0,
-    win_amount INTEGER DEFAULT 0,
-    ket_qua    TEXT    DEFAULT '',
-    time       INTEGER
-  )`);
-  await run(db, "CREATE INDEX IF NOT EXISTS idx_tx_bets_phien   ON tx_bets(phien);").catch(() => {});
-  await run(db, "CREATE INDEX IF NOT EXISTS idx_tx_bets_user    ON tx_bets(user_id, phien);").catch(() => {});
-  await run(db, `CREATE TABLE IF NOT EXISTS tx_transactions (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id        TEXT,
-    time           INTEGER,
-    amount         INTEGER,
-    balance_before INTEGER
-  )`);
-  await run(db, "CREATE INDEX IF NOT EXISTS idx_tx_trans_user ON tx_transactions(user_id);").catch(() => {});
-  await run(db, `CREATE TABLE IF NOT EXISTS tx_enabled_groups (
-    group_id TEXT PRIMARY KEY
-  )`);
-
-  // ── Tương tác ────────────────────────────────────────────────────────────────
-  await run(db, `CREATE TABLE IF NOT EXISTS tuongtac (
-    group_id TEXT,
-    user_id  TEXT,
-    name     TEXT,
-    day      INTEGER DEFAULT 0,
-    week     INTEGER DEFAULT 0,
-    month    INTEGER DEFAULT 0,
-    total    INTEGER DEFAULT 0,
-    PRIMARY KEY (group_id, user_id)
-  )`);
-  await run(db, "CREATE INDEX IF NOT EXISTS idx_tuongtac_group ON tuongtac(group_id);").catch(() => {});
-
-  // ── AI Memory & State ────────────────────────────────────────────────────────
-  await run(db, `CREATE TABLE IF NOT EXISTS ai_user_memory (
-    user_id    TEXT PRIMARY KEY,
-    name       TEXT,
-    notes_json TEXT DEFAULT '[]',
-    last_seen  TEXT DEFAULT ''
-  )`);
-  await run(db, `CREATE TABLE IF NOT EXISTS ai_diary (
-    id    INTEGER PRIMARY KEY AUTOINCREMENT,
-    date  TEXT,
-    entry TEXT
-  )`);
-  await run(db, `CREATE TABLE IF NOT EXISTS ai_global_notes (
-    id   INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT,
-    note TEXT
-  )`);
-  await run(db, `CREATE TABLE IF NOT EXISTS ai_state (
-    key   TEXT PRIMARY KEY,
-    value TEXT
-  )`);
-  await run(db, `CREATE TABLE IF NOT EXISTS ai_enabled_groups (
-    group_id TEXT PRIMARY KEY,
-    enabled  INTEGER DEFAULT 1
-  )`);
-
-  // ── Anti settings per group ───────────────────────────────────────────────
-  await run(db, `CREATE TABLE IF NOT EXISTS group_anti (
-    group_id   TEXT PRIMARY KEY,
-    cfg_json   TEXT NOT NULL DEFAULT '{}',
-    updated_at INTEGER DEFAULT 0
-  )`);
-
-  // ── Muted users per group ─────────────────────────────────────────────────
-  await run(db, `CREATE TABLE IF NOT EXISTS group_muted (
-    group_id TEXT,
-    user_id  TEXT,
-    name     TEXT DEFAULT '',
-    muted_at INTEGER DEFAULT 0,
-    expire_at INTEGER DEFAULT 0,
-    PRIMARY KEY (group_id, user_id)
-  )`);
-  await run(db, "CREATE INDEX IF NOT EXISTS idx_group_muted_gid ON group_muted(group_id);").catch(() => {});
-
-  // ── Rent groups & keys ─────────────────────────────────────────────────────
-  await run(db, `CREATE TABLE IF NOT EXISTS rent_groups (
-    group_id   TEXT PRIMARY KEY,
-    owner_id   TEXT DEFAULT '',
-    time_start TEXT DEFAULT '',
-    time_end   TEXT DEFAULT '',
-    created_at INTEGER DEFAULT 0,
-    updated_at INTEGER DEFAULT 0
-  )`);
-  await run(db, `CREATE TABLE IF NOT EXISTS rent_keys (
-    key_str    TEXT PRIMARY KEY,
-    days       INTEGER DEFAULT 30,
-    is_used    INTEGER DEFAULT 0,
-    created_at INTEGER DEFAULT 0
-  )`);
-
-  // ── Persistent cooldowns ─────────────────────────────────────────────────
-  await run(db, `CREATE TABLE IF NOT EXISTS cooldowns (
-    cmd_name  TEXT,
-    user_id   TEXT,
-    last_used INTEGER DEFAULT 0,
-    PRIMARY KEY (cmd_name, user_id)
-  )`);
-
+  // Migrations: thêm cột mới nếu DB cũ chưa có
+  const migrate = (table, col, def) => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+    if (!cols.includes(col)) {
+      try { db.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`).run(); } catch (_) {}
+    }
+  };
+  migrate("users",       "first_seen",    "INTEGER DEFAULT 0");
+  migrate("users",       "msg_count",     "INTEGER DEFAULT 0");
+  migrate("users",       "profile_at",    "INTEGER DEFAULT 0");
+  migrate("users",       "gender",        "TEXT DEFAULT 'Unknown'");
+  migrate("groups",      "member_count",  "INTEGER DEFAULT 0");
+  migrate("groups",      "first_seen",    "INTEGER DEFAULT 0");
+  migrate("groups",      "profile_at",    "INTEGER DEFAULT 0");
+  migrate("groups",      "prefix",        "TEXT DEFAULT '.'");
+  migrate("groups",      "rankup",        "INTEGER DEFAULT 0");
+  migrate("groups",      "settings",      "TEXT");
+  migrate("users_money", "exp",           "INTEGER DEFAULT 0");
+  migrate("users_money", "daily_last",    "INTEGER DEFAULT 0");
+  migrate("users_money", "name",          "TEXT DEFAULT ''");
 }
 
-// ════════════════════════════════════════
-//  Singleton
-// ════════════════════════════════════════
 async function getDb() {
   if (_dbPromise) return _dbPromise;
   _dbPromise = (async () => {
-    const db = await openDb();
-    await initSchema(db);
-    const label = `[SQLite] Engine: ${_mode}`;
+    const dbPath = getDbPath();
+    const BetterSqlite = require("better-sqlite3");
+    _db = new BetterSqlite(dbPath);
+    await initSchema(_db);
+    const label = "[SQLite] Engine: better-sqlite3";
     if (typeof logInfo === "function") logInfo(label); else console.log(label);
-    return db;
+    return _db;
   })();
   return _dbPromise;
 }

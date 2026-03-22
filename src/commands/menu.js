@@ -8,7 +8,11 @@
  */
 
 const fs = require("fs");
-const { drawMenuCard, drawCategoryCard, drawCommandInfoCard, drawAllCommandsCard } = require("../../utils/media/canvas");
+let _canvas;
+function getCanvas() {
+  if (!_canvas) _canvas = require("../../utils/media/canvas");
+  return _canvas;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -70,7 +74,7 @@ module.exports = {
       const cmd = cmds.get(key);
       if (cmd) {
         let cardPath;
-        try { cardPath = await drawCommandInfoCard({ config: cmd.config, prefix: p }); } catch (_) {}
+        try { cardPath = await getCanvas().drawCommandInfoCard({ config: cmd.config, prefix: p }); } catch (_) {}
         if (cardPath) {
           await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type);
           try { fs.unlinkSync(cardPath); } catch (_) {}
@@ -117,7 +121,7 @@ module.exports = {
 
       let cardPath;
       try {
-        cardPath = await drawAllCommandsCard({ commands: slice, page, totalPages, total: allCmds.length, prefix: p });
+        cardPath = await getCanvas().drawAllCommandsCard({ commands: slice, page, totalPages, total: allCmds.length, prefix: p });
       } catch (_) {}
 
       let sent;
@@ -153,7 +157,7 @@ module.exports = {
     const uniqueCount = data.reduce((s, g) => s + g.commandsName.length, 0);
 
     let cardPath;
-    try { cardPath = await drawMenuCard({ groups: data, uniqueCount, prefix: p }); } catch (_) {}
+    try { cardPath = await getCanvas().drawMenuCard({ groups: data, uniqueCount, prefix: p }); } catch (_) {}
 
     let sent;
     if (cardPath) {
@@ -207,7 +211,7 @@ module.exports = {
 
       let cardPath;
       try {
-        cardPath = await drawCategoryCard({
+        cardPath = await getCanvas().drawCategoryCard({
           category: item.commandCategory,
           commands: item.commandsName,
           prefix:   p,
@@ -256,7 +260,7 @@ module.exports = {
 
       let cardPath;
       try {
-        cardPath = await drawAllCommandsCard({ commands: slice, page, totalPages, total: allCmds.length, prefix: p });
+        cardPath = await getCanvas().drawAllCommandsCard({ commands: slice, page, totalPages, total: allCmds.length, prefix: p });
       } catch (_) {}
 
       let sent;
@@ -302,7 +306,7 @@ module.exports = {
       if (!cmd) return send(`❌ Không tìm thấy lệnh "${name}"`);
 
       let cardPath;
-      try { cardPath = await drawCommandInfoCard({ config: cmd.config, prefix: p }); } catch (_) {}
+      try { cardPath = await getCanvas().drawCommandInfoCard({ config: cmd.config, prefix: p }); } catch (_) {}
       if (cardPath) {
         await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type);
         try { fs.unlinkSync(cardPath); } catch (_) {}

@@ -9,7 +9,11 @@ const https = require("https");
 const fs    = require("fs");
 const { Reactions } = require("zca-js");
 const { fmtDurationSec, fmtDurationMs } = require("../../utils/media/helpers");
-const { drawSearchCard, drawNowPlayingCard } = require("../../utils/media/canvas");
+let _canvas;
+function getCanvas() {
+  if (!_canvas) _canvas = require("../../utils/media/canvas");
+  return _canvas;
+}
 
 const FOWN_API = "https://fown.onrender.com";
 const MIXCLOUD_GRAPHQL_URL = "https://app.mixcloud.com/graphql";
@@ -154,7 +158,7 @@ module.exports = {
         if (!tracks.length) return send(`😔 Không tìm thấy kết quả cho "${query}"`);
         tracks.forEach(t => { t._durStr = fmtDurationSec(t.duration); });
         let cardPath;
-        try { cardPath = await drawSearchCard({ platform: "sc", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
+        try { cardPath = await getCanvas().drawSearchCard({ platform: "sc", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
         const sent = cardPath
           ? await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type)
           : await send(`💬 Reply số từ 1-${tracks.length} để tải nhạc`);
@@ -167,7 +171,7 @@ module.exports = {
         if (!tracks.length) return send(`😔 Không tìm thấy kết quả cho "${query}"`);
         tracks.forEach(t => { t._durStr = t._durSec ? fmtDurationSec(t._durSec) : fmtDurationMs(t.duration); });
         let cardPath;
-        try { cardPath = await drawSearchCard({ platform: "spt", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
+        try { cardPath = await getCanvas().drawSearchCard({ platform: "spt", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
         const sent = cardPath
           ? await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type)
           : await send(`📌 Reply STT (1–${tracks.length}) để tải nhạc`);
@@ -184,7 +188,7 @@ module.exports = {
           _durStr: formatDuration(r.audioLength),
         }));
         let cardPath;
-        try { cardPath = await drawSearchCard({ platform: "mix", query, tracks: cardTracks }); } catch (_) {}
+        try { cardPath = await getCanvas().drawSearchCard({ platform: "mix", query, tracks: cardTracks }); } catch (_) {}
         const sent = cardPath
           ? await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type)
           : await send(`💬 Reply số từ 1-5 để xem link Mixcloud`);
@@ -220,7 +224,7 @@ module.exports = {
         if (!audioUrl) return send("❌ Không lấy được link tải. Thử bài khác.");
         let cardPath;
         try {
-          cardPath = await drawNowPlayingCard({
+          cardPath = await getCanvas().drawNowPlayingCard({
             platform: "sc",
             title:    t.title,
             artist:   t.uploader,
@@ -270,7 +274,7 @@ module.exports = {
         if (!audioUrl) return send("❌ Không lấy được link tải. Thử lại sau.");
         let cardPath;
         try {
-          cardPath = await drawNowPlayingCard({
+          cardPath = await getCanvas().drawNowPlayingCard({
             platform: "spt",
             title:    track.title,
             artist:   track.author,
@@ -301,7 +305,7 @@ module.exports = {
       } catch (_) {}
       let cardPath;
       try {
-        cardPath = await drawNowPlayingCard({
+        cardPath = await getCanvas().drawNowPlayingCard({
           platform: "mix",
           title:    r.name,
           artist:   r.owner.displayName,

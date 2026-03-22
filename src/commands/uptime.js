@@ -4,7 +4,11 @@ const fs   = require("fs");
 const path = require("path");
 const os   = require("os");
 
-const { drawUptimeCard } = require("../../utils/media/canvas");
+let _canvas;
+function getCanvas() {
+  if (!_canvas) _canvas = require("../../utils/media/canvas");
+  return _canvas;
+}
 
 const ROOT       = process.cwd();
 const BG_IMAGE   = path.join(ROOT, "attached_assets", "generated_images", "uptime_tech.png");
@@ -172,7 +176,7 @@ module.exports = {
     // ── Vẽ card ───────────────────────────────────────────────────────────────
     let cardPath;
     try {
-      cardPath = await drawUptimeCard({ ...data, bgImagePath: BG_IMAGE });
+      cardPath = await getCanvas().drawUptimeCard({ ...data, bgImagePath: BG_IMAGE });
     } catch (err) {
       logError?.(`[uptime] drawUptimeCard lỗi: ${err?.message || err}`);
     }

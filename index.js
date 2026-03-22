@@ -1,113 +1,71 @@
-// ── Auto-respawn với memory flags nếu chưa có ────────────────────────────────
-(function ensureFlags() {
-  const REQUIRED = ["--max-old-space-size=384", "--gc-interval=100"];
-  const missing  = REQUIRED.filter(f => !process.execArgv.includes(f));
-  if (missing.length === 0) return;
-  const { spawnSync } = require("child_process");
-  const result = spawnSync(
-    process.execPath,
-    [...process.execArgv, ...missing, __filename, ...process.argv.slice(2)],
-    { stdio: "inherit", env: process.env }
-  );
-  process.exit(result.status ?? 0);
-})();
+"use strict";
 
+const { spawn, execSync } = require("child_process");
 const path = require("path");
 
-// ── Globals (logger, axios, db, economy, imgur, admin, key manager) ───────────
-global.config = require("./config.json");
-require("./utils/system/global");
+const NODE_FLAGS = ["--max-old-space-size=384", "--gc-interval=100"];
+const MAIN_FILE  = path.join(__dirname, "main.js");
+const RESTART_DELAY_MS = 5000;
 
-// ── Core modules ──────────────────────────────────────────────────────────────
-const { setApi }                  = require("./utils/system/global");
-const { loadCommands, runOnLoad, setupLifecycle } = require("./utils/system/loader");
-const { scheduleCacheCleanup, scheduleKeyCheck } = require("./utils/system/maintenance");
-const { scheduleBackup } = require("./utils/system/githubBackup");
-const { startKeepAlive } = require("./utils/system/keepAlive");
-const { createZaloClient }        = require("./utils/system/client");
-const { saveLastSeen }            = require("./utils/system/lastSeen");
-const { fetchMissedMessages }     = require("./utils/system/fetchMissed");
-
-// ── Events ────────────────────────────────────────────────────────────────────
-const { handleMessage }    = require("./src/events/message");
-const { handleReaction }   = require("./includes/handlers/handleReaction");
-const { handleGroupEvent } = require("./includes/handlers/handleGroupEvent");
-const { handleUndo }       = require("./includes/handlers/handleUndo");
-const { startAutoSend }    = require("./src/events/autoSend");
-const { startTuongTac }    = require("./src/events/tuongTac");
-const { startAutoDown }    = require("./src/events/autoDown");
-const { startGoibot }      = require("./src/events/goibot");
-const { startTxLoop }      = require("./src/events/txLoop");
-
-// ── Config validation ─────────────────────────────────────────────────────────
-function validateConfig() {
-  const cfg = global.config;
-  const errors = [];
-  const method = (cfg.loginMethod || "qr").toLowerCase();
-  if (method === "cookie" && !cfg.cookiePath) errors.push("Thiếu 'cookiePath' khi loginMethod=cookie");
-  if (errors.length) { logError(errors.join("\n")); return false; }
-  return true;
-}
-
-// ── Main ──────────────────────────────────────────────────────────────────────
-let _schedulersStarted = false;
-
-async function main(isFirstRun = true) {
-  if (!validateConfig()) process.exit(1);
-
-  if (isFirstRun && !_schedulersStarted) {
-    _schedulersStarted = true;
-    scheduleCacheCleanup();
-    scheduleKeyCheck();
-    scheduleBackup();
-    startKeepAlive();
-  }
-
-  const api = await createZaloClient();
-  setApi(api);
-  global.botId    = String(api.getOwnId());
-  global.commands = loadCommands(path.join(__dirname, "src", "commands"));
-  global.prefix   = global.config.prefix || ".";
-  await runOnLoad(global.commands, api);
-
-  api.listener.on("connected", () => {
-    logInfo("[LISTENER] Bắt đầu nhận lệnh!");
-    if (isFirstRun) {
-      startAutoSend(api);
-      const ttInfo = startTuongTac(api);
-      startAutoDown(api);
-      startGoibot(api);
-      startTxLoop(api);
-      logInfo(
-        "[BOT] Dịch vụ đã khởi động:\n" +
-        "      ├─ AutoSend\n" +
-        `      ├─ TuongTac  (${ttInfo})\n` +
-        "      └─ Goibot    AI Mizai"
-      );
-
-      // Load toàn bộ data nhóm vào DB (chạy nền, không block)
-
-      // Fetch tin nhắn bỏ lỡ khi bot offline (chạy nền, không block)
-      fetchMissedMessages(api).catch(err =>
-        logError(`[fetchMissed] Lỗi: ${err?.message}`)
-      );
+// ── Kiểm tra & rebuild better-sqlite3 ────────────────────────────────────────
+(function checkNativeModules() {
+  try {
+    require("better-sqlite3");
+  } catch {
+    console.log("[LAUNCHER] better-sqlite3 chưa build. Đang rebuild...");
+    try {
+      execSync("npm rebuild better-sqlite3 --update-binary", {
+        stdio: "inherit",
+        cwd: __dirname,
+      });
+      console.log("[LAUNCHER] Rebuild better-sqlite3 thành công.");
+    } catch {
+      console.log("[LAUNCHER] Rebuild thất bại → sẽ dùng sql.js fallback.");
     }
+  }
+})();
+
+// ── Launcher ──────────────────────────────────────────────────────────────────
+let _restartCount = 0;
+let _botProcess   = null;
+
+function startBot() {
+  _restartCount++;
+
+  const label = _restartCount === 1
+    ? "[LAUNCHER] Khởi động MIZAI_BOT..."
+    : `[LAUNCHER] Khởi động lại lần ${_restartCount - 1}...`;
+  console.log(label);
+
+  _botProcess = spawn(process.execPath, [...NODE_FLAGS, MAIN_FILE], {
+    stdio: "inherit",
+    cwd:   __dirname,
+    env:   process.env,
   });
 
-  api.listener.on("disconnected", (code, reason) => {
-    saveLastSeen();
-    global.restartBot(`code:${code} | ${reason}`);
+  _botProcess.on("close", (code, signal) => {
+    if (signal === "SIGTERM" || signal === "SIGINT") {
+      console.log(`[LAUNCHER] Bot dừng bởi tín hiệu ${signal}. Không restart.`);
+      process.exit(0);
+    }
+    console.log(`[LAUNCHER] Bot thoát (code: ${code ?? "?"}). Restart sau ${RESTART_DELAY_MS / 1000}s...`);
+    setTimeout(startBot, RESTART_DELAY_MS);
   });
-  api.listener.on("error",        (err)        => global.restartBot(`error:${err?.message}`));
 
-  api.listener.on("message",     (event)    => handleMessage({ api, event, commands: global.commands, prefix: global.prefix }).catch((err) => logError(`Lỗi handleMessage: ${err?.message || err}`)));
-  api.listener.on("reaction",    (reaction) => handleReaction({ api, reaction, commands: global.commands }).catch((err) => logError(`Lỗi handleReaction: ${err?.message || err}`)));
-  api.listener.on("undo",        (undo)     => handleUndo({ api, undo, commands: global.commands }).catch((err) => logError(`Lỗi handleUndo: ${err?.message || err}`)));
-  api.listener.on("group_event", (data)     => handleGroupEvent({ api, data }).catch((err) => logError(`Lỗi handleGroupEvent: ${err?.message || err}`)));
-
-  api.listener.start({ retryOnClose: true });
-  logInfo("Bot đã khởi động và đang lắng nghe tin nhắn...");
+  _botProcess.on("error", (err) => {
+    console.error(`[LAUNCHER] Lỗi spawn: ${err.message}. Restart sau ${RESTART_DELAY_MS / 1000}s...`);
+    setTimeout(startBot, RESTART_DELAY_MS);
+  });
 }
 
-setupLifecycle(main);
-main().catch((err) => logError(`Lỗi khởi động bot: ${err?.message || err}`));
+// ── Dừng bot con khi launcher bị kill ────────────────────────────────────────
+function shutdown(signal) {
+  console.log(`\n[LAUNCHER] Nhận ${signal}, đang dừng bot...`);
+  if (_botProcess) _botProcess.kill(signal);
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT",  () => shutdown("SIGINT"));
+
+startBot();

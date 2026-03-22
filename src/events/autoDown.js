@@ -72,7 +72,7 @@ function fmtNum(n) {
     return String(n);
 }
 function buildCaption(platform, title, author, extra = {}) {
-    const lines = [`/-li 𝐀𝐮𝐭𝐨𝐃𝐨𝐰𝐧: ${platform}`, `📄 ${title}`, `👤 ${author}`];
+    const lines = [`/-li AUTODOWN: ${platform}`, `📄 ${title}`, `👤 ${author}`];
     const dur = fmtDur(extra.duration);
     const views = fmtNum(extra.views);
     const likes = fmtNum(extra.likes);
@@ -189,7 +189,7 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
                         height: meta.height || info.height || 1280,
                         duration: meta.duration * 1000, fileSize: size, ttl: 500_000,
                     }, threadId, threadType);
-                    return logInfo("[AutoDown] sendVideo (GitHub) OK.");
+                    return;
                 }
             } catch (e) { logWarn(`[AutoDown] GitHub sendVideo lỗi: ${e.message}`); }
         }
@@ -197,7 +197,7 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
         // Bước 2: sendMessage attachment
         try {
             await api.sendMessage({ msg: caption, attachments: [upload], ttl: 500_000 }, threadId, threadType);
-            return logInfo("[AutoDown] sendVideo (attachment) OK.");
+            return;
         } catch (e) { logWarn(`[AutoDown] attachment lỗi: ${e.message}`); }
 
         // Bước 3: gửi link text
@@ -239,7 +239,6 @@ async function sendImages(api, urls, caption, threadId, threadType) {
 
 // ─── TikTok handler ────────────────────────────────────────────────────────────
 async function handleTikTok(api, url, threadId, threadType) {
-    logDebug(`[AutoDown] TikTok: ${url}`);
 
     // Thử tikwm trước (nhanh, không watermark, có likes)
     try {
@@ -289,7 +288,6 @@ function resolveFbUrlSync(url) {
 
         const isLogin = final.includes("login.php");
         const isStory = /facebook\.com\/stories\//.test(final);
-        if (final && final !== url) logDebug(`[AutoDown] FB resolve: ${url} → ${final}`);
         return { url: final || url, isLogin, isStory };
     } catch (e) {
         logWarn(`[AutoDown] FB resolve lỗi: ${e.message}`);
@@ -299,7 +297,6 @@ function resolveFbUrlSync(url) {
 
 // ─── Facebook handler — resolve short/share link → fown (có cookie) ──────────
 async function handleFacebook(api, url, threadId, threadType) {
-    logDebug(`[AutoDown] Facebook: ${url}`);
     const cookies = getFbCookies();
 
     if (FB_RESOLVE_RX.test(url)) {
@@ -360,7 +357,6 @@ const dlUrl = (pageUrl, fmt, cookies = "") => {
 };
 
 async function handleOther(api, url, threadId, threadType, cookies = "") {
-    logDebug(`[AutoDown] fown: ${url}`);
     const d = await fetchInfo(url, 3, cookies);
 
     const title    = d.title?.trim() || "Media";
@@ -387,7 +383,7 @@ async function handleOther(api, url, threadId, threadType, cookies = "") {
             try {
                 await api.sendMessage({ msg: caption, ttl: 300_000 }, threadId, threadType);
                 await api.sendVoice({ voiceUrl: d.download_audio_url, ttl: 500_000 }, threadId, threadType);
-                return logInfo("[AutoDown] sendVoice (GitHub Releases) OK.");
+                return;
             } catch (e) { logWarn(`[AutoDown] sendVoice Releases lỗi: ${e.message}`); }
         }
         return await sendAudio(api, dlUrl(pageUrl, "audio", cookies), { thumbnail: thumb, duration: dur }, caption, threadId, threadType);
@@ -429,7 +425,7 @@ async function handleOther(api, url, threadId, threadType, cookies = "") {
                     videoUrl: d.download_url, thumbnailUrl: thumbZalo || thumb || "",
                     msg: caption, width: w, height: h, duration: dur * 1000, ttl: 500_000,
                 }, threadId, threadType);
-                return logInfo("[AutoDown] sendVideo (GitHub Releases) OK.");
+                return;
             } catch (e) { logWarn(`[AutoDown] sendVideo Releases lỗi: ${e.message}`); }
         }
 
@@ -492,7 +488,6 @@ function startAutoDown(api) {
         if (!isTT && !SUPPORTED.some(rx => rx.test(url))) return;
         if (!(await autoDownEnabled(threadId))) return;
 
-        logDebug(`[AutoDown] Link: ${url}`);
         try {
             fs.mkdirSync(TEMP, { recursive: true });
             if (isTT)        await handleTikTok(api, url, threadId, threadType);

@@ -58,6 +58,23 @@ function stringifyWebapiError(err) {
 
 function stringifyError(err) {
   if (!err) return "Không xác định";
+  // AxiosError: đọc message từ response body nếu có
+  if (err.isAxiosError || err.response) {
+    const data = err.response?.data;
+    if (data) {
+      const detail = data.message || data.error || data.details || null;
+      if (detail && typeof detail === "string") {
+        const sc = err.response?.status || err.status || "";
+        // Phát hiện YouTube bot-check
+        if (detail.includes("Sign in to confirm") || detail.includes("bot") || detail.includes("cookies")) {
+          return "YouTube yêu cầu xác thực bot — API tải nhạc đang bị chặn. Thử lại sau hoặc dùng platform khác (scl, mix).";
+        }
+        return sc ? `HTTP ${sc} — ${detail}` : detail;
+      }
+    }
+    const sc = err.response?.status || err.status || "";
+    return sc ? `HTTP ${sc} — ${err.message}` : err.message;
+  }
   const sc = err?.statusCode || err?.status;
   const msg = stringifyWebapiError(err);
   return sc ? `HTTP ${sc} — ${msg}` : msg;
@@ -345,7 +362,7 @@ module.exports = {
           await api.sendMessage({ msg: infoMsg }, event.threadId, event.type);
         }
         await global.zaloSendVoice(api, audioUrl, event.threadId, event.type);
-      } catch (err) { return send("❌ Lỗi tải nhạc: " + err.message); }
+      } catch (err) { console.error("[MUSIC:scl] Lỗi tải nhạc:", err?.message || err); return send("❌ Lỗi tải nhạc: " + stringifyError(err)); }
 
     } else if (platform === "spt") {
       if (!tracks.length) return send("❌ Hết dữ liệu. Vui lòng tìm lại.");

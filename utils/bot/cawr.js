@@ -102,7 +102,7 @@ function loadHistory() {
 }
 
 function saveHistory(histSet) {
-  ensureDir(DATA_DIR);
+  ensureDir(path.dirname(HISTORY_FILE));
   fs.writeFileSync(HISTORY_FILE, JSON.stringify([...histSet], null, 2), "utf-8");
 }
 
@@ -228,15 +228,16 @@ async function getUserVideos(username, limit = "all") {
   }
 
   return result.result.map(v => {
-    const vid = String(v.id || `${Date.now()}_${Math.random().toString(36).slice(2,6)}`);
-    const videoUrl = v.video?.downloadAddr || v.video?.playAddr || null;
+    const vid      = String(v.id || `${Date.now()}_${Math.random().toString(36).slice(2,6)}`);
+    const author   = v.author?.uniqueId || uid;
+    const tiktokUrl = `https://www.tiktok.com/@${author}/video/${vid}`;
     return {
-      id:        vid,
-      videoUrl,
-      tiktokUrl: `https://www.tiktok.com/@${uid}/video/${vid}`,
-      title:     v.desc || "",
-      author:    v.author?.uniqueId || uid,
-      _useFown:  false,
+      id:         vid,
+      videoUrl:   null,
+      tiktokUrl,
+      title:      v.desc || "",
+      author,
+      _useFown:   true,   // Tải qua fown /api/download (search broken nhưng download OK)
     };
   });
 }

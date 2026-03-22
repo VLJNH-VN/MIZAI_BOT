@@ -301,19 +301,21 @@ async function bulkAdd(tipName, query, limit = 0, onProgress = null) {
       let finalUrl = null;
 
       if (item._useFown) {
-        // Ưu tiên: lấy raw_url từ fown — retry tối đa 3 lần khi thất bại
-        for (let retry = 0; retry < 3 && !finalUrl; retry++) {
+        // Bước 1: lấy raw_url (link nguồn) từ fown để biết URL video thực
+        let sourceUrl = null;
+        for (let retry = 0; retry < 3 && !sourceUrl; retry++) {
           if (retry > 0) await new Promise(r => setTimeout(r, 2000 * retry));
-          finalUrl = await fownGetRawUrl(item.tiktokUrl);
+          sourceUrl = await fownGetRawUrl(item.tiktokUrl);
         }
 
-        if (!finalUrl) {
-          // Fallback: fown stream trực tiếp → tự tải về và upload GitHub (retry 2 lần)
-          const fownStreamUrl = `${FOWN_API}/api/download?url=${encodeURIComponent(item.tiktokUrl)}`;
-          for (let retry = 0; retry < 2 && !finalUrl; retry++) {
-            if (retry > 0) await new Promise(r => setTimeout(r, 3000));
-            finalUrl = await uploadVideo(fownStreamUrl, tipName, uid);
-          }
+        // Bước 2: Dùng sourceUrl nếu có, không thì dùng fown stream URL
+        const downloadUrl = sourceUrl
+          || `${FOWN_API}/api/download?url=${encodeURIComponent(item.tiktokUrl)}`;
+
+        // Bước 3: Tải về local rồi upload lên repo GitHub của mình (Release)
+        for (let retry = 0; retry < 2 && !finalUrl; retry++) {
+          if (retry > 0) await new Promise(r => setTimeout(r, 3000));
+          finalUrl = await uploadVideo(downloadUrl, tipName, uid);
         }
 
         if (!finalUrl) {

@@ -51,10 +51,23 @@ function normalizeCookies(raw) {
   throw new Error("cookie.json không đúng định dạng");
 }
 
+function cleanCookies(raw) {
+  const arr = Array.isArray(raw) ? raw : (raw?.cookies || []);
+  return arr.map(c => ({
+    key:      c.key   || c.name  || "",
+    value:    String(c.value ?? ""),
+    domain:   c.domain || ".zalo.me",
+    path:     c.path   || "/",
+    secure:   c.secure   ?? true,
+    httpOnly: c.httpOnly ?? true,
+  })).filter(c => c.key && c.value);
+}
+
 function saveCookieFile(cookiePath, cookies) {
   try {
-    fs.writeFileSync(cookiePath, JSON.stringify(cookies, null, 2), "utf-8");
-    logInfo(`[Cookie] Đã lưu cookie vào ${path.resolve(cookiePath)}`);
+    const clean = cleanCookies(cookies);
+    fs.writeFileSync(cookiePath, JSON.stringify(clean, null, 2), "utf-8");
+    logInfo(`[Cookie] Đã lưu ${clean.length} cookie vào ${path.resolve(cookiePath)}`);
   } catch (err) {
     logWarn(`[Cookie] Không thể lưu cookie: ${err?.message}`);
   }
@@ -72,12 +85,15 @@ async function displayQRInTerminal(imageBase64) {
       logWarn("[QR] Không thể decode QR image, hãy mở file qr.png để quét.");
       return;
     }
-    const qrString = await QRCode.toString(qrContent, { type: "terminal", small: true });
-    console.log("\n╔══════════════════════════════════════╗");
-    console.log("║      QUÉT MÃ QR ĐỂ ĐĂNG NHẬP ZALO  ║");
-    console.log("╚══════════════════════════════════════╝");
+    const qrString = await QRCode.toString(qrContent, {
+      type: "terminal",
+      small: true,
+      margin: 1,
+      errorCorrectionLevel: "L",
+    });
+    console.log("\n── QUÉT MÃ QR ĐỂ ĐĂNG NHẬP ZALO ──");
     console.log(qrString);
-    logInfo("[QR] Mở Zalo trên điện thoại → Cá nhân → Đăng nhập trên thiết bị khác → Quét mã.");
+    logInfo("[QR] Zalo → Cá nhân → Đăng nhập trên thiết bị khác → Quét mã.");
   } catch (err) {
     logWarn(`[QR] Không thể hiển thị QR trong terminal: ${err?.message}`);
   }
@@ -85,7 +101,7 @@ async function displayQRInTerminal(imageBase64) {
 
 // ── Login via QR ──────────────────────────────────────────────────────────────
 
-async function loginWithQR(zalo, userAgent, cookiePath, qrPath) {
+async function loginWithQR(zalo, userAgent, cookiePath, qrPath, imei) {
   logInfo("[QR] Đang tạo mã QR để đăng nhập Zalo...");
   logInfo(`[QR] QR code sẽ được lưu tại: ${path.resolve(qrPath)}`);
 
@@ -110,15 +126,15 @@ async function loginWithQR(zalo, userAgent, cookiePath, qrPath) {
       if (data && data.cookie) {
         saveCookieFile(cookiePath, data.cookie);
         const cfg = global.config;
-        if (data.imei) {
-          cfg.imei = data.imei;
-          persistImeiToConfig(data.imei);
-        }
+        const newImei = data.imei || imei;
+        cfg.imei = newImei;
+        persistImeiToConfig(newImei);
+        logInfo("[Cookie] Cookie & IMEI đã lưu. Lần sau bot tự đăng nhập bằng cookie.");
       }
     }
   });
 
-  logInfo("Đăng nhập Zalo bằng QR thành công.");
+  logInfo("[QR] Đăng nhập bằng QR thành công.");
   return api;
 }
 
@@ -179,7 +195,7 @@ async function createZaloClient() {
   }
 
   // Fallback: đăng nhập QR và lưu cookie lại
-  return await loginWithQR(zalo, userAgent, cookiePath, qrPath);
+  return await loginWithQR(zalo, userAgent, cookiePath, qrPath, imei);
 }
 
 module.exports = { createZaloClient, looksLikeZaloImei, generateImei, persistImeiToConfig, normalizeCookies };

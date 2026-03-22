@@ -228,11 +228,11 @@ module.exports = {
             thumb:    t.thumbnail || t.artwork_url,
           });
         } catch (_) {}
-        const infoMsg = `✅ SoundCloud\n📝 ${t.title}\n👤 ${t.uploader}\n⏳ ${fmtDurationSec(t.duration)} · ▶️ ${fmtNum(t.view_count)}`;
         if (cardPath) {
-          await api.sendMessage({ msg: infoMsg, attachments: [cardPath] }, event.threadId, event.type);
+          await api.sendMessage({ msg: "", attachments: [cardPath] }, event.threadId, event.type);
           try { fs.unlinkSync(cardPath); } catch (_) {}
         } else {
+          const infoMsg = `✅ SoundCloud\n📝 ${t.title}\n👤 ${t.uploader}\n⏳ ${fmtDurationSec(t.duration)} · ▶️ ${fmtNum(t.view_count)}`;
           await api.sendMessage({ msg: infoMsg }, event.threadId, event.type);
         }
         await global.zaloSendVoice(api, audioUrl, event.threadId, event.type);
@@ -278,11 +278,11 @@ module.exports = {
             thumb:    track.thumbnail || "",
           });
         } catch (_) {}
-        const infoMsg = `🎵 ${track.title}\n👤 ${track.author}\n⏳ ${durStr}`;
         if (cardPath) {
-          await api.sendMessage({ msg: infoMsg, attachments: [cardPath] }, event.threadId, event.type);
+          await api.sendMessage({ msg: "", attachments: [cardPath] }, event.threadId, event.type);
           try { fs.unlinkSync(cardPath); } catch (_) {}
         } else {
+          const infoMsg = `🎵 ${track.title}\n👤 ${track.author}\n⏳ ${durStr}`;
           await send(infoMsg);
         }
         await global.zaloSendVoice(api, audioUrl, event.threadId, event.type);
@@ -313,12 +313,12 @@ module.exports = {
         const mediaRes = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(mixUrl)}`, { timeout: 20000 });
         audioUrl = mediaRes.data?.download_audio_url || mediaRes.data?.download_url || null;
       } catch (_) {}
-      const infoMsg = `🎵 ${r.name}\n👤 ${r.owner.displayName}\n⏳ ${formatDuration(r.audioLength)}${!audioUrl ? `\n🔗 ${mixUrl}` : ""}`;
+      const fallbackText = `🎵 ${r.name}\n👤 ${r.owner.displayName}\n⏳ ${formatDuration(r.audioLength)}\n🔗 ${mixUrl}`;
       if (cardPath) {
-        await api.sendMessage({ msg: infoMsg, attachments: [cardPath] }, event.threadId, event.type);
+        await api.sendMessage({ msg: audioUrl ? "" : `🔗 ${mixUrl}`, attachments: [cardPath] }, event.threadId, event.type);
         try { fs.unlinkSync(cardPath); } catch (_) {}
       } else {
-        await send(infoMsg);
+        await send(fallbackText);
       }
       if (audioUrl) {
         await global.zaloSendVoice(api, audioUrl, event.threadId, event.type);

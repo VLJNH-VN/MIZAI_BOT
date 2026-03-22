@@ -14,7 +14,7 @@ const fs             = require("fs");
 const { execSync }   = require("child_process");
 const { Downloader } = require("@tobyg74/tiktok-api-dl");
 const { extractBody }            = require("../../utils/bot/messageUtils");
-const { sendReaction, REACT }    = require("../../includes/handlers/handleReaction");
+const { sendReaction, removeReaction, REACT } = require("../../includes/handlers/handleReaction");
 
 const TEMP     = path.join(process.cwd(), "includes", "cache");
 const FOWN     = "https://fown.onrender.com";
@@ -495,9 +495,11 @@ function startAutoDown(api) {
             if (isTT)           await handleTikTok(api, url, threadId, threadType);
             else if (isFB(url)) await handleFacebook(api, url, threadId, threadType);
             else                await handleOther(api, url, threadId, threadType);
+            await removeReaction(api, msg).catch(() => {});
             await sendReaction(api, msg, REACT.SUCCESS);
         } catch (err) {
             logWarn(`[AutoDown] Lỗi: ${err.message}`);
+            await removeReaction(api, msg).catch(() => {});
             await sendReaction(api, msg, REACT.ERROR).catch(() => {});
             const st  = err?.response?.status;
             let msg_;

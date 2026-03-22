@@ -91,6 +91,34 @@ async function sendReaction(api, event, iconOrText, rType = CUSTOM_RTYPE) {
   } catch (_) {}
 }
 
+/**
+ * Xóa reaction khỏi một tin nhắn (gửi rType = -1).
+ */
+async function removeReaction(api, event) {
+  try {
+    const raw      = event?.data ?? {};
+    const msgId    = raw?.msgId    ?? raw?.cliMsgId    ?? raw?.clientMsgId ?? null;
+    const cliMsgId = raw?.cliMsgId ?? raw?.clientMsgId ?? raw?.msgId       ?? null;
+    if (!msgId && !cliMsgId) return;
+
+    await api.addReaction(
+      {
+        rType : -1,
+        source: CUSTOM_SOURCE,
+        icon  : "",
+      },
+      {
+        type    : event.type,
+        threadId: String(event.threadId),
+        data    : {
+          msgId   : String(msgId    || cliMsgId),
+          cliMsgId: String(cliMsgId || msgId),
+        },
+      }
+    );
+  } catch (_) {}
+}
+
 // ── Tiện ích nhanh (dùng trong bot nội bộ) ────────────────────────────────────
 const reactLoading = (api, event) => sendReaction(api, event, REACT.LOADING);
 const reactSuccess = (api, event) => sendReaction(api, event, REACT.SUCCESS);
@@ -249,6 +277,7 @@ module.exports = {
   handleReaction,
   registerReaction,
   sendReaction,
+  removeReaction,
 
   // Tiện ích nhanh
   reactLoading,

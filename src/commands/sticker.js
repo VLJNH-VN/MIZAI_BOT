@@ -96,6 +96,9 @@ async function sendAsSticker(api, filePath, isAnimated, threadID, threadType) {
     animationImgUrl: isAnimated ? cdnUrl : undefined,
     threadId       : String(threadID),
     threadType,
+    width          : 512,
+    height         : 512,
+    ttl            : 0,
   });
 }
 

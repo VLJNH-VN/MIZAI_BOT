@@ -21,7 +21,7 @@ function registerCustomSticker(api) {
   if (api.sendCustomSticker) return;
   try {
     api.custom("sendCustomSticker", async ({ ctx, utils, props }) => {
-      const { staticImgUrl, animationImgUrl, threadId, threadType } = props;
+      const { staticImgUrl, animationImgUrl, threadId, threadType, width: w, height: h, ttl } = props;
       const isGroup = threadType === ThreadType.Group;
 
       const endpoint = isGroup
@@ -34,8 +34,8 @@ function registerCustomSticker(api) {
         nretry  : 0,
       });
 
-      const width  = 512;
-      const height = 512;
+      const width  = w ? parseInt(w) : 0;
+      const height = h ? parseInt(h) : 0;
 
       const payload = {
         clientId    : Date.now(),
@@ -61,7 +61,7 @@ function registerCustomSticker(api) {
           url: animationImgUrl || staticImgUrl,
         }),
         zsource     : -1,
-        ttl         : 0,
+        ttl         : ttl ?? 0,
       };
 
       if (isGroup) {

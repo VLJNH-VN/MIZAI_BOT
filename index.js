@@ -8,12 +8,11 @@ require("./utils/system/global");
 const { setApi }                  = require("./utils/system/global");
 const { loadCommands, runOnLoad, setupLifecycle } = require("./utils/system/loader");
 const { scheduleCacheCleanup, scheduleKeyCheck } = require("./utils/system/maintenance");
+const { scheduleBackup } = require("./utils/system/githubBackup");
 const { startKeepAlive } = require("./utils/system/keepAlive");
 const { createZaloClient }        = require("./utils/system/client");
 const { saveLastSeen }            = require("./utils/system/lastSeen");
 const { fetchMissedMessages }     = require("./utils/system/fetchMissed");
-
-// ── Database loaders ──────────────────────────────────────────────────────────
 
 // ── Events ────────────────────────────────────────────────────────────────────
 const { handleMessage }    = require("./src/events/message");
@@ -46,6 +45,7 @@ async function main(isFirstRun = true) {
     _schedulersStarted = true;
     scheduleCacheCleanup();
     scheduleKeyCheck();
+    scheduleBackup();
     startKeepAlive();
   }
 

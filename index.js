@@ -1,3 +1,17 @@
+// ── Auto-respawn với memory flags nếu chưa có ────────────────────────────────
+(function ensureFlags() {
+  const REQUIRED = ["--max-old-space-size=384", "--gc-interval=100"];
+  const missing  = REQUIRED.filter(f => !process.execArgv.includes(f));
+  if (missing.length === 0) return;
+  const { spawnSync } = require("child_process");
+  const result = spawnSync(
+    process.execPath,
+    [...process.execArgv, ...missing, __filename, ...process.argv.slice(2)],
+    { stdio: "inherit", env: process.env }
+  );
+  process.exit(result.status ?? 0);
+})();
+
 const path = require("path");
 
 // ── Globals (logger, axios, db, economy, imgur, admin, key manager) ───────────

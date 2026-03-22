@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 
-const API_URL = "https://mizai.linhrwn.workers.dev/";
+const API_BASE = "https://mizai.linhrwn.workers.dev/";
+const API_KEY = "123456";
+const DEFAULT_ROLE = "Bạn là trợ lý AI thông minh, trả lời bằng tiếng Việt";
 
 type Message = {
   role: "user" | "bot";
@@ -56,12 +58,84 @@ function ChatMessage({ message }: { message: Message }) {
   );
 }
 
+function RoleModal({
+  role,
+  onSave,
+  onClose,
+}: {
+  role: string;
+  onSave: (r: string) => void;
+  onClose: () => void;
+}) {
+  const [val, setVal] = useState(role);
+  const presets = [
+    "Bạn là trợ lý AI thông minh, trả lời bằng tiếng Việt",
+    "Bạn là gái cute nói chuyện dễ thương",
+    "Bạn là chuyên gia lập trình, giải thích rõ ràng",
+    "Bạn là giáo viên tiếng Anh, giúp học sinh học tập",
+    "Bạn là đầu bếp chuyên nghiệp, chia sẻ công thức nấu ăn",
+  ];
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-slate-800 text-base">Tuỳ chỉnh nhân cách</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">✕</button>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-slate-500 mb-1 block">Role / Nhân cách của bot</label>
+          <textarea
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            rows={3}
+            className="w-full resize-none rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+        </div>
+        <div>
+          <p className="text-xs font-medium text-slate-500 mb-2">Gợi ý nhanh</p>
+          <div className="flex flex-col gap-1.5">
+            {presets.map((p) => (
+              <button
+                key={p}
+                onClick={() => setVal(p)}
+                className={`text-left text-xs px-3 py-2 rounded-lg border transition-colors ${
+                  val === p
+                    ? "border-indigo-400 bg-indigo-50 text-indigo-700"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-2 justify-end pt-1">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl border border-slate-300 text-sm text-slate-600 hover:bg-slate-50"
+          >
+            Huỷ
+          </button>
+          <button
+            onClick={() => { onSave(val); onClose(); }}
+            className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+          >
+            Lưu
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([
     { role: "bot", content: "Xin chào! Tôi là GoiBot. Bạn cần tôi giúp gì hôm nay?" },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [role, setRole] = useState(DEFAULT_ROLE);
+  const [showRoleModal, setShowRoleModal] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -82,16 +156,13 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      });
+      const params = new URLSearchParams({ key: API_KEY, prompt, role });
+      const res = await fetch(`${API_BASE}?${params.toString()}`);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const data = await res.json();
-      const reply = data.response || data.result?.response || "Không có phản hồi.";
+      const reply = data.response || "Không có phản hồi.";
       setMessages((prev) => [...prev, { role: "bot", content: reply }]);
     } catch {
       setMessages((prev) => [
@@ -116,16 +187,43 @@ export default function App() {
     e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
   };
 
+  const clearChat = () => {
+    setMessages([{ role: "bot", content: "Xin chào! Tôi là GoiBot. Bạn cần tôi giúp gì hôm nay?" }]);
+  };
+
   return (
     <div className="h-screen flex flex-col bg-slate-50">
+      {showRoleModal && (
+        <RoleModal
+          role={role}
+          onSave={(r) => {
+            setRole(r);
+            setMessages([{ role: "bot", content: "Nhân cách đã được cập nhật! Tôi có thể giúp gì cho bạn?" }]);
+          }}
+          onClose={() => setShowRoleModal(false)}
+        />
+      )}
+
       <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3 shadow-sm">
-        <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-base">
+        <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-base shrink-0">
           G
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="font-semibold text-slate-800 leading-tight">GoiBot</p>
-          <p className="text-xs text-green-500 font-medium">Trực tuyến</p>
+          <p className="text-xs text-slate-400 truncate">{role}</p>
         </div>
+        <button
+          onClick={() => setShowRoleModal(true)}
+          className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100 transition-colors shrink-0"
+        >
+          ⚙ Role
+        </button>
+        <button
+          onClick={clearChat}
+          className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100 transition-colors shrink-0"
+        >
+          🗑 Xoá chat
+        </button>
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-4">

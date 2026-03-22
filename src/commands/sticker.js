@@ -78,7 +78,7 @@ async function uploadToCatbox(filePath) {
 
   const resp = await axios.post("https://catbox.moe/user/api.php", form, {
     headers: form.getHeaders(),
-    timeout: 30_000,
+    timeout: 25_000,
   });
 
   if (
@@ -89,6 +89,58 @@ async function uploadToCatbox(filePath) {
     return resp.data.trim();
   }
   throw new Error("Catbox upload thất bại: " + String(resp.data).slice(0, 100));
+}
+
+async function uploadTo0x0(filePath) {
+  const form = new FormData();
+  form.append("file", fs.createReadStream(filePath), "sticker.webp");
+
+  const resp = await axios.post("https://0x0.st", form, {
+    headers: form.getHeaders(),
+    timeout: 25_000,
+  });
+
+  const url = String(resp.data || "").trim();
+  if (url.startsWith("http")) return url;
+  throw new Error("0x0.st upload thất bại");
+}
+
+async function uploadToTmpfiles(filePath) {
+  const form = new FormData();
+  form.append("file", fs.createReadStream(filePath), "sticker.webp");
+
+  const resp = await axios.post("https://tmpfiles.org/api/v1/upload", form, {
+    headers: form.getHeaders(),
+    timeout: 25_000,
+  });
+
+  const rawUrl = resp.data?.data?.url;
+  if (!rawUrl) throw new Error("tmpfiles.org upload thất bại");
+  // tmpfiles.org trả về URL dạng https://tmpfiles.org/XXXXX/file.webp
+  // cần convert thành direct download URL
+  const directUrl = rawUrl.replace("tmpfiles.org/", "tmpfiles.org/dl/");
+  return directUrl;
+}
+
+async function uploadWebp(filePath) {
+  const services = [
+    { name: "Catbox",      fn: () => uploadToCatbox(filePath)    },
+    { name: "0x0.st",      fn: () => uploadTo0x0(filePath)       },
+    { name: "tmpfiles.org", fn: () => uploadToTmpfiles(filePath) },
+  ];
+
+  let lastErr;
+  for (const svc of services) {
+    try {
+      const url = await svc.fn();
+      log.info(`[STK] Upload thành công qua ${svc.name}: ${url}`);
+      return url;
+    } catch (e) {
+      log.warn(`[STK] ${svc.name} lỗi: ${e.message} — thử dịch vụ tiếp theo...`);
+      lastErr = e;
+    }
+  }
+  throw new Error(`Tất cả dịch vụ upload đều thất bại. Lỗi cuối: ${lastErr?.message}`);
 }
 
 async function sendAsSticker(api, webpUrl, isAnimated, threadID, threadType) {
@@ -159,7 +211,7 @@ async function handleFromReply({ api, event, send, threadID, threadType, reactLo
     await downloadToFile(quoted.mediaUrl, inFile);
     await convertToWebp(inFile, outFile, isAnimated);
 
-    const webpUrl = await uploadToCatbox(outFile);
+    const webpUrl = await uploadWebp(outFile);
     await sendAsSticker(api, webpUrl, isAnimated, threadID, threadType);
     await reactSuccess();
   } catch (e) {
@@ -224,7 +276,7 @@ async function handleAi({ api, send, threadID, threadType, prompt, reactLoading,
     await downloadToFile(aiUrl, inFile);
     await convertToWebp(inFile, outFile, false);
 
-    const webpUrl = await uploadToCatbox(outFile);
+    const webpUrl = await uploadWebp(outFile);
     await sendAsSticker(api, webpUrl, false, threadID, threadType);
     await reactSuccess();
   } catch (e) {

@@ -43,18 +43,23 @@ async function uploadToZaloAndGetUrl(api, filePath, threadId, type) {
   return null;
 }
 
-// Gửi voice theo pattern GwenDev:
-//   1. Download → convert AAC → uploadAttachment → sendVoice(voiceUrl từ Zalo CDN)
-//   2. Fallback: sendVoice(direct URL)
-//   3. Fallback: sendMessage attachment
+// Gửi voice:
+//   1. sendVoice(direct URL) — nhanh nhất
+//   2. Fallback: download → convert AAC → uploadAttachment → sendVoice(Zalo CDN URL)
 async function sendAudioSafe(api, audioUrl, threadId, type, notifyFn) {
+  // Bước 1: thử sendVoice trực tiếp với URL gốc
+  try {
+    await api.sendVoice({ voiceUrl: audioUrl, ttl: 900_000 }, threadId, type);
+    return;
+  } catch (_) {}
+
+  // Bước 2: download → convert AAC → upload CDN → sendVoice
   let tmpPath;
   let aacPath;
   try {
     if (notifyFn) await notifyFn("⏳ Đang xử lý âm thanh...").catch(() => {});
     tmpPath = await downloadToTmp(audioUrl);
 
-    // Convert sang AAC (nếu chưa là AAC)
     const convPath = tmpPath.replace(/\.[^.]+$/, "") + "_conv.aac";
     try {
       const { execSync } = require("child_process");
@@ -65,27 +70,17 @@ async function sendAudioSafe(api, audioUrl, threadId, type, notifyFn) {
       aacPath = tmpPath;
     }
 
-    // Bước 1: uploadAttachment(AAC) → sendVoice (Zalo CDN URL theo GwenDev)
     const voiceUrl = await uploadToZaloAndGetUrl(api, aacPath, threadId, type);
     if (voiceUrl) {
       await api.sendVoice({ voiceUrl, ttl: 900_000 }, threadId, type);
       return;
     }
 
-    // Bước 2: Fallback → sendVoice(direct URL)
-    try {
-      await api.sendVoice({ voiceUrl: audioUrl }, threadId, type);
-      return;
-    } catch {}
+    // Thử lần cuối với URL gốc sau khi download xong
+    await api.sendVoice({ voiceUrl: audioUrl, ttl: 900_000 }, threadId, type);
 
-    // Bước 3: Fallback → sendMessage attachment
-    await api.sendMessage({ attachments: [aacPath] }, threadId, type);
-
-  } catch {
-    // Last resort fallback
-    try {
-      await api.sendVoice({ voiceUrl: audioUrl }, threadId, type);
-    } catch {}
+  } catch (err) {
+    if (notifyFn) await notifyFn(`❌ Không thể gửi voice: ${err?.message || "Lỗi không xác định"}`).catch(() => {});
   } finally {
     if (tmpPath && tmpPath !== aacPath) try { fs.unlinkSync(tmpPath); } catch (_) {}
     if (aacPath) try { fs.unlinkSync(aacPath); } catch (_) {}

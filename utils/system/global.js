@@ -227,6 +227,22 @@ global.zaloUploadAttachment = _zaloUploadAttachment;
 // global.cawr.tt.bulkAdd(name, query, limit)    → Promise<{ success, skipped, failed, ... }>
 global.cawr = cawr;
 
+// ── Ljzi — Danh sách video gái / anime ───────────────────────────────────────
+// global.Ljzi.vdgai  → string[]  danh sách URL video gái  (từ listapi/gai.json)
+// global.Ljzi.vdani  → string[]  danh sách URL video anime (mảng rỗng nếu chưa có)
+(function registerLjzi() {
+  const fs   = require("fs");
+  const path = require("path");
+  const GAI_PATH = path.join(__dirname, "../../includes/listapi/gai.json");
+  let vdgai = [];
+  try {
+    if (fs.existsSync(GAI_PATH)) vdgai = JSON.parse(fs.readFileSync(GAI_PATH, "utf8")).slice();
+  } catch (e) {
+    global.logWarn?.(`[Ljzi] Không load được gai.json: ${e.message}`);
+  }
+  global.Ljzi = { vdgai, vdani: [] };
+})();
+
 // ── Message Cache + resolveQuote ──────────────────────────────────────────────
 /**
  * global.messageCache

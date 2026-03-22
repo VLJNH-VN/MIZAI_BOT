@@ -16,5 +16,7 @@
   "uploadRepo": "VLJNH-VN/UPLOAD_MIZAI",
   "branch": "main",
   "autoUndoOnAngry": true,
-  "🔄 undoEnabled": true
+  "🔄 undoEnabled": true,
+  "spotifyClientId": "1530d567ec6542669896bc96efd370f3",
+  "spotifyClientSecret": "6e0241b124da40dfb98728b7f29cedfd"
 }

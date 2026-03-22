@@ -20,9 +20,10 @@ const FOWN_API = "https://fown.onrender.com";
 const MIXCLOUD_GRAPHQL_URL = "https://app.mixcloud.com/graphql";
 
 // ── Spotify client (Client Credentials) ───────────────────────────────────────
+const _cfg = (() => { try { return require("../../config.json"); } catch { return {}; } })();
 const spotifyApi = new SpotifyWebApi({
-  clientId:     "1530d567ec6542669896bc96efd370f3",
-  clientSecret: "6e0241b124da40dfb98728b7f29cedfd",
+  clientId:     _cfg.spotifyClientId     || "1530d567ec6542669896bc96efd370f3",
+  clientSecret: _cfg.spotifyClientSecret || "6e0241b124da40dfb98728b7f29cedfd",
 });
 let _spotifyTokenExpiry = 0;
 
@@ -30,21 +31,36 @@ async function ensureSpotifyToken() {
   if (Date.now() < _spotifyTokenExpiry - 30000) return;
   try {
     const data = await spotifyApi.clientCredentialsGrant();
+    if (!data?.body?.access_token) throw new Error("Không nhận được access_token từ Spotify");
     spotifyApi.setAccessToken(data.body.access_token);
     _spotifyTokenExpiry = Date.now() + data.body.expires_in * 1000;
   } catch (err) {
-    const detail = typeof err?.message === "string" ? err.message : JSON.stringify(err?.message ?? err);
-    throw new Error(`Spotify auth thất bại: ${detail}`);
+    _spotifyTokenExpiry = 0;
+    const sc  = err?.statusCode || err?.status || "";
+    const msg = stringifyWebapiError(err);
+    throw new Error(`Spotify auth thất bại${sc ? ` (${sc})` : ""}: ${msg}`);
   }
+}
+
+function stringifyWebapiError(err) {
+  if (!err) return "Không xác định";
+  if (typeof err.message === "string" && err.message && err.message !== "[object Object]") return err.message;
+  if (typeof err.message === "object" && err.message !== null) {
+    return err.message.error_description
+      || err.message.error?.message
+      || err.message.error
+      || JSON.stringify(err.message);
+  }
+  const sc = err?.statusCode || err?.status;
+  if (sc) return `HTTP ${sc}`;
+  return err.toString?.() || JSON.stringify(err);
 }
 
 function stringifyError(err) {
   if (!err) return "Không xác định";
-  if (typeof err.message === "string" && err.message) return err.message;
-  if (typeof err.message === "object" && err.message !== null) {
-    return err.message.error_description || err.message.error?.message || err.message.error || JSON.stringify(err.message);
-  }
-  return err.toString?.() || JSON.stringify(err);
+  const sc = err?.statusCode || err?.status;
+  const msg = stringifyWebapiError(err);
+  return sc ? `HTTP ${sc} — ${msg}` : msg;
 }
 
 function fmtNum(n) {
@@ -87,7 +103,17 @@ async function ytSearch(keyword) {
 // ── Spotify (Spotify Web API — Client Credentials) ────────────────────────────
 async function sptSearch(keyword) {
   await ensureSpotifyToken();
-  const res = await spotifyApi.searchTracks(keyword, { limit: 6 });
+  let res;
+  try {
+    res = await spotifyApi.searchTracks(keyword, { limit: 6 });
+  } catch (err) {
+    const sc = err?.statusCode || err?.status;
+    if (sc === 401 || sc === 403) {
+      _spotifyTokenExpiry = 0;
+      throw new Error(`Spotify credentials không hợp lệ hoặc hết hạn (HTTP ${sc}). Vui lòng cập nhật spotifyClientId/spotifyClientSecret trong config.json.`);
+    }
+    throw err;
+  }
   const items = res.body?.tracks?.items || [];
   return items.map(track => ({
     id:        track.id || "",

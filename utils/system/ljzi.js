@@ -130,7 +130,6 @@ async function _prepareOne(name) {
 
     const meta = probeStreams(finalPath);
     _cache[name].push({ filePath: finalPath, meta });
-    global.logInfo?.(`[Ljzi] Cache +1 "${name}" → ${_cache[name].length}/${CACHE_SIZE} (${path.basename(finalPath)})`);
     return true;
   } catch (e) {
     global.logWarn?.(`[Ljzi] _prepareOne "${name}" lỗi: ${e.message}`);
@@ -148,14 +147,13 @@ async function _fillCache(name) {
   if (_cache[name].length >= CACHE_SIZE) return;
 
   _filling[name] = true;
-  global.logInfo?.(`[Ljzi] Bắt đầu fill cache "${name}" (hiện: ${_cache[name].length}/${CACHE_SIZE})...`);
 
   while (_cache[name].length < CACHE_SIZE) {
     const ok = await _prepareOne(name);
     if (!ok) break;
   }
 
-  global.logInfo?.(`[Ljzi] Cache "${name}" đã đủ: ${_cache[name].length}/${CACHE_SIZE}`);
+  global.logInfo?.(`[Ljzi] Cache "${name}" sẵn sàng: ${_cache[name].length}/${CACHE_SIZE}`);
   _filling[name] = false;
 }
 
@@ -163,7 +161,6 @@ async function _fillCache(name) {
 
 async function _sendFromFile(api, event, filePath, meta, caption) {
   const fileSize = fs.statSync(filePath).size;
-  global.logInfo?.(`[Ljzi] Gửi từ cache: ${path.basename(filePath)} | size=${(fileSize/1024).toFixed(0)}KB`);
 
   let thumbnailUrl = "";
   try {
@@ -188,7 +185,6 @@ async function _sendFromFile(api, event, filePath, meta, caption) {
           duration:     meta.duration * 1000,
           ttl:          500_000,
         }, event.threadId, event.type);
-        global.logInfo?.("[Ljzi] sendVideo (Release) thành công.");
         sentAsVideo = true;
       }
     } catch (e) {
@@ -201,7 +197,6 @@ async function _sendFromFile(api, event, filePath, meta, caption) {
       { msg: caption || "", attachments: [filePath], ttl: 500_000 },
       event.threadId, event.type
     );
-    global.logInfo?.("[Ljzi] fallback sendMessage attachment thành công.");
   }
 
   cleanup(filePath);

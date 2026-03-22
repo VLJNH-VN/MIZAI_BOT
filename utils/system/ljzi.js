@@ -75,20 +75,43 @@ function probeStreams(filePath) {
   }
 }
 
-function convertToH264(inputPath, outputPath) {
-  const result = spawnSync("ffmpeg", [
-    "-y", "-i", inputPath,
-    "-map", "0:v:0", "-map", "0:a:0?",
-    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-    "-profile:v", "baseline", "-level", "3.1",
-    "-pix_fmt", "yuv420p",
-    "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-    "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
-    "-movflags", "+faststart",
-    outputPath,
-  ], { timeout: 300000, encoding: "utf8" });
+function _spawnFfmpeg(args, timeout = 300000) {
+  const result = spawnSync("ffmpeg", args, { timeout, encoding: "utf8" });
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(result.stderr || "ffmpeg lỗi");
+  if (result.status !== 0) {
+    const stderr = (result.stderr || "").trim();
+    const lastLines = stderr.split("\n").slice(-5).join(" | ");
+    throw new Error(`ffmpeg exit ${result.status}: ${lastLines || "không có output"}`);
+  }
+}
+
+function convertToH264(inputPath, outputPath) {
+  try {
+    _spawnFfmpeg([
+      "-y", "-i", inputPath,
+      "-map", "0:v:0", "-map", "0:a:0?",
+      "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+      "-profile:v", "baseline", "-level", "3.1",
+      "-pix_fmt", "yuv420p",
+      "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+      "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+      "-movflags", "+faststart",
+      outputPath,
+    ]);
+  } catch (e1) {
+    // Fallback: thử lại không dùng -map (tự động chọn stream)
+    try {
+      if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+    } catch (_) {}
+    _spawnFfmpeg([
+      "-y", "-i", inputPath,
+      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac", "-b:a", "96k",
+      "-movflags", "+faststart",
+      outputPath,
+    ]);
+  }
 }
 
 // ── Load JSON list ─────────────────────────────────────────────────────────────

@@ -21,8 +21,8 @@ const MIXCLOUD_GRAPHQL_URL = "https://app.mixcloud.com/graphql";
 
 // ── Spotify client (Client Credentials) ───────────────────────────────────────
 const spotifyApi = new SpotifyWebApi({
-  clientId:     "SPOTIFY_CLIENT_ID_CỦA_BẠN",
-  clientSecret: "SPOTIFY_CLIENT_SECRET_CỦA_BẠN",
+  clientId:     "1530d567ec6542669896bc96efd370f3",
+  clientSecret: "6e0241b124da40dfb98728b7f29cedfd",
 });
 let _spotifyTokenExpiry = 0;
 

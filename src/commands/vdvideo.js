@@ -40,6 +40,6 @@ module.exports = {
     if (!videoUrl)
       return send("❌ Lỗi video, thử lại sau!");
 
-    return send({ body: `🎬 Gửi video từ nhóm **${tipName}**`, attachment: videoUrl });
+    return send({ msg: `🎬 Gửi video từ nhóm **${tipName}**`, attachments: [videoUrl] });
   },
 };

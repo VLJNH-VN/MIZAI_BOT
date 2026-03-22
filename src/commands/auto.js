@@ -58,9 +58,11 @@ module.exports = {
             "auto bot on|off                              — Bật/tắt Mizai AI cho nhóm",
             "auto down on|off                             — Bật/tắt tự động tải video (AutoDown)",
             "auto list                                    — Danh sách lịch gửi tự động",
-            "auto add <HH:MM> <nội dung>                 — Thêm lịch gửi text",
-            "auto add <HH:MM> --vd <key>                 — Thêm lịch gửi video",
-            "auto add <HH:MM> --vd <key> --text <nội dung> — Thêm lịch gửi video + text",
+            "auto add <HH:MM> <nội dung>                    — Thêm lịch gửi text",
+            "auto add <HH:MM> --vd <key>                    — Thêm lịch gửi video",
+            "auto add <HH:MM> --joke                        — Thêm lịch gửi joke ngẫu nhiên",
+            "auto add <HH:MM> --joke --text <nội dung>      — Thêm lịch gửi joke + text",
+            "auto add <HH:MM> --vd <key> --text <nội dung>  — Thêm lịch gửi video + text",
             "auto on|off|remove <stt>                    — Bật/tắt/xoá lịch theo số thứ tự",
         ].join("\n"),
         cooldowns: 3,
@@ -89,6 +91,8 @@ module.exports = {
                 `  ${prefix}auto list\n` +
                 `  ${prefix}auto add <HH:MM> <nội dung>\n` +
                 `  ${prefix}auto add <HH:MM> --vd <key>\n` +
+                `  ${prefix}auto add <HH:MM> --joke\n` +
+                `  ${prefix}auto add <HH:MM> --joke --text <nội dung>\n` +
                 `  ${prefix}auto add <HH:MM> --vd <key> --text <nội dung>\n` +
                 `  ${prefix}auto on <STT>\n` +
                 `  ${prefix}auto off <STT>\n` +
@@ -153,6 +157,7 @@ module.exports = {
                 msg += `  ${st} [${i + 1}] ${c.time}`;
                 if (preview) msg += ` — 📝 ${preview}`;
                 if (c.listapi) msg += `\n       🎬 Video: ${c.listapi}`;
+                if (c.joke) msg += `\n       😂 Joke: bật`;
                 msg += `\n       📡 ${targets}\n`;
             });
             msg += `╚════════════════════════╝\n`;
@@ -180,39 +185,44 @@ module.exports = {
                 return send(`❌ Giờ không hợp lệ: "${timeArg}".\nDùng định dạng HH:MM (24h), ví dụ: 08:00, 20:30`);
             }
 
-            // Parse --vd <key> và --text <nội dung> từ phần còn lại
+            // Parse --vd <key>, --text <nội dung>, --joke từ phần còn lại
             const rest = args.slice(2);
             let listapi = null;
             let content = "";
+            let joke = false;
 
-            const vdIdx = rest.indexOf("--vd");
+            const vdIdx   = rest.indexOf("--vd");
             const textIdx = rest.indexOf("--text");
+            const jokeIdx = rest.indexOf("--joke");
+
+            if (jokeIdx !== -1) joke = true;
 
             if (vdIdx !== -1) {
                 listapi = rest[vdIdx + 1] || null;
-                if (!listapi) return send(`❌ Thiếu tên key video sau --vd.\nVí dụ: ${prefix}auto add 08:00 --vd gaixinh`);
+                if (!listapi || listapi.startsWith("--")) return send(`❌ Thiếu tên key video sau --vd.\nVí dụ: ${prefix}auto add 08:00 --vd gaixinh`);
             }
 
             if (textIdx !== -1) {
-                // Lấy tất cả token sau --text (cho đến --vd hoặc hết)
+                const STOP_FLAGS = new Set(["--vd", "--joke"]);
                 const textTokens = [];
                 for (let i = textIdx + 1; i < rest.length; i++) {
-                    if (rest[i] === "--vd") break;
+                    if (STOP_FLAGS.has(rest[i])) break;
                     textTokens.push(rest[i]);
                 }
                 content = textTokens.join(" ").trim();
                 if (!content) return send(`❌ Thiếu nội dung sau --text.\nVí dụ: ${prefix}auto add 08:00 --text Chào buổi sáng!`);
-            } else if (vdIdx === -1) {
+            } else if (vdIdx === -1 && jokeIdx === -1) {
                 // Không có flag nào → toàn bộ là text (hành vi cũ)
                 content = rest.join(" ").trim();
             }
 
-            if (!listapi && !content) {
+            if (!listapi && !content && !joke) {
                 return send(
-                    `❌ Cần ít nhất nội dung text hoặc video.\n` +
+                    `❌ Cần ít nhất một trong: text, video, hoặc joke.\n` +
                     `  ${prefix}auto add ${timeArg} <nội dung>\n` +
                     `  ${prefix}auto add ${timeArg} --vd <key>\n` +
-                    `  ${prefix}auto add ${timeArg} --vd <key> --text <nội dung>`
+                    `  ${prefix}auto add ${timeArg} --joke\n` +
+                    `  ${prefix}auto add ${timeArg} --joke --text <nội dung>`
                 );
             }
 
@@ -223,6 +233,7 @@ module.exports = {
                 enabled: true
             };
             if (listapi) newEntry.listapi = listapi;
+            if (joke) newEntry.joke = true;
 
             configs.push(newEntry);
             writeAutoSend(configs);
@@ -230,6 +241,7 @@ module.exports = {
             let confirmMsg = `✅ Đã thêm lịch gửi tự động!\n  ⏰ Giờ: ${timeArg}\n  📌 Nhóm: nhóm này\n`;
             if (content) confirmMsg += `  📝 Text: ${content.slice(0, 60)}${content.length > 60 ? "..." : ""}\n`;
             if (listapi) confirmMsg += `  🎬 Video: ${listapi}\n`;
+            if (joke) confirmMsg += `  😂 Joke: bật\n`;
             confirmMsg += `  STT: [${configs.length}]`;
 
             return send(confirmMsg);

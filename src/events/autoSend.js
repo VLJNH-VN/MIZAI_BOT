@@ -59,6 +59,21 @@ function pickRandomVideo() {
 const CONFIG_FILE = path.join(process.cwd(), "includes", "data", "config", "autoSend.json");
 const { getAllGroupIds } = require("../../includes/database/group/groupSettings");
 
+const JOKE_API = "https://v2.jokeapi.dev/joke/Any?type=single&safe-mode";
+const CATEGORY_EMOJI = {
+  Programming: "💻", Misc: "🎲", Dark: "🌑", Pun: "😄", Spooky: "👻", Christmas: "🎄",
+};
+
+async function fetchJoke() {
+  try {
+    const res = await axios.get(JOKE_API, { timeout: 10000 });
+    const data = res.data;
+    if (data.error || !data.joke) return null;
+    const emoji = CATEGORY_EMOJI[data.category] || "😂";
+    return `${emoji} Joke ngẫu nhiên\n━━━━━━━━━━━━━━━\n${data.joke}\n━━━━━━━━━━━━━━━\n📂 ${data.category}`;
+  } catch { return null; }
+}
+
 const INTERVAL_MS = 60 * 1000;
 let lastCheckedMinute = "";
 
@@ -114,6 +129,18 @@ function startAutoSend(api) {
               threadId,
               ThreadType.Group
             );
+          }
+
+          // ── Gửi Joke từ JokeAPI ───────────────────────────────────────────
+          if (cfg.joke) {
+            const jokeText = await fetchJoke();
+            if (jokeText) {
+              await api.sendMessage(
+                { msg: jokeText, ttl: 600_000 },
+                threadId,
+                ThreadType.Group
+              );
+            }
           }
 
           // ── Ưu tiên 1: Video từ listapi (tải về → upload Zalo → sendVideo) ──

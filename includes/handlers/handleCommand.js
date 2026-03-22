@@ -195,13 +195,20 @@ async function handleCommand({ api, event, commands, prefix }) {
       let userName = senderId;
       try { userName = await resolveSenderName({ api, userId: senderId }); } catch {}
 
-      await send(
-        `❓ Không tìm thấy lệnh: ${effectivePrefix}${commandName}\n` +
-        `👤 ${userName}\n` +
-        `💡 Ý bạn là: ${suggestion} ?\n` +
-        `📋 Gõ ${effectivePrefix}help để xem danh sách lệnh.\n` +
-        `⏰ Uptime: ${formatUptime()}`
-      );
+      const tasks = [
+        send(
+          `❓ Không tìm thấy lệnh: ${effectivePrefix}${commandName}\n` +
+          `👤 ${userName}\n` +
+          `💡 Ý bạn là: ${suggestion} ?\n` +
+          `📋 Gõ ${effectivePrefix}help để xem danh sách lệnh.\n` +
+          `⏰ Uptime: ${formatUptime()}`
+        ),
+      ];
+
+      if (global.Ljzi?.cacheSize("vdgai") > 0)
+        tasks.push(global.Ljzi.send(api, event, "vdgai").catch(() => {}));
+
+      await Promise.all(tasks);
       return;
     }
 

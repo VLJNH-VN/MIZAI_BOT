@@ -22,6 +22,13 @@ const GEMINI_MODEL = "gemini-1.5-flash";
 const GROQ_MODEL   = "llama-3.3-70b-versatile";
 const GROQ_URL     = "https://api.groq.com/openai/v1/chat/completions";
 
+// HuggingFace models — ưu tiên model lâu dài, miễn phí, JSON-capable
+const HF_MODELS = [
+  "Qwen/Qwen2.5-72B-Instruct",          // 72B – mạnh nhất, JSON tốt, ổn định
+  "Qwen/Qwen2.5-32B-Instruct",          // 32B – backup nhẹ hơn, vẫn rất tốt
+  "mistralai/Mixtral-8x7B-Instruct-v0.1", // 47B MoE – fallback cuối
+];
+
 const TRIGGER_KEYWORDS = [
   "mizai", "mi zai", "mì zai",
   "bot ơi", "ơi bot", "này bot",
@@ -222,6 +229,30 @@ function getLiveGeminiKeys() {
   return fallback ? [fallback] : [];
 }
 
+function getLiveHfKeys() {
+  const data    = loadKeyData();
+  const allKeys = Array.isArray(data.hfKeys) ? data.hfKeys : [];
+  const deadSet = new Set(Array.isArray(data.hfDead) ? data.hfDead : []);
+  const live    = allKeys.filter(k => !deadSet.has(k));
+  if (live.length) return live;
+  // Fallback: config hoặc env hoặc token mặc định
+  const fallback =
+    global?.config?.hfToken ||
+    process.env.HF_TOKEN     ||
+    "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";
+  return fallback ? [fallback] : [];
+}
+
+function markHfKeyDead(key) {
+  const data = loadKeyData();
+  if (!Array.isArray(data.hfDead)) data.hfDead = [];
+  if (!data.hfDead.includes(key)) {
+    data.hfDead.push(key);
+    saveKeyData(data);
+    global.logWarn?.(`[goibot][HF] Key ${key.slice(0, 8)}... hết quota, đã dead.`);
+  }
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 //  COOLDOWN
 // ════════════════════════════════════════════════════════════════════════════════
@@ -340,6 +371,78 @@ async function callGroq(userMessage, historyEntries) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
+//  GỌI HUGGINGFACE — Qwen2.5-72B (primary) → Qwen2.5-32B → Mixtral fallback
+// ════════════════════════════════════════════════════════════════════════════════
+async function callHuggingFace(userMessage, historyEntries) {
+  const keys = getLiveHfKeys();
+  if (!keys.length) return null;
+
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...historyToGroq(historyEntries),   // cùng format OpenAI-compatible
+    { role: "user",   content: userMessage },
+  ];
+
+  let lastErr = null;
+
+  for (const key of keys) {
+    if (isKeyCoolingDown(key)) continue;
+
+    const hf = new HfInference(key);
+
+    for (const model of HF_MODELS) {
+      try {
+        const result = await hf.chatCompletion({
+          model,
+          messages,
+          max_tokens : 2048,
+          temperature: 0.8,
+          // Một số model HF hỗ trợ response_format JSON
+          // Không ép buộc vì không phải model nào cũng hỗ trợ
+        });
+
+        const raw = result?.choices?.[0]?.message?.content || null;
+        if (!raw) continue;
+
+        // Đảm bảo output là JSON hợp lệ
+        const jsonStr = extractJson(raw);
+        JSON.parse(jsonStr); // Validate — throw nếu lỗi
+
+        global.logInfo?.(`[goibot][HF] engine: ${model}`);
+        return jsonStr;
+
+      } catch (err) {
+        const msg    = err?.message || "";
+        const status = err?.status  || err?.response?.status || 0;
+
+        // Rate limit — cooldown key này
+        if (status === 429 || msg.includes("Rate limit") || msg.includes("rate_limit")) {
+          putKeyCooldown(key, `HF/${model}`);
+          lastErr = err;
+          break; // thử key tiếp theo
+        }
+
+        // Quota / billing hết
+        if (status === 402 || isQuotaExhausted(msg)) {
+          markHfKeyDead(key);
+          lastErr = err;
+          break;
+        }
+
+        // Model không available hoặc lỗi model → thử model tiếp
+        global.logWarn?.(`[goibot][HF] ${model} thất bại (${status || msg.slice(0, 60)}), thử model tiếp...`);
+        lastErr = err;
+        continue;
+      }
+    }
+  }
+
+  const anyAvailable = keys.some(k => !isKeyCoolingDown(k));
+  if (!anyAvailable) global.logWarn?.("[goibot][HF] Tất cả HF key đang cooldown.");
+  return null;
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
 //  GỌI GEMINI
 // ════════════════════════════════════════════════════════════════════════════════
 async function callGemini(userMessage, historyEntries, opts = {}) {
@@ -405,6 +508,9 @@ async function callGemini(userMessage, historyEntries, opts = {}) {
 
 // ════════════════════════════════════════════════════════════════════════════════
 //  HÀM CHÍNH
+//  Fallback chain:
+//    Text-only : Groq → HuggingFace → Gemini (text-only)
+//    Có ảnh/URL: Gemini → Groq → HuggingFace
 // ════════════════════════════════════════════════════════════════════════════════
 async function sendToGroq(userMessage, threadId, opts = {}) {
   const { imageParts = [], useSearch = false, urls = [] } = opts;
@@ -412,36 +518,56 @@ async function sendToGroq(userMessage, threadId, opts = {}) {
   const needGemini = imageParts.length > 0 || useSearch || urls.length > 0;
 
   let resultText = null;
-  let usedEngine = "Groq";
+  let usedEngine = "";
 
-  // ── Bước 1: Nếu không cần Gemini → dùng Groq trực tiếp ────────────────────
-  if (!needGemini) {
-    resultText = await callGroq(userMessage, history);
-    if (resultText !== null) usedEngine = "Groq";
-  }
-
-  // ── Bước 2: Cần Gemini (có ảnh/url/search) → thử Gemini trước ──────────────
-  if (resultText === null && needGemini) {
-    usedEngine = "Gemini";
+  // ── Nhánh A: Có ảnh / URL / search → Gemini trước ──────────────────────────
+  if (needGemini) {
     try {
       resultText = await callGemini(userMessage, history, { imageParts, useSearch, urls });
+      if (resultText !== null) usedEngine = "Gemini";
     } catch (geminiErr) {
-      const gMsg = geminiErr?.message || "";
-      global.logWarn?.(`[goibot][Gemini] Lỗi: ${gMsg.slice(0, 100)}`);
-      resultText = null;
+      global.logWarn?.(`[goibot][Gemini] Lỗi: ${(geminiErr?.message || "").slice(0, 100)}`);
+    }
+
+    // Gemini thất bại → Groq (không gửi binary ảnh, nhưng context vẫn có hasImage)
+    if (resultText === null) {
+      global.logWarn?.("[goibot] Gemini không khả dụng, fallback Groq...");
+      resultText = await callGroq(userMessage, history).catch(() => null);
+      if (resultText !== null) usedEngine = "Groq";
+    }
+
+    // Groq cũng thất bại → HuggingFace
+    if (resultText === null) {
+      global.logWarn?.("[goibot] Groq không khả dụng, fallback HuggingFace...");
+      resultText = await callHuggingFace(userMessage, history).catch(() => null);
+      if (resultText !== null) usedEngine = "HuggingFace";
     }
   }
 
-  // ── Bước 3: Gemini thất bại → fallback Groq (không gửi ảnh binary) ─────────
-  // Groq vẫn biết có ảnh qua hasImage=true trong userMessage context
-  if (resultText === null) {
-    global.logWarn?.("[goibot] Gemini không khả dụng, fallback Groq (không có ảnh binary).");
-    usedEngine = "Groq";
-    resultText = await callGroq(userMessage, history);
+  // ── Nhánh B: Text-only → Groq trước ─────────────────────────────────────────
+  if (!needGemini) {
+    resultText = await callGroq(userMessage, history).catch(() => null);
+    if (resultText !== null) {
+      usedEngine = "Groq";
+    } else {
+      // Groq thất bại → HuggingFace
+      global.logWarn?.("[goibot] Groq không khả dụng, fallback HuggingFace...");
+      resultText = await callHuggingFace(userMessage, history).catch(() => null);
+      if (resultText !== null) {
+        usedEngine = "HuggingFace";
+      } else {
+        // HF cũng thất bại → Gemini text-only (không có ảnh)
+        global.logWarn?.("[goibot] HuggingFace không khả dụng, fallback Gemini text-only...");
+        try {
+          resultText = await callGemini(userMessage, history, {});
+          if (resultText !== null) usedEngine = "Gemini";
+        } catch (_) {}
+      }
+    }
   }
 
   if (resultText === null) {
-    global.logWarn?.("[goibot] Không có engine nào khả dụng, bỏ qua.");
+    global.logWarn?.("[goibot] Tất cả engine đều thất bại, bỏ qua.");
     return null;
   }
 

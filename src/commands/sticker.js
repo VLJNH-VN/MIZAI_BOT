@@ -12,15 +12,15 @@
  *   !stk ai <mô tả>    — AI vẽ sticker theo mô tả
  */
 
-const fs           = require("node:fs");
-const path         = require("node:path");
-const { exec }     = require("node:child_process");
-const { promisify }= require("node:util");
-const querystring  = require("node:querystring");
-const axios        = require("axios");
-const FormData     = require("form-data");
-const ffmpegPath   = require("ffmpeg-static");
-const { log }      = require("../../utils/system/logger");
+const fs            = require("node:fs");
+const path          = require("node:path");
+const { exec }      = require("node:child_process");
+const { promisify } = require("node:util");
+const querystring   = require("node:querystring");
+const axios         = require("axios");
+const FormData      = require("form-data");
+const ffmpegPath    = require("ffmpeg-static");
+const { log }       = require("../../utils/system/logger");
 
 const execPromise = promisify(exec);
 
@@ -96,22 +96,8 @@ function cleanupFiles(...files) {
   }
 }
 
-function startClockReaction(api, event, threadID, threadType) {
-  const clocks = ["🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚", "🕛"];
-  let idx = 0;
-  const raw = event?.data || {};
-  return setInterval(() => {
-    const msgId = raw.msgId || raw.globalMsgId;
-    if (msgId) {
-      api.addReaction(
-        { icon: clocks[idx++ % 12], rType: 75, source: 1 },
-        { data: { msgId, cliMsgId: raw.cliMsgId }, threadId: threadID, type: threadType }
-      ).catch(() => {});
-    }
-  }, 1500);
-}
-
 // ── Pinterest search ──────────────────────────────────────────────────────────
+
 const PINTEREST_CSRF   = "6044a8a6c65d538760e70c78b3c82bd0";
 const PINTEREST_COOKIE = `csrftoken=${PINTEREST_CSRF}; _auth=1; _pinterest_sess=`;
 
@@ -153,10 +139,10 @@ function pickImageUrl(pin) {
 
 // ── Sub-command handlers ──────────────────────────────────────────────────────
 
-async function handleStk({ api, event, send, threadID, threadType }) {
+async function handleStk({ api, event, send, threadID, threadType, reactLoading, reactSuccess, reactError }) {
   const raw = event?.data || {};
   const quoteAttach = raw.quote?.attach;
-  if (!quoteAttach && !raw.quote) {
+  if (!raw.quote) {
     return send("⚠️ Hãy reply (phản hồi) vào một ảnh hoặc video để tạo sticker.");
   }
 
@@ -178,7 +164,8 @@ async function handleStk({ api, event, send, threadID, threadType }) {
     return send("⚠️ Định dạng không được hỗ trợ (chỉ Ảnh/Video/GIF).");
   }
 
-  const timer = startClockReaction(api, event, threadID, threadType);
+  await reactLoading();
+
   const tempIn  = makeTempPath("stk_in", "tmp");
   const tempOut = makeTempPath("stk_out", "webp");
 
@@ -200,19 +187,21 @@ async function handleStk({ api, event, send, threadID, threadType }) {
       width:  512,
       height: 512,
     });
+
+    await reactSuccess();
   } catch (e) {
     log.error("[STK] Lỗi:", e.message);
+    await reactError();
     await send(`⚠️ Lỗi: ${e.message}`);
   } finally {
-    clearInterval(timer);
     cleanupFiles(tempIn, tempOut);
   }
 }
 
-async function handlePin({ api, event, send, threadID, threadType, query }) {
+async function handlePin({ api, event, send, threadID, threadType, query, reactLoading, reactSuccess, reactError }) {
   if (!query) return send("⚠️ Vui lòng nhập từ khóa.\nVí dụ: !stk pin mèo cute");
 
-  const timer = startClockReaction(api, event, threadID, threadType);
+  await reactLoading();
 
   try {
     const results = await searchPinterest(query);
@@ -249,18 +238,19 @@ async function handlePin({ api, event, send, threadID, threadType, query }) {
         cleanupFiles(tempIn, tempOut);
       }
     }
+
+    await reactSuccess();
   } catch (e) {
     log.error("[STK-PIN] Lỗi:", e.message);
+    await reactError();
     await send(`⚠️ Lỗi: ${e.message}`);
-  } finally {
-    clearInterval(timer);
   }
 }
 
-async function handleSpin({ api, event, send, threadID, threadType, query }) {
+async function handleSpin({ api, send, threadID, threadType, query, reactLoading, reactSuccess, reactError }) {
   if (!query) return send("⚠️ Vui lòng nhập từ khóa.\nVí dụ: !stk spin mèo");
 
-  const timer = startClockReaction(api, event, threadID, threadType);
+  await reactLoading();
 
   try {
     const results = await searchPinterest(query);
@@ -288,23 +278,24 @@ async function handleSpin({ api, event, send, threadID, threadType, query }) {
         width: 512,
         height: 512,
       });
+
+      await reactSuccess();
     } finally {
       cleanupFiles(tempIn, tempOut);
     }
   } catch (e) {
     log.error("[STK-SPIN] Lỗi:", e.message);
+    await reactError();
     await send(`⚠️ Lỗi: ${e.message}`);
-  } finally {
-    clearInterval(timer);
   }
 }
 
-async function handleCustom({ api, send, threadID, threadType, url }) {
+async function handleCustom({ api, send, threadID, threadType, url, reactLoading, reactSuccess, reactError }) {
   if (!url || !url.startsWith("http")) {
     return send("⚠️ Vui lòng cung cấp link ảnh/video.\nVí dụ: !stk custom https://example.com/anh.jpg");
   }
 
-  await send("🔍 Đang xử lý sticker từ link...");
+  await reactLoading();
 
   const fileType   = await getFileType(url);
   const isAnimated = fileType === "video" || url.toLowerCase().includes(".gif");
@@ -327,50 +318,50 @@ async function handleCustom({ api, send, threadID, threadType, url }) {
       width:  512,
       height: 512,
     });
+
+    await reactSuccess();
   } catch (e) {
     log.error("[STK-CUSTOM] Lỗi:", e.message);
+    await reactError();
     await send(`⚠️ Lỗi: ${e.message}`);
   } finally {
     cleanupFiles(tempIn, tempOut);
   }
 }
 
-async function handleAi({ api, event, send, threadID, threadType, prompt }) {
+async function handleAi({ api, send, threadID, threadType, prompt, reactLoading, reactSuccess, reactError }) {
   if (!prompt) return send("⚠️ Vui lòng nhập mô tả.\nVí dụ: !stk ai mèo phi hành gia");
 
-  const timer = startClockReaction(api, event, threadID, threadType);
+  await reactLoading();
+  await send(`🎨 AI đang vẽ sticker: "${prompt}"... (Đợi xíu nha)`);
+
+  const aiImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&seed=${Date.now()}`;
+  const tempIn  = makeTempPath("ai_in", "tmp");
+  const tempOut = makeTempPath("ai_out", "webp");
 
   try {
-    await send(`🎨 AI đang vẽ sticker: "${prompt}"... (Đợi xíu nha)`);
+    await downloadFile(aiImageUrl, tempIn);
+    const ok = await convertToWebp(tempIn, tempOut, false);
+    if (!ok) throw new Error("Vẽ xong nhưng đóng gói sticker lỗi.");
 
-    const aiImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&seed=${Date.now()}`;
+    const webpUrl = await uploadToCatbox(tempOut);
+    if (!webpUrl) throw new Error("Upload sticker AI lỗi.");
 
-    const tempIn  = makeTempPath("ai_in", "tmp");
-    const tempOut = makeTempPath("ai_out", "webp");
+    await api.sendCustomSticker({
+      staticImgUrl: webpUrl,
+      threadId:     threadID,
+      threadType,
+      width:  512,
+      height: 512,
+    });
 
-    try {
-      await downloadFile(aiImageUrl, tempIn);
-      const ok = await convertToWebp(tempIn, tempOut, false);
-      if (!ok) throw new Error("Vẽ xong nhưng đóng gói sticker lỗi.");
-
-      const webpUrl = await uploadToCatbox(tempOut);
-      if (!webpUrl) throw new Error("Upload sticker AI lỗi.");
-
-      await api.sendCustomSticker({
-        staticImgUrl: webpUrl,
-        threadId:     threadID,
-        threadType,
-        width:  512,
-        height: 512,
-      });
-    } finally {
-      cleanupFiles(tempIn, tempOut);
-    }
+    await reactSuccess();
   } catch (e) {
     log.error("[STK-AI] Lỗi:", e.message);
+    await reactError();
     await send(`⚠️ AI vẽ lỗi rồi: ${e.message}`);
   } finally {
-    clearInterval(timer);
+    cleanupFiles(tempIn, tempOut);
   }
 }
 
@@ -394,37 +385,22 @@ module.exports = {
     cooldowns: 5,
   },
 
-  run: async ({ api, event, args, send, threadID }) => {
+  run: async ({
+    api, event, args, send, threadID,
+    reactLoading, reactSuccess, reactError,
+  }) => {
     const threadType = event.type;
     const sub = (args[0] || "").toLowerCase().trim();
     const restArgs = args.slice(1).join(" ").trim();
+    const ctx = { api, event, send, threadID, threadType, reactLoading, reactSuccess, reactError };
 
-    // !stk (không có sub) → tạo sticker từ reply ảnh/video
-    if (!sub) {
-      return handleStk({ api, event, send, threadID, threadType });
-    }
+    if (!sub) return handleStk(ctx);
 
-    // !stk pin <từ khóa>
-    if (sub === "pin" || sub === "pstk") {
-      return handlePin({ api, event, send, threadID, threadType, query: restArgs });
-    }
+    if (sub === "pin" || sub === "pstk") return handlePin({ ...ctx, query: restArgs });
+    if (sub === "spin")                  return handleSpin({ ...ctx, query: restArgs });
+    if (sub === "custom")                return handleCustom({ ...ctx, url: restArgs });
+    if (sub === "ai")                    return handleAi({ ...ctx, prompt: restArgs });
 
-    // !stk spin <từ khóa>
-    if (sub === "spin") {
-      return handleSpin({ api, event, send, threadID, threadType, query: restArgs });
-    }
-
-    // !stk custom <url>
-    if (sub === "custom") {
-      return handleCustom({ api, send, threadID, threadType, url: restArgs });
-    }
-
-    // !stk ai <mô tả>
-    if (sub === "ai") {
-      return handleAi({ api, event, send, threadID, threadType, prompt: restArgs });
-    }
-
-    // Không biết sub → thử tạo sticker từ reply (backward compat)
-    return handleStk({ api, event, send, threadID, threadType });
+    return handleStk(ctx);
   },
 };

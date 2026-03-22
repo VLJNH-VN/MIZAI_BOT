@@ -89,21 +89,6 @@ function formatAdminList(cfg, prefix) {
   return msg;
 }
 
-// ── Clock reaction helper ─────────────────────────────────────────────────────
-function startClockReaction(api, event, threadID, threadType) {
-  const clocks = ["🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚", "🕛"];
-  let idx = 0;
-  const raw = event?.data || {};
-  return setInterval(() => {
-    const msgId = raw.msgId || raw.globalMsgId;
-    if (msgId) {
-      api.addReaction(
-        { icon: clocks[idx++ % 12], rType: 75, source: 1 },
-        { data: { msgId, cliMsgId: raw.cliMsgId }, threadId: threadID, type: threadType }
-      ).catch(() => {});
-    }
-  }, 2000);
-}
 
 module.exports = {
   config: {
@@ -127,7 +112,7 @@ module.exports = {
     cooldowns: 3,
   },
 
-  run: async ({ api, event, args, send, prefix, threadID, senderId }) => {
+  run: async ({ api, event, args, send, prefix, threadID, senderId, reactLoading, reactSuccess, reactError }) => {
     const FLAG_MAP = {
       "-l": "list", "-a": "add", "-r": "remove",
       "-p": "setprefix", "-bc": "broadcast", "-k": "kick",
@@ -338,14 +323,14 @@ module.exports = {
 
     // ── admin listbox ─────────────────────────────────────────────────────────
     if (sub === "listbox") {
-      const clockInterval = startClockReaction(api, event, threadID, threadType);
+      await reactLoading();
 
       try {
         const groupsResp = await api.getAllGroups();
         const groupIds = Object.keys(groupsResp?.gridVerMap || {});
 
         if (groupIds.length === 0) {
-          clearInterval(clockInterval);
+          await reactError();
           return send("⚠️ Bot không có trong nhóm nào.");
         }
 
@@ -392,10 +377,10 @@ module.exports = {
             payload: { action: "leaveGroup", groups: unrentedList, senderId: String(senderId) },
           });
         }
+        await reactSuccess();
       } catch (e) {
+        await reactError();
         await send(`⚠️ Lỗi khi lấy danh sách nhóm: ${e.message}`);
-      } finally {
-        clearInterval(clockInterval);
       }
       return;
     }

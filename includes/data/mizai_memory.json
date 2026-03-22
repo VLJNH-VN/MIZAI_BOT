@@ -19,17 +19,20 @@
     "6826850414793381853": {
       "name": "Quốc Lord",
       "notes": [
+        "Quốc Lord luôn thân thiện và chúc mừng",
         "Quốc Lord có vẻ bối rối với lệnh",
         "Quốc Lord luôn thân thiện và chúc mừng",
         "Quốc Lord rất thân thiện và hay nhắn tin chúc mừng",
         "Quốc Lord rất thân thiện"
       ],
-      "lastSeen": "2026-03-21T19:45:13.740Z"
+      "lastSeen": "2026-03-22T04:29:47.757Z"
     },
     "2817603034815564154": {
       "name": "Phanh",
-      "notes": [],
-      "lastSeen": "2026-03-22T04:20:40.493Z"
+      "notes": [
+        "Phanh vừa gửi lệnh không tồn tại"
+      ],
+      "lastSeen": "2026-03-22T04:29:46.357Z"
     },
     "7700432593083401149": {
       "name": "Minh Vũ Shinn Cteツ",
@@ -48,6 +51,14 @@
     }
   },
   "diary": [
+    {
+      "date": "2026-03-22T04:29:47.757Z",
+      "entry": "Ngày 22/3/2026, Quốc Lord chúc Mizai một ngày tốt lành"
+    },
+    {
+      "date": "2026-03-22T04:29:46.357Z",
+      "entry": "Ngày 22/3/2026, Phanh gửi lệnh không tồn tại"
+    },
     {
       "date": "2026-03-21T19:45:13.575Z",
       "entry": "Ngày 22/3/2026, Quốc Lord cần giúp đỡ về lệnh ~"

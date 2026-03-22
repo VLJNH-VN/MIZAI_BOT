@@ -925,6 +925,191 @@ async function drawAllCommandsCard({ commands, page, totalPages, total, prefix =
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+// UPTIME CARD
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Vẽ card uptime công nghệ với background image + overlay thông tin hệ thống
+ * @param {object} opts
+ * @param {string}  opts.uptimeStr   - Chuỗi uptime
+ * @param {string}  opts.startTime   - Thời điểm khởi động
+ * @param {string}  opts.vnTime      - Giờ hiện tại
+ * @param {number}  opts.ramPct      - % RAM đã dùng (0-100)
+ * @param {number}  opts.cpuPct      - % CPU load (0-100)
+ * @param {string}  opts.usedMem     - RAM đã dùng (string)
+ * @param {string}  opts.totalMem    - Tổng RAM (string)
+ * @param {string}  opts.nodeVer     - Node.js version
+ * @param {number}  opts.cmdCount    - Số lệnh
+ * @param {string}  opts.prefix      - Prefix bot
+ * @param {string}  opts.bgImagePath - Đường dẫn ảnh nền
+ * @returns {Promise<string>} path to saved PNG
+ */
+async function drawUptimeCard({
+  uptimeStr, startTime, vnTime,
+  ramPct, cpuPct, usedMem, totalMem,
+  nodeVer, cmdCount, prefix,
+  bgImagePath,
+}) {
+  const W = 900, H = 500;
+  const canvas = createCanvas(W, H);
+  const ctx    = canvas.getContext("2d");
+
+  // ── Background ─────────────────────────────────────────────────────────────
+  if (bgImagePath && fs.existsSync(bgImagePath)) {
+    try {
+      const bg = await loadImage(bgImagePath);
+      ctx.drawImage(bg, 0, 0, W, H);
+    } catch (_) {
+      const grad = ctx.createLinearGradient(0, 0, W, H);
+      grad.addColorStop(0, "#080020");
+      grad.addColorStop(1, "#001040");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+    }
+  } else {
+    const grad = ctx.createLinearGradient(0, 0, W, H);
+    grad.addColorStop(0, "#080020");
+    grad.addColorStop(1, "#001040");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // ── Dark overlay ───────────────────────────────────────────────────────────
+  ctx.fillStyle = "rgba(0,0,0,0.62)";
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Panel ──────────────────────────────────────────────────────────────────
+  const PAD = 28, PW = W - PAD * 2, PH = H - PAD * 2;
+  ctx.save();
+  roundRect(ctx, PAD, PAD, PW, PH, 18);
+  ctx.fillStyle   = "rgba(10,5,40,0.72)";
+  ctx.fill();
+  ctx.strokeStyle = "#7c5cfc88";
+  ctx.lineWidth   = 1.5;
+  ctx.stroke();
+  ctx.restore();
+
+  // ── Neon border glow top ───────────────────────────────────────────────────
+  const topGlow = ctx.createLinearGradient(PAD, PAD, PAD + PW, PAD);
+  topGlow.addColorStop(0,   "transparent");
+  topGlow.addColorStop(0.3, "#00e5ff");
+  topGlow.addColorStop(0.7, "#7c5cfc");
+  topGlow.addColorStop(1,   "transparent");
+  ctx.strokeStyle = topGlow;
+  ctx.lineWidth   = 2;
+  ctx.beginPath();
+  ctx.moveTo(PAD + 18, PAD);
+  ctx.lineTo(PAD + PW - 18, PAD);
+  ctx.stroke();
+
+  // ── Header ─────────────────────────────────────────────────────────────────
+  ctx.font      = "bold 13px monospace";
+  ctx.fillStyle = "#00e5ffcc";
+  ctx.fillText("⚡  SYSTEM UPTIME  ⚡", PAD + 20, PAD + 32);
+
+  ctx.font      = "bold 26px sans-serif";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText("MiZai Bot v2.0.0", PAD + 20, PAD + 66);
+
+  ctx.fillStyle = "#7c5cfc55";
+  ctx.fillRect(PAD + 20, PAD + 76, PW - 40, 1);
+
+  // ── Watermark ──────────────────────────────────────────────────────────────
+  ctx.font      = "bold 12px sans-serif";
+  ctx.fillStyle = "#7c5cfc77";
+  ctx.textAlign = "right";
+  ctx.fillText("✦ Mizai Bot", PAD + PW - 16, PAD + 28);
+  ctx.textAlign = "left";
+
+  // ── Left column — time info ─────────────────────────────────────────────────
+  const colX = PAD + 20;
+  const colY  = PAD + 100;
+  const LH    = 38;
+
+  const rows1 = [
+    { icon: "⏰", label: "Thời gian", val: vnTime },
+    { icon: "🚀", label: "Khởi động", val: startTime },
+    { icon: "⏳", label: "Hoạt động", val: uptimeStr },
+    { icon: "🔧", label: "Node.js",   val: nodeVer },
+    { icon: "⚙️",  label: "Prefix",   val: prefix },
+    { icon: "📦", label: "Số lệnh",  val: `${cmdCount} lệnh` },
+  ];
+
+  rows1.forEach((r, i) => {
+    const y = colY + i * LH;
+    ctx.font      = "bold 14px sans-serif";
+    ctx.fillStyle = "#00e5ffbb";
+    ctx.fillText(r.icon, colX, y);
+    ctx.fillStyle = "#aaaacc";
+    ctx.fillText(r.label, colX + 26, y);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(r.val, colX + 130, y);
+  });
+
+  // ── Divider vertical ───────────────────────────────────────────────────────
+  const divX = W / 2 + 10;
+  ctx.fillStyle = "#7c5cfc44";
+  ctx.fillRect(divX, PAD + 86, 1, PH - 92);
+
+  // ── Right column — gauges ──────────────────────────────────────────────────
+  const rX   = divX + 24;
+  const barW  = PW - (rX - PAD) - 30;
+  const barH  = 18;
+
+  function drawGauge(label, pct, color, y) {
+    ctx.font      = "bold 13px monospace";
+    ctx.fillStyle = "#aaaacc";
+    ctx.fillText(label, rX, y);
+
+    const pctStr = `${pct}%`;
+    ctx.font      = "bold 14px sans-serif";
+    ctx.fillStyle = color;
+    ctx.textAlign = "right";
+    ctx.fillText(pctStr, rX + barW, y);
+    ctx.textAlign = "left";
+
+    const trackY = y + 6;
+    ctx.fillStyle = "#ffffff18";
+    roundRect(ctx, rX, trackY, barW, barH, 5);
+    ctx.fill();
+
+    const fill = Math.round((pct / 100) * barW);
+    const fillGrad = ctx.createLinearGradient(rX, 0, rX + fill, 0);
+    fillGrad.addColorStop(0, color + "99");
+    fillGrad.addColorStop(1, color);
+    ctx.fillStyle = fillGrad;
+    roundRect(ctx, rX, trackY, fill, barH, 5);
+    ctx.fill();
+  }
+
+  const rY = colY;
+  ctx.font      = "bold 16px sans-serif";
+  ctx.fillStyle = "#00e5ff";
+  ctx.fillText("📊  Tài Nguyên Hệ Thống", rX, rY - 10);
+
+  drawGauge(`🔩 CPU Load`, cpuPct, "#00e5ff", rY + 32);
+  drawGauge(`💾 RAM  ${usedMem}MB / ${totalMem}MB`, ramPct, "#7c5cfc", rY + 32 + 60);
+
+  // ── RAM free text ──────────────────────────────────────────────────────────
+  const freeMB   = Math.round((100 - ramPct) / 100 * parseFloat(totalMem));
+  const freeGB   = (freeMB / 1024).toFixed(2);
+  ctx.font      = "13px sans-serif";
+  ctx.fillStyle = "#66cc88";
+  ctx.fillText(`🔋 RAM trống: ${freeGB} GB`, rX, rY + 32 + 60 + 44);
+
+  // ── Status badge ───────────────────────────────────────────────────────────
+  const badgeY = H - PAD - 28;
+  const badgeTxt = "🛠️  Trạng thái: Đang chạy ổn định  ✅";
+  ctx.font      = "bold 14px sans-serif";
+  ctx.fillStyle = "#00e5ff";
+  ctx.textAlign = "center";
+  ctx.fillText(badgeTxt, W / 2, badgeY);
+  ctx.textAlign = "left";
+
+  return savePng(canvas, "uptime_card");
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 
 module.exports = {
   drawSearchCard,
@@ -936,4 +1121,5 @@ module.exports = {
   drawCategoryCard,
   drawCommandInfoCard,
   drawAllCommandsCard,
+  drawUptimeCard,
 };

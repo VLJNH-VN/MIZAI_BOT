@@ -113,33 +113,59 @@ function scheduleCacheCleanup(intervalMs = 60 * 60 * 1000, options = {}) {
 
 // ── Key Manager ───────────────────────────────────────────────────────────────
 
-const KEY_FILE = path.join(process.cwd(), "includes", "data", "key.json");
+const KEY_FILE       = path.join(process.cwd(), "includes", "data", "key.json");
+const CONFIG_FILE    = path.join(process.cwd(), "config.json");
 const GROQ_CHECK_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 let autoCheckEnabled = true;
+let _checkRunning    = false;
 
 function loadKeyData() {
   try {
     const config = global.config || {};
     if (!fs.existsSync(KEY_FILE)) {
-      const def = { keys: config.groqKeys || [], autoCheck: true, live: [], dead: [], no_balance: [] };
+      const def = {
+        keys: config.groqKeys || [], autoCheck: true, live: [], dead: [], no_balance: [],
+        geminiKeys: [], geminiLive: [], geminiDead: [],
+      };
       fs.writeFileSync(KEY_FILE, JSON.stringify(def, null, 2), "utf-8");
       return def;
     }
     const raw = JSON.parse(fs.readFileSync(KEY_FILE, "utf-8"));
-    if (!Array.isArray(raw.keys))       raw.keys       = config.groqKeys || [];
+    if (!Array.isArray(raw.keys))        raw.keys        = config.groqKeys || [];
+    if (!Array.isArray(raw.geminiKeys))  raw.geminiKeys  = [];
+    if (!Array.isArray(raw.geminiLive))  raw.geminiLive  = [];
+    if (!Array.isArray(raw.geminiDead))  raw.geminiDead  = [];
     if (typeof raw.autoCheck !== "boolean") raw.autoCheck = true;
-    if (!Array.isArray(raw.live))       raw.live       = [];
-    if (!Array.isArray(raw.dead))       raw.dead       = [];
-    if (!Array.isArray(raw.no_balance)) raw.no_balance = [];
+    if (!Array.isArray(raw.live))        raw.live        = [];
+    if (!Array.isArray(raw.dead))        raw.dead        = [];
+    if (!Array.isArray(raw.no_balance))  raw.no_balance  = [];
     return raw;
   } catch {
-    return { keys: [], autoCheck: true, live: [], dead: [], no_balance: [] };
+    return {
+      keys: [], autoCheck: true, live: [], dead: [], no_balance: [],
+      geminiKeys: [], geminiLive: [], geminiDead: [],
+    };
   }
 }
 
 function saveKeyData(data) {
   fs.writeFileSync(KEY_FILE, JSON.stringify(data, null, 2), "utf-8");
+}
+
+function syncActiveGeminiKey(data) {
+  const deadSet   = new Set(Array.isArray(data.geminiDead) ? data.geminiDead : []);
+  const liveKeys  = (data.geminiKeys || []).filter(k => !deadSet.has(k));
+  const activeKey = liveKeys[0] || "";
+  if (activeKey) {
+    if (global.config) global.config.geminiKey = activeKey;
+    try {
+      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+      cfg.geminiKey = activeKey;
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf-8");
+    } catch {}
+  }
+  return activeKey;
 }
 
 async function checkGroqKey(key) {
@@ -159,28 +185,82 @@ async function checkGroqKey(key) {
   }
 }
 
-async function checkAllKeys() {
-  if (!autoCheckEnabled) return;
-  const data = loadKeyData();
-  if (!data.autoCheck || !data.keys.length) return;
-
-  const live = [], dead = [], noBalance = [];
-
-  for (const key of data.keys) {
-    const result = await checkGroqKey(key);
-    if (result.status === "live")            live.push(key);
-    else if (result.status === "no_balance") noBalance.push(key);
-    else                                     dead.push(key);
+async function checkGeminiKey(key) {
+  try {
+    const { GoogleGenAI } = require("@google/genai");
+    const ai = new GoogleGenAI({ apiKey: key });
+    await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: [{ role: "user", parts: [{ text: "Hi" }] }],
+      config: { maxOutputTokens: 5 },
+    });
+    return { key, status: "live" };
+  } catch (err) {
+    const status = err?.status || err?.response?.status || 0;
+    const msg    = err?.message || "";
+    const is429  = status === 429 || msg.includes("RESOURCE_EXHAUSTED");
+    if (is429) {
+      const m = msg.toLowerCase();
+      const quotaOut = m.includes("daily") || m.includes("monthly") ||
+        m.includes("billing") || m.includes("exceeded your quota") || m.includes("quota exceeded");
+      if (quotaOut) return { key, status: "no_balance" };
+      return { key, status: "rate_limit" };
+    }
+    if (status === 401 || msg.includes("API_KEY_INVALID") || msg.includes("invalid api key"))
+      return { key, status: "dead" };
+    return { key, status: "dead" };
   }
-
-  data.live = live;
-  data.dead = dead;
-  data.no_balance = noBalance;
-  saveKeyData(data);
 }
 
-function scheduleKeyCheck(intervalMs = 5 * 60 * 1000) {
-  checkAllKeys();
+async function checkAllKeys() {
+  if (!autoCheckEnabled || _checkRunning) return;
+  const data = loadKeyData();
+  if (!data.autoCheck) return;
+
+  const hasGroq   = data.keys.length > 0;
+  const hasGemini = data.geminiKeys.length > 0;
+  if (!hasGroq && !hasGemini) return;
+
+  _checkRunning = true;
+  try {
+    // ── Groq ────────────────────────────────────────────────────────────────────
+    if (hasGroq) {
+      const live = [], dead = [], noBalance = [];
+      for (const key of data.keys) {
+        const r = await checkGroqKey(key);
+        if (r.status === "live")            live.push(key);
+        else if (r.status === "no_balance") noBalance.push(key);
+        else                                dead.push(key);
+      }
+      data.live       = live;
+      data.dead       = dead;
+      data.no_balance = noBalance;
+    }
+
+    // ── Gemini ──────────────────────────────────────────────────────────────────
+    if (hasGemini) {
+      const gLive = [], gDead = [];
+      for (const key of data.geminiKeys) {
+        const r = await checkGeminiKey(key);
+        if (r.status === "live" || r.status === "rate_limit") gLive.push(key);
+        else                                                   gDead.push(key);
+      }
+      data.geminiLive = gLive;
+      data.geminiDead = gDead;
+      syncActiveGeminiKey(data);
+    }
+
+    saveKeyData(data);
+    logInfo(`[KEY] Auto check xong — Groq live: ${data.live.length}/${data.keys.length} | Gemini live: ${data.geminiLive.length}/${data.geminiKeys.length}`);
+  } catch (err) {
+    logError?.(`[KEY] checkAllKeys lỗi: ${err?.message}`);
+  } finally {
+    _checkRunning = false;
+  }
+}
+
+function scheduleKeyCheck(intervalMs = 30 * 60 * 1000) {
+  setTimeout(checkAllKeys, 10_000).unref?.();
   setInterval(checkAllKeys, intervalMs).unref?.();
 }
 
@@ -195,6 +275,7 @@ module.exports = {
   CACHE_DIR,
   CACHE_DIRS,
   checkGroqKey,
+  checkGeminiKey,
   scheduleKeyCheck,
   setAutoCheck,
   readJsonFile,

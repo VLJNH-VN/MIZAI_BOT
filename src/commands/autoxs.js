@@ -10,14 +10,14 @@ const fs   = require("fs");
 const path = require("path");
 const { ThreadType } = require("zca-js");
 
-const DATA_FILE   = path.join(process.cwd(), "includes", "data", "auto_xo_so.json");
-const GROUPS_FILE = path.join(process.cwd(), "includes", "database", "groupsCache.json");
+const DATA_FILE = path.join(process.cwd(), "includes", "data", "auto_xo_so.json");
+const { getAllGroupIds } = require("../../includes/database/groupSettings");
 
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify([]));
 
-function readData()    { try { return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8")); } catch { return []; } }
-function writeData(d)  { fs.writeFileSync(DATA_FILE, JSON.stringify(d, null, 2)); }
-function readGroups()  { try { return Object.keys(JSON.parse(fs.readFileSync(GROUPS_FILE, "utf-8"))); } catch { return []; } }
+function readData()          { try { return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8")); } catch { return []; } }
+function writeData(d)        { fs.writeFileSync(DATA_FILE, JSON.stringify(d, null, 2)); }
+async function readGroups()  { return getAllGroupIds(); }
 
 function nowVN() {
   const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }));
@@ -177,7 +177,7 @@ module.exports = {
           `👍 Thả cảm xúc để xem kết quả xổ số Miền Nam & Miền Trung`;
 
         const disabledIds = readData();
-        const groups      = readGroups();
+        const groups      = await readGroups();
 
         for (const id of groups) {
           if (disabledIds.includes(id)) continue;

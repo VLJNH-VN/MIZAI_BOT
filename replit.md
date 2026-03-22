@@ -49,7 +49,10 @@ MIZAI_BOT/
 │       ├── message.js          # Điều phối tin nhắn → handleCommand
 │       ├── autoDown.js         # Tự động tải media
 │       ├── autoSend.js         # Tự động gửi tin định kỳ
-│       ├── goibot.js           # AI Mizai background
+│       ├── goibot.js           # AI Mizai — main handler (thin, ~230 dòng)
+│       ├── goibotThrottle.js   # Anti-spam & cooldown state
+│       ├── goibotContext.js    # TX context, self-profile cache, safeCalc, self-reflect
+│       ├── goibotRouter.js     # Action dispatch, image gen, file ops, reaction
 │       ├── groupEvents.js      # Sự kiện nhóm
 │       ├── tuongTac.js         # Tương tác tự động
 │       └── txLoop.js           # Vòng lặp game Tài Xỉu

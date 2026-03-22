@@ -1,28 +1,6 @@
-const fs = require("fs");
-const path = require("path");
 const { ThreadType } = require("zca-js");
 const { readConfig, writeConfig } = require('../../utils/helpers');
-
-const GROUPS_CACHE_PATH = path.join(__dirname, "../../includes/database/groupsCache.json");
-
-// ── Cache nhóm đã biết (dùng cho broadcast) ─────────────────────────────────
-function readGroupsCache() {
-  try { return JSON.parse(fs.readFileSync(GROUPS_CACHE_PATH, "utf-8")); }
-  catch { return {}; }
-}
-
-function saveGroupsCache(data) {
-  fs.writeFileSync(GROUPS_CACHE_PATH, JSON.stringify(data, null, 2), "utf-8");
-}
-
-function trackGroup(threadID) {
-  if (!threadID) return;
-  const cache = readGroupsCache();
-  if (!cache[threadID]) {
-    cache[threadID] = { addedAt: Date.now() };
-    saveGroupsCache(cache);
-  }
-}
+const { getAllGroupIds } = require('../../includes/database/groupSettings');
 
 // ── Lấy UID từ mention hoặc args ─────────────────────────────────────────────
 function isNumericUid(uid) {
@@ -240,8 +218,7 @@ module.exports = {
         return send(`❌ Thiếu nội dung.\nDùng: ${prefix}admin bc <nội dung tin nhắn>`);
       }
 
-      const groupsCache = readGroupsCache();
-      const groupIds = Object.keys(groupsCache);
+      const groupIds = await getAllGroupIds();
 
       if (groupIds.length === 0) {
         return send(
@@ -286,8 +263,7 @@ module.exports = {
       const s = Math.floor(uptime % 60);
       const uptimeStr = `${h}h ${m}m ${s}s`;
 
-      const groupsCache = readGroupsCache();
-      const groupCount = Object.keys(groupsCache).length;
+      const groupCount = (await getAllGroupIds()).length;
       const adminCount = Array.isArray(cfg.adminBotIds) ? cfg.adminBotIds.length : 0;
       const memMb = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1);
 

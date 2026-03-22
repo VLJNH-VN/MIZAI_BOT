@@ -11,24 +11,17 @@ const fs = require("fs");
 const path = require("path");
 const { loadLastSeen } = require("./lastSeen");
 
-const GROUPS_CACHE_PATH = path.join(__dirname, "../../includes/database/groupsCache.json");
+const { getAllGroupIds } = require("../../includes/database/groupSettings");
 const MAX_FETCH = 50;
 
-// Delay nhỏ giữa các nhóm để tránh rate limit
 const GROUP_DELAY_MS = 800;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function loadGroupIds() {
-  try {
-    if (!fs.existsSync(GROUPS_CACHE_PATH)) return [];
-    const cache = JSON.parse(fs.readFileSync(GROUPS_CACHE_PATH, "utf-8"));
-    return Object.keys(cache);
-  } catch {
-    return [];
-  }
+async function loadGroupIds() {
+  return getAllGroupIds();
 }
 
 /**
@@ -51,7 +44,7 @@ async function fetchMissedMessages(api) {
 
   logInfo(`[DataBase] Bot đã offline ${offlineStr}. Đang kiểm tra tin nhắn bỏ lỡ...`);
 
-  const groupIds = loadGroupIds();
+  const groupIds = await loadGroupIds();
   if (groupIds.length === 0) return;
 
   const botId = global.botId ? String(global.botId) : null;

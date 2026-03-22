@@ -102,29 +102,42 @@ function clearSpam(groupId, userId) {
   spamStore.delete(key);
 }
 
-// ── Group Settings (rank on/off) — dùng groups.settings SQLite ───────────────
+// ── Group Settings (rank on/off) — in-memory cache + async SQLite ────────────
 const GROUP_SETTINGS_FILE = path.join(__dirname, "../../includes/data/groupSettings.json");
 
-function readGroupSettings() {
-  return readJsonFile(GROUP_SETTINGS_FILE, {});
-}
+// In-memory cache: Map<groupId, { key: value, ... }>
+const _settingsCache = new Map();
 
-function saveGroupSettings(data) {
-  writeJsonFile(GROUP_SETTINGS_FILE, data);
+// Khởi tạo từ file cũ (sync, một lần duy nhất) — backward-compatible migration
+(function _initSettingsCache() {
+  try {
+    const raw = readJsonFile(GROUP_SETTINGS_FILE, {});
+    for (const [gid, cfg] of Object.entries(raw)) {
+      if (cfg && typeof cfg === "object") _settingsCache.set(String(gid), { ...cfg });
+    }
+  } catch {}
+})();
+
+// Async write sang SQLite (không block)
+async function _persistSetting(groupId, key, value) {
+  try {
+    const { setSetting } = require("../../includes/database/groupSettings");
+    await setSetting(String(groupId), key, value);
+  } catch {}
 }
 
 function getGroupSetting(groupId, key, defaultVal = true) {
-  const data = readGroupSettings();
-  if (!data[groupId]) return defaultVal;
-  const val = data[groupId][key];
-  return val === undefined ? defaultVal : val;
+  const gid = String(groupId);
+  const cfg = _settingsCache.get(gid);
+  if (!cfg) return defaultVal;
+  return cfg[key] === undefined ? defaultVal : cfg[key];
 }
 
 function setGroupSetting(groupId, key, value) {
-  const data = readGroupSettings();
-  if (!data[groupId]) data[groupId] = {};
-  data[groupId][key] = value;
-  saveGroupSettings(data);
+  const gid = String(groupId);
+  if (!_settingsCache.has(gid)) _settingsCache.set(gid, {});
+  _settingsCache.get(gid)[key] = value;
+  _persistSetting(gid, key, value).catch(() => {});
 }
 
 module.exports = {

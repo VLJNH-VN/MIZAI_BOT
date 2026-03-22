@@ -18,7 +18,7 @@
  *   getData(threadId, name?)                → Promise<object>  row đầy đủ
  */
 
-const { getDb, run, get } = require("./sqlite");
+const { getDb, run, get, all } = require("./sqlite");
 
 // Cache prefix trong bộ nhớ để tránh hit DB mỗi tin nhắn
 const _prefixCache = new Map();
@@ -133,6 +133,16 @@ async function getData(threadId, name) {
   };
 }
 
+// ── Lấy tất cả group_id từ SQLite ────────────────────────────────────────────
+
+async function getAllGroupIds() {
+  try {
+    const db   = await getDb();
+    const rows = await all(db, "SELECT group_id FROM groups");
+    return rows.map(r => r.group_id).filter(Boolean);
+  } catch { return []; }
+}
+
 // ── Xoá cache prefix (dùng khi đổi global prefix) ────────────────────────────
 function clearPrefixCache(threadId) {
   if (threadId) _prefixCache.delete(String(threadId));
@@ -144,6 +154,7 @@ module.exports = {
   setPrefix,
   getRankup,
   setRankup,
+  getAllGroupIds,
   getSettings,
   getSetting,
   setSettings,

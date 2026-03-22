@@ -8,46 +8,37 @@
  *   syncGroupToDb(api, groupId) — Fetch + lưu 1 nhóm
  *   getAllGroupsFromDb()         — Đọc toàn bộ nhóm từ SQLite
  *   getGroupData(groupId)       — Đọc 1 nhóm từ SQLite
- *   getGroupIds()               — Danh sách group_id từ groupsCache.json
+ *   getGroupIds()               — Danh sách group_id từ SQLite groups table
  *   saveGroupsSnapshot()        — Xuất snapshot JSON ra includes/data/groups.json
  */
 
-const fs   = require("fs");
-const path = require("path");
-
 // Dùng dataManager thay vì viết SQL trực tiếp — tránh duplicate logic
 const { saveGroup, getGroup, getAllGroups, saveSnapshot } = require("./dataManager");
+const { getAllGroupIds } = require("./groupSettings");
 
-const GROUPS_CACHE_PATH = path.join(__dirname, "groupsCache.json");
-const BATCH_SIZE        = 5;
-const RETRY_DELAY_MS    = 1500;
+const BATCH_SIZE     = 5;
+const RETRY_DELAY_MS = 1500;
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ── Cache tracking ─────────────────────────────────────────────────────────────
 
-/** Đọc danh sách group ID từ groupsCache.json */
-function getGroupIds() {
-  try {
-    if (!fs.existsSync(GROUPS_CACHE_PATH)) return [];
-    const raw = JSON.parse(fs.readFileSync(GROUPS_CACHE_PATH, "utf-8"));
-    return Object.keys(raw).filter(Boolean);
-  } catch {
-    return [];
-  }
+/** Đọc danh sách group ID từ SQLite groups table */
+async function getGroupIds() {
+  return getAllGroupIds();
 }
 
-/** Thêm nhóm vào groupsCache.json nếu chưa có */
-function trackGroup(groupId) {
+/** Đảm bảo nhóm tồn tại trong bảng groups (SQLite) */
+async function trackGroup(groupId) {
   try {
-    let cache = {};
-    if (fs.existsSync(GROUPS_CACHE_PATH)) {
-      try { cache = JSON.parse(fs.readFileSync(GROUPS_CACHE_PATH, "utf-8")); } catch {}
-    }
-    if (!cache[groupId]) {
-      cache[groupId] = { addedAt: Date.now() };
-      fs.writeFileSync(GROUPS_CACHE_PATH, JSON.stringify(cache, null, 2), "utf-8");
-    }
+    const { getDb, run } = require("./sqlite");
+    const db  = await getDb();
+    const now = Date.now();
+    await run(db,
+      `INSERT INTO groups (group_id, name, first_seen, updated_at) VALUES (?, '', ?, ?)
+       ON CONFLICT(group_id) DO NOTHING`,
+      [String(groupId), now, now]
+    );
   } catch {}
 }
 
@@ -72,7 +63,7 @@ async function syncGroupToDb(api, groupId) {
     const memberCount    = memVerList ? memVerList.length : (info.totalMember || 0);
 
     await saveGroup(groupId, { name, info, memVerList, pendingApprove });
-    trackGroup(groupId);
+    await trackGroup(groupId);
 
     return { groupId: String(groupId), name, memberCount };
   } catch (err) {
@@ -82,13 +73,13 @@ async function syncGroupToDb(api, groupId) {
 }
 
 /**
- * Load toàn bộ nhóm từ groupsCache.json → Zalo API → SQLite.
+ * Load toàn bộ nhóm từ SQLite groups table → Zalo API → SQLite.
  */
 async function loadAllGroups(api) {
-  const ids = getGroupIds();
+  const ids = await getGroupIds();
 
   if (ids.length === 0) {
-    logInfo("[DataBase] groupsCache.json trống, chưa có nhóm nào để load.");
+    logInfo("[DataBase] Chưa có nhóm nào trong SQLite để load.");
     return { ok: 0, fail: 0, total: 0, groups: [] };
   }
 

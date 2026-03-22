@@ -1,14 +1,29 @@
 /**
  * src/commands/auto.js
- * Quản lý AutoSend + Bật/tắt Mizai AI (auto bot)
+ * Quản lý AutoSend + Bật/tắt Mizai AI (auto bot) + AutoDown per-nhóm
  */
 
 const fs   = require("fs");
 const path = require("path");
 const { ThreadType } = require("zca-js");
 const { setEnabled, isEnabled } = require('../../utils/ai/goibot');
+const { setSetting, getSetting } = require('../../includes/database/groupSettings');
 
 const AUTOSEND_FILE = path.join(process.cwd(), "includes", "data", "autoSend.json");
+const AUTO_JSON     = path.join(process.cwd(), "includes", "data", "auto.json");
+
+// ─── One-time migration: auto.json → groups.settings ─────────────────────────
+(function _migrateAutoJson() {
+    try {
+        if (!fs.existsSync(AUTO_JSON)) return;
+        const raw = JSON.parse(fs.readFileSync(AUTO_JSON, "utf-8"));
+        for (const [gid, cfg] of Object.entries(raw)) {
+            if (cfg && typeof cfg.autodown === "boolean") {
+                setSetting(String(gid), "autodown", cfg.autodown).catch(() => {});
+            }
+        }
+    } catch {}
+})();
 
 // ─── AutoSend helpers ────────────────────────────────────────────────────────
 function readAutoSend() {
@@ -34,13 +49,14 @@ function validateTime(t) {
 module.exports = {
     config: {
         name: "auto",
-        version: "1.0.0",
+        version: "1.1.0",
         hasPermssion: 1,
         credits: "MiZai",
-        description: "Quản lý AutoSend + Bật/tắt Mizai AI",
+        description: "Quản lý AutoSend + Bật/tắt Mizai AI + AutoDown",
         commandCategory: "Quản Trị",
         usages: [
             "auto bot on|off                  — Bật/tắt Mizai AI cho nhóm",
+            "auto down on|off                 — Bật/tắt tự động tải video (AutoDown)",
             "auto list                        — Danh sách lịch gửi tự động",
             "auto add <HH:MM> <nội dung>      — Thêm lịch gửi mới",
             "auto on|off|remove <stt>         — Bật/tắt/xoá lịch theo số thứ tự",
@@ -49,8 +65,12 @@ module.exports = {
     },
 
     run: async ({ api, event, args, send, prefix, threadID }) => {
-        const FLAG_MAP = { "-b": "bot", "-l": "list", "-a": "add" };
+        const FLAG_MAP = { "-b": "bot", "-l": "list", "-a": "add", "-d": "down" };
         const sub = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase().trim();
+
+        if (event.type !== ThreadType.Group && ["bot", "down"].includes(sub)) {
+            return send("⛔ Lệnh này chỉ dùng được trong nhóm.");
+        }
 
         // ── Không có sub-command → hướng dẫn ────────────────────────────────
         if (!sub) {
@@ -58,8 +78,10 @@ module.exports = {
                 `╔══ LỆNH AUTO ══╗\n` +
                 `╚════════════════════╝\n` +
                 `🤖 Mizai AI:\n` +
-                `  ${prefix}auto bot on       — Bật Mizai AI\n` +
-                `  ${prefix}auto bot off      — Tắt Mizai AI\n` +
+                `  ${prefix}auto bot on|off      — Bật/tắt Mizai AI\n` +
+                `\n` +
+                `📥 AutoDown:\n` +
+                `  ${prefix}auto down on|off     — Bật/tắt tự tải video\n` +
                 `\n` +
                 `📤 AutoSend:\n` +
                 `  ${prefix}auto list\n` +
@@ -86,6 +108,25 @@ module.exports = {
                 `🤖 Mizai AI — ${status}\n` +
                 `  ${prefix}auto bot on   — Bật\n` +
                 `  ${prefix}auto bot off  — Tắt`
+            );
+        }
+
+        // ── auto down on/off ──────────────────────────────────────────────────
+        if (sub === "down") {
+            const action = (args[1] || "").toLowerCase();
+            if (action === "on") {
+                await setSetting(threadID, "autodown", true);
+                return send("✅ AutoDown đã được BẬT cho nhóm này.\nBot sẽ tự tải video khi có link TikTok/YouTube/FB/...");
+            }
+            if (action === "off") {
+                await setSetting(threadID, "autodown", false);
+                return send("☑️ AutoDown đã được TẮT cho nhóm này.");
+            }
+            const current = await getSetting(threadID, "autodown", true);
+            return send(
+                `📥 AutoDown — ${current ? "✅ Đang BẬT" : "❌ Đang TẮT"}\n` +
+                `  ${prefix}auto down on   — Bật tự tải video\n` +
+                `  ${prefix}auto down off  — Tắt tự tải video`
             );
         }
 

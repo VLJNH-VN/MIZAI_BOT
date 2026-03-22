@@ -57,7 +57,7 @@ function pickRandomVideo() {
 }
 
 const CONFIG_FILE = path.join(process.cwd(), "includes", "data", "autoSend.json");
-const GROUPS_FILE = path.join(process.cwd(), "includes", "database", "groupsCache.json");
+const { getAllGroupIds } = require("../../includes/database/groupSettings");
 
 const INTERVAL_MS = 60 * 1000;
 let lastCheckedMinute = "";
@@ -78,11 +78,8 @@ function readConfig() {
   } catch { return []; }
 }
 
-function readKnownGroups() {
-  try {
-    if (!fs.existsSync(GROUPS_FILE)) return [];
-    return Object.keys(JSON.parse(fs.readFileSync(GROUPS_FILE, "utf-8")));
-  } catch { return []; }
+async function readKnownGroups() {
+  return getAllGroupIds();
 }
 
 function currentHHMM() {
@@ -101,7 +98,7 @@ function startAutoSend(api) {
     const matching = configs.filter(c => c.enabled !== false && c.time === nowTime);
     if (!matching.length) return;
 
-    const knownGroups = readKnownGroups();
+    const knownGroups = await readKnownGroups();
 
     for (const cfg of matching) {
       const targets = Array.isArray(cfg.threadIds) && cfg.threadIds.length > 0

@@ -5,8 +5,9 @@
  * Gộp: scl (SoundCloud) + spt (Spotify) + mixcloud (Mixcloud) + yt (YouTube)
  */
 
-const https = require("https");
-const fs    = require("fs");
+const https  = require("https");
+const fs     = require("fs");
+const SpotifyWebApi = require("spotify-web-api-node");
 const { Reactions } = require("zca-js");
 const { fmtDurationSec, fmtDurationMs } = require("../../utils/media/helpers");
 let _canvas;
@@ -17,6 +18,20 @@ function getCanvas() {
 
 const FOWN_API = "https://fown.onrender.com";
 const MIXCLOUD_GRAPHQL_URL = "https://app.mixcloud.com/graphql";
+
+// ── Spotify client (Client Credentials) ───────────────────────────────────────
+const spotifyApi = new SpotifyWebApi({
+  clientId:     process.env.SPOTIFY_CLIENT_ID,
+  clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+});
+let _spotifyTokenExpiry = 0;
+
+async function ensureSpotifyToken() {
+  if (Date.now() < _spotifyTokenExpiry - 30000) return;
+  const data = await spotifyApi.clientCredentialsGrant();
+  spotifyApi.setAccessToken(data.body.access_token);
+  _spotifyTokenExpiry = Date.now() + data.body.expires_in * 1000;
+}
 
 function fmtNum(n) {
   if (!n) return "0";
@@ -55,20 +70,20 @@ async function ytSearch(keyword) {
   }));
 }
 
-// ── Spotify (via fown API / yt-dlp spsearch) ──────────────────────────────────
+// ── Spotify (Spotify Web API — Client Credentials) ────────────────────────────
 async function sptSearch(keyword) {
-  const res = await global.axios.get(
-    `${FOWN_API}/api/search?q=${encodeURIComponent(keyword)}&platform=yt&svl=6`,
-    { timeout: 30000 }
-  );
-  return (res.data?.results || []).map(item => ({
-    id:        item.id || "",
-    title:     item.title || "Unknown",
-    author:    item.uploader || "Unknown",
-    duration:  (item.duration || 0) * 1000,
-    link:      item.url || item.webpage_url || "",
-    _durSec:   item.duration || 0,
-    thumbnail: item.thumbnail || "",
+  await ensureSpotifyToken();
+  const res = await spotifyApi.searchTracks(keyword, { limit: 6 });
+  const items = res.body?.tracks?.items || [];
+  return items.map(track => ({
+    id:        track.id || "",
+    title:     track.name || "Unknown",
+    author:    (track.artists || []).map(a => a.name).join(", ") || "Unknown",
+    duration:  track.duration_ms || 0,
+    _durSec:   Math.floor((track.duration_ms || 0) / 1000),
+    link:      track.external_urls?.spotify || "",
+    thumbnail: track.album?.images?.[0]?.url || "",
+    spotifyId: track.id || "",
   }));
 }
 
@@ -298,31 +313,22 @@ module.exports = {
       await addReactionWow();
       try {
         const durStr = track._durSec ? fmtDurationSec(track._durSec) : fmtDurationMs(track.duration);
-        const spfUrl = track.link || track.url || "";
         let audioUrl = null;
 
-        if (spfUrl) {
-          const mediaRes = await global.axios.get(
-            `${FOWN_API}/api/media?url=${encodeURIComponent(spfUrl)}`,
-            { timeout: 120000 }
-          );
-          audioUrl = resolveUrl(mediaRes.data?.download_audio_url || mediaRes.data?.download_url || null);
-        }
+        // Tìm trên YouTube Music bằng tên bài + nghệ sĩ
+        const keyword   = `${track.title} ${track.author}`;
+        const searchRes = await global.axios.get(
+          `${FOWN_API}/api/search?ytsearch=${encodeURIComponent(keyword)}&svl=1`,
+          { timeout: 30000 }
+        );
+        const ytUrl = searchRes.data?.results?.[0]?.url || searchRes.data?.results?.[0]?.webpage_url;
+        if (!ytUrl) return send("❌ Không tìm thấy nhạc trên YouTube. Thử bài khác.");
 
-        if (!audioUrl) {
-          const keyword   = `${track.title} ${track.author}`;
-          const searchRes = await global.axios.get(
-            `${FOWN_API}/api/search?ytsearch=${encodeURIComponent(keyword)}&svl=1`,
-            { timeout: 30000 }
-          );
-          const ytmUrl = searchRes.data?.results?.[0]?.url || searchRes.data?.results?.[0]?.webpage_url;
-          if (!ytmUrl) return send("❌ Không tìm thấy nhạc. Thử bài khác.");
-          const mediaRes2 = await global.axios.get(
-            `${FOWN_API}/api/media?url=${encodeURIComponent(ytmUrl)}`,
-            { timeout: 120000 }
-          );
-          audioUrl = resolveUrl(mediaRes2.data?.download_audio_url || mediaRes2.data?.download_url || null);
-        }
+        const mediaRes = await global.axios.get(
+          `${FOWN_API}/api/media?url=${encodeURIComponent(ytUrl)}`,
+          { timeout: 120000 }
+        );
+        audioUrl = resolveUrl(mediaRes.data?.download_audio_url || mediaRes.data?.download_url || null);
 
         if (!audioUrl) return send("❌ Không lấy được link tải. Thử lại sau.");
         let cardPath;

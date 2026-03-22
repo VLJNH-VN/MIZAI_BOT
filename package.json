@@ -28,6 +28,7 @@
     "jsqr": "^1.4.0",
     "qrcode": "^1.5.4",
     "sharp": "^0.34.5",
+    "spotify-web-api-node": "^5.0.2",
     "sql.js": "^1.14.1",
     "string-similarity": "^4.0.4",
     "zca-js": "^2.1.2"

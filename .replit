@@ -54,3 +54,5 @@ channel = "stable-25_05"
 [userenv.shared]
 CLOUDFLARE_API_TOKEN = "cfut_vyhFLWn4n22JD5cTirGdvB7QLcfmRcA6wUNWUX5R98ccd0d6"
 GITHUB_REPO = "VLJNH-VN/flux-image-gen"
+SPOTIFY_CLIENT_ID = "1530d567ec6542669896bc96efd370f3"
+SPOTIFY_CLIENT_SECRET = "6e0241b124da40dfb98728b7f29cedfd"

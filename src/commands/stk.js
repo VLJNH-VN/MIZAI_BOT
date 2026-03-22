@@ -78,7 +78,7 @@ async function sendZaloSticker(api, keyword, threadID, threadType) {
   if (!results || results.length === 0) return false;
   const sticker = results[Math.floor(Math.random() * results.length)];
   await api.sendSticker(
-    { id: sticker.sticker_id, cateId: sticker.cate_id, type: sticker.type ?? 1 },
+    { id: sticker.sticker_id, cateId: sticker.cate_id, type: sticker.type || 1 },
     threadID,
     threadType
   );

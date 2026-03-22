@@ -211,7 +211,13 @@ async function extractMediaUrl(event, api, threadID, args) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ffmpegRun(...args) {
-  const bin    = (() => { try { return require("ffmpeg-static"); } catch { return "ffmpeg"; } })();
+  const bin = (() => {
+    try {
+      const p = require("ffmpeg-static");
+      if (p && fs.existsSync(p)) return p;
+    } catch (_) {}
+    return "ffmpeg";
+  })();
   const result = spawnSync(bin, args, { timeout: 120_000, maxBuffer: 100 * 1024 * 1024 });
   if (result.error) throw result.error;
   if (result.status !== 0) {

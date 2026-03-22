@@ -6,7 +6,7 @@
  * global.cawr — Thư viện tiện ích dùng chung toàn bot
  *
  * ┌─────────────────────────────────────────────────────────────────────────┐
- * │  global.cawr.tt — Bộ công cụ TikTok (không dùng API bên ngoài)         │
+ * │  global.cawr.tt — Bộ công cụ TikTok (qua fown.onrender.com)            │
  * ├────────────────────────┬────────────────────────────────────────────────┤
  * │  .search(q, limit)     │ Tìm video bằng từ khóa trực tiếp TikTok       │
  * │  .getUserVideos(uid)   │ Lấy toàn bộ video từ @username trực tiếp      │
@@ -21,32 +21,12 @@
  * │  .bulkAdd(n,q,lim)     │ Pipeline đầy đủ: tìm→tải→upload→lưu           │
  * └────────────────────────┴────────────────────────────────────────────────┘
  *
- * Cấu hình trong config.json:
- *   "tiktokCookie": "<cookie TikTok>"  — bắt buộc cho tìm theo từ khóa
- *   (lấy @username không cần cookie)
+ * Mọi chức năng TikTok đều đi qua https://fown.onrender.com — không cần cookie.
  */
 
-const fs     = require("fs");
-const path   = require("path");
-const axios  = require("axios");
-const crypto = require("crypto");
-
-const TikTok = require("@tobyg74/tiktok-api-dl");
-
-function generateMsToken(len = 148) {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-  const bytes = crypto.randomBytes(len);
-  return Array.from(bytes, b => chars[b % chars.length]).join("");
-}
-
-function buildFullCookie(baseCookie) {
-  const hasMs      = /msToken=/.test(baseCookie);
-  const hasChain   = /tt_chain_token=/.test(baseCookie);
-  let cookie = baseCookie;
-  if (!hasMs)    cookie += `; msToken=${generateMsToken()}`;
-  if (!hasChain) cookie += `; tt_chain_token=${generateMsToken(24)}`;
-  return cookie;
-}
+const fs    = require("fs");
+const path  = require("path");
+const axios = require("axios");
 
 const LISTAPI_DIR  = path.join(process.cwd(), "includes", "listapi");
 const TEMP_DIR     = path.join(process.cwd(), "includes", "cache");
@@ -119,61 +99,40 @@ function addHistory(videoId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  TikTok — Search theo từ khoá (trực tiếp, không qua API ngoài)
-//  Yêu cầu: global.config.tiktokCookie
-//  Mỗi page ~10 kết quả, phân trang để đủ limit (max 50)
+//  TikTok — Search theo từ khoá qua fown API
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Tìm video TikTok trực tiếp qua tiktok-api-dl, trả về mảng item chuẩn hoá.
+ * Tìm video TikTok qua fown /api/search?ttsearch=, trả về mảng item chuẩn hoá.
  * @param {string} query
  * @param {number} limit  1-50
  * @returns {Promise<Array<{ id, videoUrl, tiktokUrl, title, author }>>}
  */
 async function search(query, limit = 8) {
-  const cookie = global.config?.tiktokCookie;
-  if (!cookie) throw new Error("Chưa có tiktokCookie trong config.json");
-
   const safeLimit = Math.min(Math.max(1, limit), 50);
-  const results   = [];
-  let page = 1;
 
-  while (results.length < safeLimit) {
-    let res;
-    try {
-      res = await TikTok.Search(query, { type: "video", cookie, page });
-    } catch (e) {
-      global.logWarn?.(`[cawr.tt] search page ${page} lỗi: ${e.message}`);
-      break;
-    }
+  const res = await axios.get(`${FOWN_API}/api/search`, {
+    params:  { ttsearch: query, svl: safeLimit },
+    timeout: 30000,
+  });
 
-    if (res.status !== "success" || !Array.isArray(res.result) || res.result.length === 0) {
-      global.logWarn?.(`[cawr.tt] search page ${page}: ${res.message || "không có kết quả"}`);
-      break;
-    }
-
-    for (const v of res.result) {
-      if (results.length >= safeLimit) break;
-      const videoUrl = v.video?.downloadAddr || v.video?.playAddr || null;
-      if (!videoUrl) continue;
-      const uid = String(v.id || `${Date.now()}_${Math.random().toString(36).slice(2,6)}`);
-      const tiktokUrl = `https://www.tiktok.com/@${v.author?.uniqueId || "unknown"}/video/${uid}`;
-      results.push({
-        id:        uid,
-        videoUrl,
-        tiktokUrl,
-        title:     v.desc     || "",
-        author:    v.author?.uniqueId || "",
-      });
-    }
-
-    page++;
-    if (results.length < safeLimit) {
-      await new Promise(r => setTimeout(r, 600));
-    }
+  const videos = res.data?.results;
+  if (!Array.isArray(videos) || videos.length === 0) {
+    return [];
   }
 
-  return results;
+  return videos.slice(0, safeLimit).map(v => {
+    const uid       = String(v.id || `${Date.now()}_${Math.random().toString(36).slice(2,6)}`);
+    const tiktokUrl = v.url || `https://www.tiktok.com/@${v.uploader || "unknown"}/video/${uid}`;
+    return {
+      id:        uid,
+      videoUrl:  null,
+      tiktokUrl,
+      title:     v.title    || "",
+      author:    v.uploader || "",
+      _useFown:  true,
+    };
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -191,55 +150,24 @@ async function getUserVideos(username, limit = "all") {
   const uid = username.replace(/^@/, "");
   const svl = (limit === "all" || !limit) ? "all" : Math.max(1, Number(limit));
 
-  // ── Thử fown API trước ────────────────────────────────────────────────────
-  try {
-    const res = await axios.get(`${FOWN_API}/api/search`, {
-      params: { ttuser: uid, svl },
-      timeout: 60000,
-      validateStatus: () => true,
-    });
+  const res = await axios.get(`${FOWN_API}/api/search`, {
+    params:  { ttuser: uid, svl },
+    timeout: 60000,
+  });
 
-    if (res.status === 200) {
-      const videos = res.data?.results;
-      if (Array.isArray(videos) && videos.length > 0) {
-        return videos.map(v => ({
-          id:        String(v.id || `${Date.now()}_${Math.random().toString(36).slice(2,6)}`),
-          videoUrl:  null,
-          tiktokUrl: v.url || `https://www.tiktok.com/@${uid}/video/${v.id}`,
-          title:     v.title || "",
-          author:    uid,
-          _useFown:  true,
-        }));
-      }
-    }
-    const errDetail = res.data?.error || res.data?.message || `HTTP ${res.status}`;
-    global.logWarn?.(`[cawr.tt] Fown API thất bại (${errDetail}), fallback TikTok package…`);
-  } catch (e) {
-    global.logWarn?.(`[cawr.tt] Fown API lỗi mạng: ${e.message}, fallback TikTok package…`);
-  }
-
-  // ── Fallback: TikTok.GetUserPosts (không cần cookie) ─────────────────────
-  const cookie = global.config?.tiktokCookie;
-  const maxCount = (svl === "all" || !svl) ? 35 : Math.min(Number(svl), 35);
-  const result = await TikTok.GetUserPosts(uid, { count: maxCount, cookie: cookie || undefined });
-
-  if (result?.status !== "success" || !Array.isArray(result.result) || result.result.length === 0) {
+  const videos = res.data?.results;
+  if (!Array.isArray(videos) || videos.length === 0) {
     throw new Error(`Không tìm thấy video nào của @${uid}`);
   }
 
-  return result.result.map(v => {
-    const vid      = String(v.id || `${Date.now()}_${Math.random().toString(36).slice(2,6)}`);
-    const author   = v.author?.uniqueId || uid;
-    const tiktokUrl = `https://www.tiktok.com/@${author}/video/${vid}`;
-    return {
-      id:         vid,
-      videoUrl:   null,
-      tiktokUrl,
-      title:      v.desc || "",
-      author,
-      _useFown:   true,   // Tải qua fown /api/download (search broken nhưng download OK)
-    };
-  });
+  return videos.map(v => ({
+    id:        String(v.id || `${Date.now()}_${Math.random().toString(36).slice(2,6)}`),
+    videoUrl:  null,
+    tiktokUrl: v.url || `https://www.tiktok.com/@${uid}/video/${v.id}`,
+    title:     v.title || "",
+    author:    uid,
+    _useFown:  true,
+  }));
 }
 
 /**

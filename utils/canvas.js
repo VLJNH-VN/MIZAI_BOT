@@ -946,11 +946,15 @@ async function drawAllCommandsCard({ commands, page, totalPages, total, prefix =
  */
 async function drawUptimeCard({
   uptimeStr, startTime, vnTime,
-  ramPct, cpuPct, usedMem, totalMem,
+  ramPct, cpuPct, cpuModel,
+  usedMem, totalMem, freeMem,
   nodeVer, cmdCount, prefix,
+  pingMs, threadCount, ramWarning,
+  hostname, localIP, platform,
+  restartCount, firstStart,
   bgImagePath,
 }) {
-  const W = 900, H = 500;
+  const W = 960, H = 660;
   const canvas = createCanvas(W, H);
   const ctx    = canvas.getContext("2d");
 
@@ -961,149 +965,192 @@ async function drawUptimeCard({
       ctx.drawImage(bg, 0, 0, W, H);
     } catch (_) {
       const grad = ctx.createLinearGradient(0, 0, W, H);
-      grad.addColorStop(0, "#080020");
-      grad.addColorStop(1, "#001040");
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, W, H);
+      grad.addColorStop(0, "#080020"); grad.addColorStop(1, "#001040");
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
     }
   } else {
     const grad = ctx.createLinearGradient(0, 0, W, H);
-    grad.addColorStop(0, "#080020");
-    grad.addColorStop(1, "#001040");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
+    grad.addColorStop(0, "#080020"); grad.addColorStop(1, "#001040");
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
   }
 
   // ── Dark overlay ───────────────────────────────────────────────────────────
-  ctx.fillStyle = "rgba(0,0,0,0.62)";
+  ctx.fillStyle = "rgba(0,0,0,0.65)";
   ctx.fillRect(0, 0, W, H);
 
-  // ── Panel ──────────────────────────────────────────────────────────────────
-  const PAD = 28, PW = W - PAD * 2, PH = H - PAD * 2;
+  // ── Outer panel ────────────────────────────────────────────────────────────
+  const PAD = 24, PW = W - PAD * 2, PH = H - PAD * 2;
   ctx.save();
   roundRect(ctx, PAD, PAD, PW, PH, 18);
-  ctx.fillStyle   = "rgba(10,5,40,0.72)";
+  ctx.fillStyle   = "rgba(8,4,32,0.75)";
   ctx.fill();
   ctx.strokeStyle = "#7c5cfc88";
   ctx.lineWidth   = 1.5;
   ctx.stroke();
   ctx.restore();
 
-  // ── Neon border glow top ───────────────────────────────────────────────────
+  // ── Neon top border ────────────────────────────────────────────────────────
   const topGlow = ctx.createLinearGradient(PAD, PAD, PAD + PW, PAD);
-  topGlow.addColorStop(0,   "transparent");
+  topGlow.addColorStop(0, "transparent");
   topGlow.addColorStop(0.3, "#00e5ff");
   topGlow.addColorStop(0.7, "#7c5cfc");
-  topGlow.addColorStop(1,   "transparent");
-  ctx.strokeStyle = topGlow;
-  ctx.lineWidth   = 2;
+  topGlow.addColorStop(1, "transparent");
+  ctx.strokeStyle = topGlow; ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.moveTo(PAD + 18, PAD);
-  ctx.lineTo(PAD + PW - 18, PAD);
+  ctx.moveTo(PAD + 18, PAD); ctx.lineTo(PAD + PW - 18, PAD);
   ctx.stroke();
 
-  // ── Header ─────────────────────────────────────────────────────────────────
-  ctx.font      = "bold 13px monospace";
-  ctx.fillStyle = "#00e5ffcc";
-  ctx.fillText("⚡  SYSTEM UPTIME  ⚡", PAD + 20, PAD + 32);
+  // ── Header band ────────────────────────────────────────────────────────────
+  const headerGrad = ctx.createLinearGradient(PAD, PAD, PAD + PW, PAD + 80);
+  headerGrad.addColorStop(0, "#7c5cfc22"); headerGrad.addColorStop(1, "transparent");
+  ctx.fillStyle = headerGrad;
+  roundRect(ctx, PAD, PAD, PW, 80, 18); ctx.fill();
 
-  ctx.font      = "bold 26px sans-serif";
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText("MiZai Bot v2.0.0", PAD + 20, PAD + 66);
+  ctx.font = "bold 13px monospace"; ctx.fillStyle = "#00e5ffcc";
+  ctx.fillText("⚡  SYSTEM UPTIME  ⚡", PAD + 20, PAD + 28);
+  ctx.font = "bold 28px sans-serif"; ctx.fillStyle = "#ffffff";
+  ctx.fillText("MiZai Bot  v3.0.0", PAD + 20, PAD + 62);
 
-  ctx.fillStyle = "#7c5cfc55";
-  ctx.fillRect(PAD + 20, PAD + 76, PW - 40, 1);
-
-  // ── Watermark ──────────────────────────────────────────────────────────────
-  ctx.font      = "bold 12px sans-serif";
-  ctx.fillStyle = "#7c5cfc77";
+  ctx.font = "bold 12px sans-serif"; ctx.fillStyle = "#7c5cfc99";
   ctx.textAlign = "right";
-  ctx.fillText("✦ Mizai Bot", PAD + PW - 16, PAD + 28);
+  ctx.fillText("✦ Mizai Bot", PAD + PW - 16, PAD + 24);
   ctx.textAlign = "left";
 
-  // ── Left column — time info ─────────────────────────────────────────────────
-  const colX = PAD + 20;
-  const colY  = PAD + 100;
-  const LH    = 38;
-
-  const rows1 = [
-    { icon: "⏰", label: "Thời gian", val: vnTime },
-    { icon: "🚀", label: "Khởi động", val: startTime },
-    { icon: "⏳", label: "Hoạt động", val: uptimeStr },
-    { icon: "🔧", label: "Node.js",   val: nodeVer },
-    { icon: "⚙️",  label: "Prefix",   val: prefix },
-    { icon: "📦", label: "Số lệnh",  val: `${cmdCount} lệnh` },
-  ];
-
-  rows1.forEach((r, i) => {
-    const y = colY + i * LH;
-    ctx.font      = "bold 14px sans-serif";
-    ctx.fillStyle = "#00e5ffbb";
-    ctx.fillText(r.icon, colX, y);
-    ctx.fillStyle = "#aaaacc";
-    ctx.fillText(r.label, colX + 26, y);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(r.val, colX + 130, y);
-  });
-
-  // ── Divider vertical ───────────────────────────────────────────────────────
-  const divX = W / 2 + 10;
   ctx.fillStyle = "#7c5cfc44";
-  ctx.fillRect(divX, PAD + 86, 1, PH - 92);
+  ctx.fillRect(PAD + 20, PAD + 72, PW - 40, 1);
 
-  // ── Right column — gauges ──────────────────────────────────────────────────
-  const rX   = divX + 24;
-  const barW  = PW - (rX - PAD) - 30;
-  const barH  = 18;
+  // ── Layout grid ────────────────────────────────────────────────────────────
+  const bodyY  = PAD + 88;
+  const BODY_H = H - bodyY - PAD - 50;
+  const COL1X  = PAD + 18;
+  const COL2X  = W / 2 + 12;
+  const COL_W  = W / 2 - PAD - 12;
+  const LH     = 34;
 
-  function drawGauge(label, pct, color, y) {
-    ctx.font      = "bold 13px monospace";
-    ctx.fillStyle = "#aaaacc";
-    ctx.fillText(label, rX, y);
-
-    const pctStr = `${pct}%`;
-    ctx.font      = "bold 14px sans-serif";
-    ctx.fillStyle = color;
-    ctx.textAlign = "right";
-    ctx.fillText(pctStr, rX + barW, y);
-    ctx.textAlign = "left";
-
-    const trackY = y + 6;
-    ctx.fillStyle = "#ffffff18";
-    roundRect(ctx, rX, trackY, barW, barH, 5);
-    ctx.fill();
-
-    const fill = Math.round((pct / 100) * barW);
-    const fillGrad = ctx.createLinearGradient(rX, 0, rX + fill, 0);
-    fillGrad.addColorStop(0, color + "99");
-    fillGrad.addColorStop(1, color);
-    ctx.fillStyle = fillGrad;
-    roundRect(ctx, rX, trackY, fill, barH, 5);
-    ctx.fill();
+  // helper: draw a labelled row
+  function infoRow(icon, label, val, x, y, valColor = "#ffffff") {
+    ctx.font = "14px sans-serif"; ctx.fillStyle = "#00e5ffaa";
+    ctx.fillText(icon, x, y);
+    ctx.fillStyle = "#9999bb";
+    ctx.fillText(label, x + 24, y);
+    ctx.fillStyle = valColor;
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillText(val, x + 148, y);
   }
 
-  const rY = colY;
-  ctx.font      = "bold 16px sans-serif";
-  ctx.fillStyle = "#00e5ff";
-  ctx.fillText("📊  Tài Nguyên Hệ Thống", rX, rY - 10);
+  // helper: section label
+  function sectionLabel(label, x, y, color = "#00e5ff") {
+    ctx.font = "bold 13px monospace"; ctx.fillStyle = color;
+    ctx.fillText(label, x, y);
+    ctx.fillStyle = color + "33";
+    ctx.fillRect(x, y + 4, COL_W - 10, 1);
+  }
 
-  drawGauge(`🔩 CPU Load`, cpuPct, "#00e5ff", rY + 32);
-  drawGauge(`💾 RAM  ${usedMem}MB / ${totalMem}MB`, ramPct, "#7c5cfc", rY + 32 + 60);
+  // ── LEFT COLUMN ────────────────────────────────────────────────────────────
+  let ly = bodyY + 18;
 
-  // ── RAM free text ──────────────────────────────────────────────────────────
-  const freeMB   = Math.round((100 - ramPct) / 100 * parseFloat(totalMem));
-  const freeGB   = (freeMB / 1024).toFixed(2);
-  ctx.font      = "13px sans-serif";
-  ctx.fillStyle = "#66cc88";
-  ctx.fillText(`🔋 RAM trống: ${freeGB} GB`, rX, rY + 32 + 60 + 44);
+  sectionLabel("◈ THỜI GIAN & UPTIME", COL1X, ly); ly += 20;
+  infoRow("⏰", "Thời gian :", vnTime,    COL1X, ly); ly += LH;
+  infoRow("🚀", "Khởi động :", startTime, COL1X, ly); ly += LH;
+  infoRow("⏳", "Hoạt động :", uptimeStr, COL1X, ly, "#00e5ff"); ly += LH;
+  infoRow("🔁", "Restarts  :", `${restartCount} lần`, COL1X, ly, "#ffcc44"); ly += LH;
+  infoRow("📅", "Từ ngày   :", firstStart, COL1X, ly); ly += LH + 8;
 
-  // ── Status badge ───────────────────────────────────────────────────────────
-  const badgeY = H - PAD - 28;
-  const badgeTxt = "🛠️  Trạng thái: Đang chạy ổn định  ✅";
-  ctx.font      = "bold 14px sans-serif";
-  ctx.fillStyle = "#00e5ff";
+  sectionLabel("◈ BOT INFO", COL1X, ly); ly += 20;
+  infoRow("🏓", "Ping API  :", `${pingMs}ms  ${pingMs < 200 ? "🟢" : pingMs < 500 ? "🟡" : "🔴"}`, COL1X, ly,
+    pingMs < 200 ? "#44ff88" : pingMs < 500 ? "#ffcc00" : "#ff4444"); ly += LH;
+  infoRow("💬", "Threads   :", `${threadCount} nhóm`, COL1X, ly, "#a78bfa"); ly += LH;
+  infoRow("📦", "Số lệnh   :", `${cmdCount} lệnh`,   COL1X, ly); ly += LH;
+  infoRow("⚙️", "Prefix    :", prefix,               COL1X, ly); ly += LH + 8;
+
+  sectionLabel("◈ MẠNG", COL1X, ly); ly += 20;
+  infoRow("🌐", "Hostname  :", hostname,  COL1X, ly); ly += LH;
+  infoRow("📡", "IP nội bộ :", localIP,   COL1X, ly, "#44ddff"); ly += LH;
+  infoRow("🖥️", "OS        :", platform,  COL1X, ly); ly += LH;
+  infoRow("🔧", "Node.js   :", nodeVer,   COL1X, ly); ly += LH;
+
+  // ── Vertical divider ───────────────────────────────────────────────────────
+  ctx.fillStyle = "#7c5cfc33";
+  ctx.fillRect(W / 2 + 2, bodyY, 1, BODY_H);
+
+  // ── RIGHT COLUMN ───────────────────────────────────────────────────────────
+  let ry = bodyY + 18;
+  const barW = COL_W - 20, barH = 18;
+
+  function drawGauge(label, pct, color, y, warn = false) {
+    const gc = warn && pct >= 85 ? "#ff4444" : color;
+    ctx.font = "bold 13px monospace"; ctx.fillStyle = warn && pct >= 85 ? "#ff4444" : "#aaaacc";
+    ctx.fillText(label, COL2X, y);
+
+    ctx.font = "bold 14px sans-serif"; ctx.fillStyle = gc;
+    ctx.textAlign = "right";
+    ctx.fillText(`${pct}%${warn && pct >= 85 ? " ⚠️" : ""}`, COL2X + barW, y);
+    ctx.textAlign = "left";
+
+    const ty = y + 5;
+    ctx.fillStyle = "#ffffff15";
+    roundRect(ctx, COL2X, ty, barW, barH, 5); ctx.fill();
+
+    const fill  = Math.max(4, Math.round((pct / 100) * barW));
+    const fgrad = ctx.createLinearGradient(COL2X, 0, COL2X + fill, 0);
+    fgrad.addColorStop(0, gc + "88"); fgrad.addColorStop(1, gc);
+    ctx.fillStyle = fgrad;
+    roundRect(ctx, COL2X, ty, fill, barH, 5); ctx.fill();
+  }
+
+  sectionLabel("◈ TÀI NGUYÊN HỆ THỐNG", COL2X, ry, "#a78bfa"); ry += 24;
+
+  ctx.font = "13px sans-serif"; ctx.fillStyle = "#9999bb";
+  ctx.fillText(`🔩 CPU: ${cpuModel || ""}`, COL2X, ry); ry += 20;
+  drawGauge("CPU Load", cpuPct, "#00e5ff", ry); ry += LH + 14;
+
+  const ramFreeGB = ((parseFloat(totalMem) - parseFloat(usedMem)) / 1024).toFixed(2);
+  ctx.font = "13px sans-serif"; ctx.fillStyle = "#9999bb";
+  ctx.fillText(`💾 RAM: ${usedMem}MB / ${totalMem}MB  (${ramFreeGB}GB trống)`, COL2X, ry); ry += 20;
+  drawGauge("RAM Usage", ramPct, "#7c5cfc", ry, true); ry += LH + 22;
+
+  // ── Mini stat boxes ────────────────────────────────────────────────────────
+  sectionLabel("◈ THỐNG KÊ NHANH", COL2X, ry, "#00e5ff"); ry += 22;
+  const boxes = [
+    { label: "Ping",     val: `${pingMs}ms`,        color: pingMs < 200 ? "#44ff88" : "#ffcc00" },
+    { label: "Threads",  val: `${threadCount}`,      color: "#a78bfa" },
+    { label: "Lệnh",     val: `${cmdCount}`,         color: "#00e5ff" },
+    { label: "Restarts", val: `${restartCount}`,     color: "#ffcc44" },
+  ];
+  const BW = Math.floor((barW - 12) / 2), BH = 56;
+  boxes.forEach((b, i) => {
+    const bx = COL2X + (i % 2) * (BW + 12);
+    const by = ry + Math.floor(i / 2) * (BH + 10);
+    ctx.fillStyle = b.color + "18";
+    roundRect(ctx, bx, by, BW, BH, 8); ctx.fill();
+    ctx.strokeStyle = b.color + "55"; ctx.lineWidth = 1;
+    roundRect(ctx, bx, by, BW, BH, 8); ctx.stroke();
+    ctx.font = "bold 20px sans-serif"; ctx.fillStyle = b.color;
+    ctx.textAlign = "center";
+    ctx.fillText(b.val, bx + BW / 2, by + 28);
+    ctx.font = "11px sans-serif"; ctx.fillStyle = "#888899";
+    ctx.fillText(b.label, bx + BW / 2, by + 46);
+    ctx.textAlign = "left";
+  });
+
+  // ── Status footer bar ──────────────────────────────────────────────────────
+  const fY = H - PAD - 44;
+  const statusOk = !ramWarning;
+  const fGrad = ctx.createLinearGradient(PAD, fY, PAD + PW, fY);
+  fGrad.addColorStop(0, statusOk ? "#00443322" : "#44000022");
+  fGrad.addColorStop(1, statusOk ? "#00664422" : "#66000022");
+  ctx.fillStyle = fGrad;
+  roundRect(ctx, PAD + 8, fY, PW - 16, 36, 8); ctx.fill();
+  ctx.strokeStyle = statusOk ? "#00cc6655" : "#cc222255"; ctx.lineWidth = 1;
+  roundRect(ctx, PAD + 8, fY, PW - 16, 36, 8); ctx.stroke();
+
+  const statusTxt = statusOk
+    ? "✅  Hệ thống đang chạy ổn định"
+    : `⚠️  RAM cao (${ramPct}%) — Cân nhắc restart bot!`;
+  ctx.font = "bold 15px sans-serif";
+  ctx.fillStyle = statusOk ? "#44dd88" : "#ff6644";
   ctx.textAlign = "center";
-  ctx.fillText(badgeTxt, W / 2, badgeY);
+  ctx.fillText(statusTxt, W / 2, fY + 23);
   ctx.textAlign = "left";
 
   return savePng(canvas, "uptime_card");

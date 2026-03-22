@@ -345,72 +345,98 @@ function setApi(apiInstance) {
    *   URL này Zalo server chấp nhận trong api.sendVideo (raw.githubusercontent.com bị reject).
    */
   global.githubReleaseUpload = async (localFilePath, filename, options = {}) => {
-    const token = global.config?.githubToken;
-    const repo  = options.repo || global.config?.uploadRepo || global.config?.repo;
+    const token = global.config && global.config.githubToken;
+    const repo  = options.repo || (global.config && (global.config.uploadRepo || global.config.repo));
     const tag   = options.tag  || "vd-upload";
 
     if (!token) throw new Error("[githubReleaseUpload] Thiếu githubToken trong config.json");
     if (!repo)  throw new Error("[githubReleaseUpload] Thiếu uploadRepo trong config.json");
 
     const headers = {
-      Authorization: `token ${token}`,
+      Authorization: "token " + token,
       Accept: "application/vnd.github.v3+json",
       "User-Agent": "MIZAI_BOT"
     };
 
-    const [owner, repoName] = repo.split("/");
+    const parts    = repo.split("/");
+    const owner    = parts[0];
+    const repoName = parts[1];
 
     // Tìm release với tag đã tồn tại hoặc tạo mới
     let releaseId;
     try {
       const existing = await axios.get(
-        `https://api.github.com/repos/${owner}/${repoName}/releases/tags/${tag}`,
+        "https://api.github.com/repos/" + owner + "/" + repoName + "/releases/tags/" + tag,
         { headers }
       );
       releaseId = existing.data.id;
     } catch (_) {
       const created = await axios.post(
-        `https://api.github.com/repos/${owner}/${repoName}/releases`,
+        "https://api.github.com/repos/" + owner + "/" + repoName + "/releases",
         { tag_name: tag, name: tag, body: "Auto-upload by MIZAI bot", draft: false, prerelease: false },
         { headers }
       );
       releaseId = created.data.id;
     }
 
-    // Xóa asset cũ cùng tên nếu tồn tại (tránh conflict)
+    // Xóa TẤT CẢ asset bị kẹt (trạng thái "uploaded" hoặc trùng tên) trước khi upload
     try {
       const assets = await axios.get(
-        `https://api.github.com/repos/${owner}/${repoName}/releases/${releaseId}/assets`,
+        "https://api.github.com/repos/" + owner + "/" + repoName + "/releases/" + releaseId + "/assets",
         { headers }
       );
-      const dup = assets.data.find(a => a.name === filename);
-      if (dup) {
-        await axios.delete(
-          `https://api.github.com/repos/${owner}/${repoName}/releases/assets/${dup.id}`,
-          { headers }
-        );
+      const toDelete = assets.data.filter(function(a) {
+        return a.name === filename || a.state === "new";
+      });
+      for (var i = 0; i < toDelete.length; i++) {
+        try {
+          await axios.delete(
+            "https://api.github.com/repos/" + owner + "/" + repoName + "/releases/assets/" + toDelete[i].id,
+            { headers }
+          );
+        } catch (_) {}
       }
     } catch (_) {}
 
-    // Upload asset
+    // Upload asset — retry tối đa 3 lần, đổi tên file nếu gặp 422
     const fileData = fs.readFileSync(localFilePath);
-    const uploadRes = await axios.post(
-      `https://uploads.github.com/repos/${owner}/${repoName}/releases/${releaseId}/assets?name=${encodeURIComponent(filename)}`,
-      fileData,
-      {
-        headers: {
-          ...headers,
-          "Content-Type": "application/octet-stream",
-          "Content-Length": fileData.length,
-        },
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity,
-      }
-    );
+    var uploadFilename = filename;
+    var lastErr = null;
 
-    // Trả về browser_download_url (stable URL, Zalo server tự follow redirect khi play)
-    // Không resolve redirect vì URL đã resolve có thể là signed/time-limited URL
-    return uploadRes.data?.browser_download_url || null;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        // Đổi tên để tránh xung đột với asset cũ chưa xóa được
+        var ext   = uploadFilename.lastIndexOf(".");
+        var base  = ext >= 0 ? uploadFilename.slice(0, ext) : uploadFilename;
+        var suffix = ext >= 0 ? uploadFilename.slice(ext) : "";
+        uploadFilename = base + "_r" + attempt + suffix;
+        // Chờ 2 giây trước khi thử lại
+        await new Promise(function(r) { setTimeout(r, 2000); });
+      }
+
+      try {
+        var uploadRes = await axios.post(
+          "https://uploads.github.com/repos/" + owner + "/" + repoName + "/releases/" + releaseId + "/assets?name=" + encodeURIComponent(uploadFilename),
+          fileData,
+          {
+            headers: Object.assign({}, headers, {
+              "Content-Type": "application/octet-stream",
+              "Content-Length": fileData.length,
+            }),
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+          }
+        );
+        return uploadRes.data && uploadRes.data.browser_download_url || null;
+      } catch (err) {
+        lastErr = err;
+        var status = err.response && err.response.status;
+        // Chỉ retry khi gặp 422 (conflict) hoặc 5xx (server lỗi)
+        if (status !== 422 && (status < 500 || status > 599)) break;
+      }
+    }
+
+    throw lastErr;
   };
 
   global.githubDownload = async (repoFilePath, localFilePath, options = {}) => {

@@ -119,29 +119,51 @@ async function ytSearch(keyword) {
 
 // ── Spotify (Spotify Web API — Client Credentials) ────────────────────────────
 async function sptSearch(keyword) {
-  await ensureSpotifyToken();
-  let res;
+  // Thử Spotify trước
   try {
-    res = await spotifyApi.searchTracks(keyword, { limit: 6 });
+    await ensureSpotifyToken();
+    let res;
+    try {
+      res = await spotifyApi.searchTracks(keyword, { limit: 6 });
+    } catch (err) {
+      const sc = err?.statusCode || err?.status;
+      if (sc === 401 || sc === 403) {
+        _spotifyTokenExpiry = 0;
+        throw Object.assign(new Error("SPOTIFY_BLOCKED"), { spotifyBlocked: true });
+      }
+      throw err;
+    }
+    const items = res.body?.tracks?.items || [];
+    if (!items.length) throw Object.assign(new Error("SPOTIFY_EMPTY"), { spotifyBlocked: true });
+    return items.map(track => ({
+      id:        track.id || "",
+      title:     track.name || "Unknown",
+      author:    (track.artists || []).map(a => a.name).join(", ") || "Unknown",
+      duration:  track.duration_ms || 0,
+      _durSec:   Math.floor((track.duration_ms || 0) / 1000),
+      link:      track.external_urls?.spotify || "",
+      thumbnail: track.album?.images?.[0]?.url || "",
+      spotifyId: track.id || "",
+    }));
   } catch (err) {
-    const sc = err?.statusCode || err?.status;
-    if (sc === 401 || sc === 403) {
-      _spotifyTokenExpiry = 0;
-      throw new Error(`Spotify credentials không hợp lệ hoặc hết hạn (HTTP ${sc}). Vui lòng cập nhật spotifyClientId/spotifyClientSecret trong config.json.`);
+    if (err.spotifyBlocked) {
+      // Fallback: tìm trên YouTube thay thế
+      global.logWarn?.("[MUSIC:spt] Spotify bị chặn, fallback sang YouTube search...");
+      const ytTracks = await ytSearch(keyword);
+      return ytTracks.map(t => ({
+        id:        t.id || "",
+        title:     t.title || "Unknown",
+        author:    t.author || "Unknown",
+        duration:  t.duration || 0,
+        _durSec:   t._durSec || 0,
+        link:      t.link || "",
+        thumbnail: t.thumbnail || "",
+        spotifyId: "",
+        _ytFallback: true,
+      }));
     }
     throw err;
   }
-  const items = res.body?.tracks?.items || [];
-  return items.map(track => ({
-    id:        track.id || "",
-    title:     track.name || "Unknown",
-    author:    (track.artists || []).map(a => a.name).join(", ") || "Unknown",
-    duration:  track.duration_ms || 0,
-    _durSec:   Math.floor((track.duration_ms || 0) / 1000),
-    link:      track.external_urls?.spotify || "",
-    thumbnail: track.album?.images?.[0]?.url || "",
-    spotifyId: track.id || "",
-  }));
 }
 
 // ── Mixcloud ──────────────────────────────────────────────────────────────────
@@ -373,13 +395,16 @@ module.exports = {
         const durStr = track._durSec ? fmtDurationSec(track._durSec) : fmtDurationMs(track.duration);
         let audioUrl = null;
 
-        // Tìm trên YouTube Music bằng tên bài + nghệ sĩ
-        const keyword   = `${track.title} ${track.author}`;
-        const searchRes = await global.axios.get(
-          `${FOWN_API}/api/search?ytsearch=${encodeURIComponent(keyword)}&svl=1`,
-          { timeout: 30000 }
-        );
-        const ytUrl = searchRes.data?.results?.[0]?.url || searchRes.data?.results?.[0]?.webpage_url;
+        // Nếu đã có YouTube link (fallback), dùng luôn — ngược lại tìm trên YouTube
+        let ytUrl = track._ytFallback && track.link ? track.link : null;
+        if (!ytUrl) {
+          const keyword   = `${track.title} ${track.author}`;
+          const searchRes = await global.axios.get(
+            `${FOWN_API}/api/search?ytsearch=${encodeURIComponent(keyword)}&svl=1`,
+            { timeout: 30000 }
+          );
+          ytUrl = searchRes.data?.results?.[0]?.url || searchRes.data?.results?.[0]?.webpage_url;
+        }
         if (!ytUrl) return send("❌ Không tìm thấy nhạc trên YouTube. Thử bài khác.");
 
         const mediaRes = await global.axios.get(

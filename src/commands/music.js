@@ -192,7 +192,7 @@ const MIXCLOUD_HEADERS = {
 
 const SEARCH_QUERY = `query SearchResultsCloudcastsQuery($count: Int! $term: String! $cursor: String) {
   viewer { search { searchQuery(term: $term) { cloudcasts(first: $count, after: $cursor) {
-    edges { node { id name slug owner { displayName username } audioLength plays } cursor }
+    edges { node { id name slug owner { displayName username } audioLength plays picture { urlRoot } } cursor }
   } } } }
 }`;
 
@@ -225,11 +225,18 @@ async function mixSearch(term) {
   if (json?.errors) throw new Error(json.errors[0]?.message);
   const edges = json?.data?.viewer?.search?.searchQuery?.cloudcasts?.edges;
   if (!edges?.length) throw new Error("Không có kết quả từ Mixcloud");
-  return edges.map(({ node }) => ({
-    id: node.id, name: node.name || "Unknown", slug: node.slug || "",
-    owner: { displayName: node.owner?.displayName || node.owner?.username || "Unknown", username: node.owner?.username || "" },
-    audioLength: node.audioLength || 0, plays: node.plays || 0,
-  }));
+  return edges.map(({ node }) => {
+    const urlRoot = node.picture?.urlRoot || "";
+    const thumbnail = urlRoot
+      ? `https://thumbnailer.mixcloud.com/unsafe/600x600/${urlRoot}`
+      : "";
+    return {
+      id: node.id, name: node.name || "Unknown", slug: node.slug || "",
+      owner: { displayName: node.owner?.displayName || node.owner?.username || "Unknown", username: node.owner?.username || "" },
+      audioLength: node.audioLength || 0, plays: node.plays || 0,
+      thumbnail,
+    };
+  });
 }
 
 // ── SoundCloud ────────────────────────────────────────────────────────────────
@@ -332,9 +339,10 @@ module.exports = {
         const results = await mixSearch(query);
         const top5 = results.slice(0, 5);
         const cardTracks = top5.map(r => ({
-          title:  r.name,
-          owner:  r.owner,
-          _durStr: formatDuration(r.audioLength),
+          title:     r.name,
+          owner:     r.owner,
+          _durStr:   formatDuration(r.audioLength),
+          thumbnail: r.thumbnail || "",
         }));
         let cardPath;
         try { cardPath = await getCanvas().drawSearchCard({ platform: "mix", query, tracks: cardTracks }); } catch (_) {}
@@ -493,6 +501,7 @@ module.exports = {
           title:    r.name,
           artist:   r.owner.displayName,
           duration: formatDuration(r.audioLength),
+          thumb:    r.thumbnail || "",
         });
       } catch (_) {}
       let audioUrl = null;

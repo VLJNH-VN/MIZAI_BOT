@@ -47,9 +47,11 @@ module.exports = {
   //  │ registerReply   │ Đăng ký xử lý khi người dùng reply tin này           │
   //  │ registerReaction│ Đăng ký xử lý khi người dùng react tin này           │
   //  │ registerUndo    │ Đăng ký xử lý khi tin này bị thu hồi                │
-  //  │ reactLoading()  │ React ⏳ báo hiệu đang xử lý                         │
-  //  │ reactSuccess()  │ React ✅ khi xong                                     │
-  //  │ reactError()    │ React ❌ khi lỗi                                      │
+  //  │ reactLoading()       │ React ⏳ báo hiệu đang xử lý                    │
+  //  │ reactSuccess()       │ React ✅ khi xong                                │
+  //  │ reactError()         │ React ❌ khi lỗi                                 │
+  //  │ sendReaction(t,rT)   │ React text/icon tự do (rType mặc định 75)        │
+  //  │ REACT.OK / REACT.LOL │ Hằng text reaction import được                  │
   //  └─────────────────┴──────────────────────────────────────────────────────┘
   // ════════════════════════════════════════════════════════════════
   run: async ({
@@ -58,6 +60,7 @@ module.exports = {
     isBotAdmin, isGroupAdmin,
     registerReply, registerReaction, registerUndo,
     reactLoading, reactSuccess, reactError,
+    sendReaction, REACT,
   }) => {
 
     // ── Chặn nếu không phải nhóm ───────────────────────────────────

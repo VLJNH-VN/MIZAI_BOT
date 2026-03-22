@@ -4,7 +4,7 @@ const { isBotAdmin, isGroupAdmin } = require("../../utils/bot/botManager");
 const { extractBody } = require("../../utils/bot/messageUtils");
 const stringSimilarity = require("string-similarity");
 const { registerReply } = require("./handleReply");
-const { registerReaction, reactError, reactSuccess, reactLoading } = require("./handleReaction");
+const { registerReaction, reactError, reactSuccess, reactLoading, sendReaction, REACT } = require("./handleReaction");
 const { registerUndo } = require("./handleUndo");
 const { readConfig } = require("../../utils/media/helpers");
 const { getRentInfo, isRentExpired } = require("../database/moderation/rent");
@@ -232,6 +232,7 @@ async function handleCommand({ api, event, commands, prefix }) {
       isBotAdmin, isGroupAdmin,
       registerReply, registerReaction, registerUndo,
       reactError, reactSuccess, reactLoading,
+      sendReaction, REACT,
     });
     const execTime = Date.now() - startTime;
 

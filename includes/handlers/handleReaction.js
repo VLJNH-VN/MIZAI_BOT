@@ -1,52 +1,115 @@
 /**
  * handleReaction – xử lý sự kiện cảm xúc (reaction):
- * - Log chi tiết reaction vào console
+ * - sendReaction: gửi reaction dạng text/icon tự do (rType 75 = custom)
+ * - reactLoading / reactSuccess / reactError dùng text/icon import được từ lệnh
  * - Tự động gỡ tin nhắn bot khi bị thả reaction phẫn nộ (😡)
  * - Gọi onReaction của các command đã đăng ký theo dõi tin nhắn đó
  */
 
 const { ThreadType, Reactions } = require("zca-js");
+const { createTtlStore }        = require("./ttlStore");
 
-// ── Icon reaction constants (must use zca-js Reactions codes, not Unicode emoji) ──
-const ICON_LOADING = Reactions.WOW;      // ":o"      → 😮 processing/wait
-const ICON_SUCCESS = Reactions.LIKE;     // "/-strong" → 👍 done
-const ICON_ERROR   = Reactions.DISLIKE;  // "/-weak"   → 👎 failed
+// ══════════════════════════════════════════════════════════════════════════════
+// REACT TEXT / ICON CONSTANTS  —  import từ lệnh để dùng thống nhất
+// ══════════════════════════════════════════════════════════════════════════════
 
 /**
- * React icon lên tin nhắn của người dùng (event.data)
- * @param {object} api
- * @param {object} event  – event chứa type, threadId, data
- * @param {string} icon   – emoji icon
+ * Bộ text/icon reaction dùng với sendReaction (rType 75 – custom).
+ * Lệnh có thể import và dùng:
+ *
+ *   const { REACT, sendReaction } = require("../../includes/handlers/handleReaction");
+ *   await sendReaction(api, event, REACT.OK);
  */
-async function reactToEvent(api, event, icon) {
+const REACT = {
+  // Trạng thái xử lý
+  LOADING : "⏳",
+  SUCCESS : "✅",
+  ERROR   : "❌",
+
+  // Phản hồi vui / thân thiện
+  OK      : "ok",
+  NICE    : "👍",
+  LOVE    : "❤️",
+  WOW     : "wow",
+  LOL     : "hihi",
+  AKOI    : "akoi",
+  LOI     : "lỏ r hihi",
+
+  // Emoji khác
+  FIRE    : "🔥",
+  SAD     : "😢",
+  ANGRY   : "😡",
+  STAR    : "⭐",
+  MONEY   : "💰",
+  MUSIC   : "🎵",
+  THINK   : "🤔",
+  SLEEP   : "😴",
+  PARTY   : "🎉",
+};
+
+// rType mặc định cho custom text/icon reaction (Zalo protocol)
+const CUSTOM_RTYPE  = 75;
+const CUSTOM_SOURCE = 6;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// sendReaction  –  thay thế addReaction(Reactions.XXX)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Gửi reaction text/icon tự do lên một tin nhắn.
+ *
+ * Tương đương Python:
+ *   self.client.sendReaction(message_object, icon, thread_id, thread_type, reactionType=75)
+ *
+ * @param {object} api        - Zalo API instance
+ * @param {object} event      - event object (chứa type, threadId, data)
+ * @param {string} iconOrText - Text hoặc emoji (vd: "ok", "✅", REACT.LOADING)
+ * @param {number} rType      - Reaction type (mặc định 75 = custom text/icon)
+ */
+async function sendReaction(api, event, iconOrText, rType = CUSTOM_RTYPE) {
   try {
     const raw      = event?.data ?? {};
     const msgId    = raw?.msgId    ?? raw?.cliMsgId    ?? raw?.clientMsgId ?? null;
     const cliMsgId = raw?.cliMsgId ?? raw?.clientMsgId ?? raw?.msgId       ?? null;
     if (!msgId && !cliMsgId) return;
-    await api.addReaction(icon, {
-      type    : event.type,
-      threadId: event.threadId,
-      data    : { msgId, cliMsgId },
-    });
+
+    await api.addReaction(
+      {
+        rType : Number(rType),
+        source: CUSTOM_SOURCE,
+        icon  : String(iconOrText),
+      },
+      {
+        type    : event.type,
+        threadId: String(event.threadId),
+        data    : {
+          msgId   : String(msgId    || cliMsgId),
+          cliMsgId: String(cliMsgId || msgId),
+        },
+      }
+    );
   } catch (_) {}
 }
 
-const reactError   = (api, event) => reactToEvent(api, event, ICON_ERROR);
-const reactSuccess = (api, event) => reactToEvent(api, event, ICON_SUCCESS);
-const reactLoading = (api, event) => reactToEvent(api, event, ICON_LOADING);
+// ── Tiện ích nhanh (dùng trong bot nội bộ) ────────────────────────────────────
+const reactLoading = (api, event) => sendReaction(api, event, REACT.LOADING);
+const reactSuccess = (api, event) => sendReaction(api, event, REACT.SUCCESS);
+const reactError   = (api, event) => sendReaction(api, event, REACT.ERROR);
 
-const { createTtlStore } = require('./ttlStore');
+// Backward-compat: vẫn export ICON_* để lệnh cũ không bị lỗi
+const ICON_LOADING = REACT.LOADING;
+const ICON_SUCCESS = REACT.SUCCESS;
+const ICON_ERROR   = REACT.ERROR;
 
-const DEFAULT_TTL_MS  = 10 * 60 * 1000;
+// ══════════════════════════════════════════════════════════════════════════════
+// REACTION STORE  –  theo dõi tin nhắn chờ reaction
+// ══════════════════════════════════════════════════════════════════════════════
+
+const DEFAULT_TTL_MS = 10 * 60 * 1000;
 const reactionStore  = createTtlStore(DEFAULT_TTL_MS);
 
-// Zalo reaction code cho cảm xúc phẫn nộ (dùng Reactions enum từ zca-js)
-// Reactions.ANGRY = ":-h" — đây là giá trị hợp lệ duy nhất trong zca-js
-const ANGRY_ICONS = new Set(
-  [Reactions.ANGRY].filter(Boolean)
-);
-
+/** Zalo reaction icon cho cảm xúc phẫn nộ (rType 20 trong zca-js) */
+const ANGRY_ICONS = new Set([Reactions.ANGRY].filter(Boolean));
 
 /**
  * Đăng ký một message đang chờ reaction.
@@ -57,13 +120,15 @@ function registerReaction({ messageId, commandName, payload = {}, ttl = DEFAULT_
 }
 
 function findTrackedReaction(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!raw || typeof raw !== "object") return null;
   const rMsgs = raw?.content?.rMsg || [];
-  const rMsgCandidates = rMsgs.flatMap((rr) => [rr?.gMsgID, rr?.cMsgID].filter(Boolean));
+  const rMsgCandidates = rMsgs
+    .flatMap((rr) => [rr?.gMsgID, rr?.cMsgID].filter(Boolean));
   const candidates = [
     ...rMsgCandidates,
     raw.msgId, raw.cliMsgId, raw.messageId, raw.globalMsgId, raw?.content?.msgId,
   ].filter(Boolean).map((id) => String(id));
+
   for (const id of candidates) {
     const entry = reactionStore.find(id);
     if (entry) return entry;
@@ -73,8 +138,6 @@ function findTrackedReaction(raw) {
 
 /**
  * Lấy { msgId, senderUid } của tin nhắn gốc bị react.
- * Ưu tiên gMsgID (global), fallback cMsgID.
- * uidFrom: người gửi tin nhắn gốc (nếu có trong event data).
  */
 function extractReactedMsg(raw) {
   const rMsgs = raw?.content?.rMsg || [];
@@ -92,46 +155,44 @@ function extractReactedMsg(raw) {
 
 /**
  * Tự động thu hồi (undo) tin nhắn bot bị thả reaction phẫn nộ.
- * Chỉ undo nếu tin nhắn đó do bot gửi.
  */
 async function autoRemoveAngryMessage({ api, msgId, senderUid, threadID, type, icon }) {
   if (!msgId || !threadID) return;
-
   const botId = global.botId ? String(global.botId) : null;
-
-  // Nếu biết người gửi tin gốc mà không phải bot → bỏ qua hoàn toàn
   if (senderUid && botId && senderUid !== botId) {
     logDebug?.(`[ REACT-AUTO-REMOVE ] Bỏ qua — tin nhắn ${msgId} không phải của bot (uid: ${senderUid})`);
     return;
   }
-
   try {
     await api.undo(msgId, threadID, type);
     logEvent(`[ REACT-AUTO-REMOVE ] Đã gỡ tin nhắn ${msgId} tại thread ${threadID} (react: ${icon})`);
   } catch (err) {
-    const detail = err?.message || err?.error || err?.data?.error
-      || (typeof err === "object" ? JSON.stringify(err) : String(err));
-    // Downgrade sang WARN — undo thất bại không phải lỗi nghiêm trọng
+    const detail =
+      err?.message || err?.error || err?.data?.error ||
+      (typeof err === "object" ? JSON.stringify(err) : String(err));
     logWarn?.(`[ REACT-AUTO-REMOVE ] Không thể gỡ tin nhắn ${msgId}: ${detail}`);
   }
 }
 
-// ── Main handler ───────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// MAIN HANDLER
+// ══════════════════════════════════════════════════════════════════════════════
+
 async function handleReaction({ api, reaction, commands }) {
   try {
-    const raw      = reaction?.data || {};
-    const icon     = raw?.content?.rIcon || raw?.rIcon || "";
-    const uid      = raw?.uidFrom || "?";
-    const threadID = reaction.threadId || "?";
-    const isGroup  = !!reaction.isGroup;
+    const raw        = reaction?.data || {};
+    const icon       = raw?.content?.rIcon || raw?.rIcon || "";
+    const uid        = raw?.uidFrom || "?";
+    const threadID   = reaction.threadId || "?";
+    const isGroup    = !!reaction.isGroup;
+    const type       = isGroup ? ThreadType.Group : ThreadType.User;
     const threadType = isGroup ? "nhóm" : "PM";
-    const type     = isGroup ? ThreadType.Group : ThreadType.User;
 
     if (icon) {
-      //logEvent(`[ REACT ] ${threadType}:${threadID} | uid:${uid} → ${icon}`);
+      // logEvent(`[ REACT ] ${threadType}:${threadID} | uid:${uid} → ${icon}`);
     }
 
-    // ── Tự động gỡ tin nhắn khi bị thả cảm xúc phẫn nộ ──────────────────────
+    // ── Tự động gỡ tin nhắn khi bị thả phẫn nộ ────────────────────────────
     const autoUndo = global.config?.autoUndoOnAngry !== false;
     if (autoUndo && icon && ANGRY_ICONS.has(icon) && threadID !== "?") {
       const reacted = extractReactedMsg(raw);
@@ -144,9 +205,8 @@ async function handleReaction({ api, reaction, commands }) {
       }
     }
 
-    // ── Gọi onReaction của command đang theo dõi tin nhắn này (nếu có) ────────
+    // ── Gọi onReaction của command đang theo dõi tin nhắn này ──────────────
     if (!commands) return;
-
     const tracked = findTrackedReaction(raw);
     if (!tracked) return;
 
@@ -162,7 +222,7 @@ async function handleReaction({ api, reaction, commands }) {
     await command.onReaction({
       api,
       reaction,
-      data: tracked.payload,
+      data       : tracked.payload,
       send,
       commands,
       commandName: tracked.commandName,
@@ -171,20 +231,36 @@ async function handleReaction({ api, reaction, commands }) {
       threadID,
       isGroup,
       type,
-      registerReaction
+      registerReaction,
+      sendReaction,
+      REACT,
     });
   } catch (err) {
     logError(`Lỗi handleReaction: ${err?.message || err}`);
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// EXPORTS
+// ══════════════════════════════════════════════════════════════════════════════
+
 module.exports = {
+  // Core
   handleReaction,
   registerReaction,
-  reactError,
-  reactSuccess,
+  sendReaction,
+
+  // Tiện ích nhanh
   reactLoading,
-  ICON_ERROR,
-  ICON_SUCCESS,
+  reactSuccess,
+  reactError,
+
+  // Constants (import ở lệnh)
+  REACT,
+  CUSTOM_RTYPE,
+
+  // Backward-compat
   ICON_LOADING,
+  ICON_SUCCESS,
+  ICON_ERROR,
 };

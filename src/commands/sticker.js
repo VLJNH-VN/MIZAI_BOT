@@ -15,9 +15,8 @@ const path          = require("node:path");
 const { exec, execSync } = require("node:child_process");
 const { promisify } = require("node:util");
 const axios         = require("axios");
-const { ThreadType } = require("zca-js");
-const { logError, logWarn, logInfo } = require("../../utils/system/logger");
-const { resolveQuote } = require("../../utils/bot/messageUtils");
+const { logError, logInfo } = require("../../utils/system/logger");
+const { resolveQuote }      = require("../../utils/bot/messageUtils");
 
 const execPromise = promisify(exec);
 
@@ -80,83 +79,8 @@ async function convertToWebp(inputPath, outputPath, isAnimated = false) {
   await execPromise(cmd);
 }
 
-// ── sendCustomSticker — upload lên Zalo CDN rồi gửi qua photo_url endpoint ───
-//
-// Cách hoạt động (theo Python zlapi FCA):
-//   1. api.uploadAttachment([filePath], threadID, threadType) → { hdUrl, normalUrl }
-//   2. Gọi /api/message/photo_url (user) hoặc /api/group/photo_url (group)
-//      với payload: { oriUrl, thumbUrl, hdUrl, properties(@STICKER), webp, ... }
-
-function registerCustomSticker(api) {
-  if (api.sendCustomSticker) return;
-  try {
-    api.custom("sendCustomSticker", async ({ ctx, utils, props }) => {
-      const { staticImgUrl, animationImgUrl, threadId, threadType } = props;
-      const isGroup = threadType === ThreadType.Group;
-
-      const endpoint = isGroup
-        ? "https://tt-files-wpa.chat.zalo.me/api/group/photo_url"
-        : "https://tt-files-wpa.chat.zalo.me/api/message/photo_url";
-
-      const serviceURL = utils.makeURL(endpoint, {
-        zpw_ver: 645,
-        zpw_type: 30,
-        nretry: 0,
-      });
-
-      const width  = 512;
-      const height = 512;
-
-      const payload = {
-        clientId   : Date.now(),
-        title      : "",
-        oriUrl     : staticImgUrl,
-        thumbUrl   : staticImgUrl,
-        hdUrl      : staticImgUrl,
-        width,
-        height,
-        properties : JSON.stringify({
-          subType: 0,
-          color  : -1,
-          size   : -1,
-          type   : 3,
-          ext    : JSON.stringify({ sSrcStr: "@STICKER", sSrcType: 0 }),
-        }),
-        contentId  : Date.now(),
-        thumb_height: width,
-        thumb_width : height,
-        webp       : JSON.stringify({
-          width,
-          height,
-          url: animationImgUrl || staticImgUrl,
-        }),
-        zsource    : -1,
-        ttl        : 0,
-      };
-
-      if (isGroup) {
-        payload.visibility = 0;
-        payload.grid       = String(threadId);
-      } else {
-        payload.toId = String(threadId);
-      }
-
-      const encryptedParams = utils.encodeAES(JSON.stringify(payload));
-      if (!encryptedParams) throw new Error("Failed to encrypt params");
-
-      const response = await utils.request(serviceURL, {
-        method: "POST",
-        body: new URLSearchParams({ params: encryptedParams }),
-      });
-      return utils.resolve(response);
-    });
-  } catch (e) {
-    logWarn("[STK] Không thể đăng ký sendCustomSticker:", e.message);
-  }
-}
-
 async function sendAsSticker(api, filePath, isAnimated, threadID, threadType) {
-  registerCustomSticker(api);
+  global.registerCustomSticker(api);
 
   // Upload WebP lên Zalo CDN
   const results = await api.uploadAttachment([filePath], String(threadID), threadType);

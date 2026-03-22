@@ -79,6 +79,12 @@
  * │    options: { repo, branch }                                           │
  * │    Mặc định dùng config.repo, config.branch                            │
  * ├──────────────────────┬──────────────────────────────────────────────────┤
+ * │  global.registerCustomSticker(api)                                     │
+ * │    Đăng ký api.sendCustomSticker lên Zalo API instance.                │
+ * │    Gọi 1 lần trước khi dùng api.sendCustomSticker(...)                 │
+ * │    api.sendCustomSticker({ staticImgUrl, animationImgUrl,              │
+ * │                            threadId, threadType })                     │
+ * ├──────────────────────┬──────────────────────────────────────────────────┤
  * │  global.logInfo(msg)   │ [INFO]  xanh lá                               │
  * │  global.logWarn(msg)   │ [WARN]  vàng                                  │
  * │  global.logError(msg)  │ [ERROR] đỏ                                    │
@@ -114,6 +120,7 @@ const { getBotAdminIds, isBotAdmin, isGroupAdmin } = require("../bot/botManager"
 const { logInfo, logWarn, logError, logEvent, logDebug } = require("./logger");
 const { checkGroqKey, setAutoCheck }          = require("./maintenance");
 const { processGaiData, resolveQuote }        = require("../bot/messageUtils");
+const { registerCustomSticker }               = require("../bot/sendCustomSticker");
 const cawr                                    = require("../bot/cawr");
 const msgCache                                = require("../../includes/database/message/messageCache");
 const groupLoader                             = require("../../includes/database/group/groupLoader");
@@ -226,6 +233,9 @@ global.zaloUploadAttachment = _zaloUploadAttachment;
 // global.cawr.tt.pickRandom(name)               → string|null
 // global.cawr.tt.bulkAdd(name, query, limit)    → Promise<{ success, skipped, failed, ... }>
 global.cawr = cawr;
+
+// ── sendCustomSticker — Zalo sticker qua photo_url endpoint (Python zlapi) ───
+global.registerCustomSticker = registerCustomSticker;
 
 // ── Ljzi — Danh sách video gái / anime ───────────────────────────────────────
 // global.Ljzi.vdgai              → string[]   danh sách URL video gái

@@ -2,7 +2,7 @@
   "prefix": ">",
   "loginMethod": "qr",
   "cookiePath": "./cookie.json",
-  "imei": "d03e6327-e8e2-4369-8d3f-de26fae153dc-91e1a2a41c0741f7f47615ab9de2fb8a",
+  "imei": "aa789c9b-21d5-4ebe-9cf4-3aa63e6ee691-4eb2ed3210f93b0cfac36baedcccf478",
   "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
   "ownerId": "6024931307373526012",
   "adminBotIds": [

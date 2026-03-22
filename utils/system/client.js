@@ -27,6 +27,7 @@ function persistImeiToConfig(imei) {
     const current = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     current.imei = imei;
     fs.writeFileSync(configPath, JSON.stringify(current, null, 2), "utf-8");
+    if (global.config) global.config.imei = imei;
     return true;
   } catch (err) {
     logWarn(`Không thể ghi IMEI mới: ${err?.message || err}`);

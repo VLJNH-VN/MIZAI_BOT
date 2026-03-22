@@ -273,25 +273,46 @@ async function handleTikTok(api, url, threadId, threadType) {
     throw new Error("TikTok: Không tìm thấy URL");
 }
 
+// ─── Facebook URL resolver dùng curl (axios bị FB block 400) ─────────────────
+//  Trả về: { url: <canonical>, isLogin: <bool>, isStory: <bool> }
+function resolveFbUrlSync(url) {
+    try {
+        const final = execSync(
+            `curl -s -L -o /dev/null -w "%{url_effective}" --max-redirs 10 --max-time 12 ` +
+            `-A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" ` +
+            `"${url.replace(/"/g, '')}"`,
+            { timeout: 14_000, stdio: "pipe" }
+        ).toString().trim();
+
+        const isLogin = final.includes("login.php");
+        const isStory = /facebook\.com\/stories\//.test(final);
+        if (final && final !== url) logDebug(`[AutoDown] FB resolve: ${url} → ${final}`);
+        return { url: final || url, isLogin, isStory };
+    } catch (e) {
+        logWarn(`[AutoDown] FB resolve lỗi: ${e.message}`);
+        return { url, isLogin: false, isStory: false };
+    }
+}
+
 // ─── Facebook handler — resolve short/share link → fown ───────────────────────
 async function handleFacebook(api, url, threadId, threadType) {
     logDebug(`[AutoDown] Facebook: ${url}`);
-    let resolved = url;
+
     if (FB_RESOLVE_RX.test(url)) {
-        try {
-            const r = await axios.get(url, {
-                timeout: 12_000, maxRedirects: 10,
-                headers: { "User-Agent": UA, "Accept-Language": "vi-VN,vi;q=0.9" },
-                validateStatus: () => true,
-            });
-            const final = r?.request?.res?.responseUrl || url;
-            if (typeof final === "string" && final.startsWith("http") && final !== url) {
-                logDebug(`[AutoDown] FB resolve: ${url} → ${final}`);
-                resolved = final;
-            }
-        } catch (e) { logWarn(`[AutoDown] FB resolve lỗi: ${e.message}`); }
+        const { url: resolved, isLogin, isStory } = resolveFbUrlSync(url);
+
+        // Story / nội dung cần đăng nhập → dừng sớm, báo user
+        if (isLogin || isStory) {
+            return await api.sendMessage({
+                msg: "⚠️ AutoDown: Link Facebook này là Story hoặc yêu cầu đăng nhập — không thể tải.",
+                ttl: 300_000,
+            }, threadId, threadType);
+        }
+
+        return await handleOther(api, resolved, threadId, threadType);
     }
-    await handleOther(api, resolved, threadId, threadType);
+
+    await handleOther(api, url, threadId, threadType);
 }
 
 // ─── fown (yt-dlp) handler ─────────────────────────────────────────────────────
@@ -302,10 +323,17 @@ async function fetchInfo(url, retries = 3) {
             const r = await axios.get(`${FOWN}/api/media?url=${encodeURIComponent(url)}`, { timeout: 180_000 });
             const d = r.data;
             if (!d || typeof d !== "object") throw new Error("API trả về không hợp lệ");
-            if (d.error) throw new Error(d.details ? String(d.details).slice(0, 200) : String(d.error));
+            if (d.error) {
+                const details = String(d.details || d.error || "");
+                // Phát hiện redirect đến login page (Story / nội dung riêng tư)
+                if (details.includes("login.php") || details.includes("/login/"))
+                    throw Object.assign(new Error("FB_LOGIN"), { fbLogin: true });
+                throw new Error(details.slice(0, 200) || String(d.error));
+            }
             return d;
         } catch (e) {
             last = e;
+            if (e.fbLogin) break;                  // Không retry khi cần login
             if (e?.response?.status < 500) break;
             if (i < retries) {
                 logWarn(`[AutoDown] Retry ${i} (${e.message})...`);
@@ -456,11 +484,12 @@ function startAutoDown(api) {
             else             await handleOther(api, url, threadId, threadType);
         } catch (err) {
             logWarn(`[AutoDown] Lỗi: ${err.message}`);
-            const st = err?.response?.status;
+            const st  = err?.response?.status;
             let msg_;
-            if (st === 404)           msg_ = "⚠️ AutoDown: Không tìm thấy media tại link này.";
-            else if (st >= 500)       msg_ = `⚠️ AutoDown: Máy chủ lỗi (${st}), thử lại sau.`;
-            else                      msg_ = `⚠️ AutoDown: Không thể tải — ${err.message}`;
+            if (err.fbLogin)    msg_ = "⚠️ AutoDown: Link Facebook này là Story hoặc nội dung riêng tư — không thể tải.";
+            else if (st === 404) msg_ = "⚠️ AutoDown: Không tìm thấy media tại link này.";
+            else if (st >= 500)  msg_ = `⚠️ AutoDown: Máy chủ lỗi (${st}), thử lại sau.`;
+            else                 msg_ = `⚠️ AutoDown: Không thể tải — ${err.message}`;
             try { await api.sendMessage({ msg: msg_, ttl: 300_000 }, threadId, threadType); } catch {}
         }
     });

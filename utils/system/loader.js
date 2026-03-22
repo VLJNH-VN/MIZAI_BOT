@@ -6,7 +6,6 @@ const path = require("path");
 function loadCommandFromFile(filePath) {
   const file = path.basename(filePath);
   try {
-    delete require.cache[require.resolve(filePath)];
     const command = require(filePath);
 
     if (!command || typeof command !== "object") return null;
@@ -99,17 +98,19 @@ function loadCommands(commandsDir) {
 async function runOnLoad(commands, api) {
   if (!commands || !api) return;
   const seen = new Set();
+  const tasks = [];
   for (const [, command] of commands) {
     if (!command || seen.has(command)) continue;
     seen.add(command);
     if (typeof command.onLoad !== "function") continue;
-    try {
-      await command.onLoad({ api, commands });
-    } catch (err) {
-      const name = command?.config?.name || "unknown";
-      logError(`[CMD] Lỗi onLoad của '${name}': ${err?.message || err}`);
-    }
+    tasks.push(
+      command.onLoad({ api, commands }).catch((err) => {
+        const name = command?.config?.name || "unknown";
+        logError(`[CMD] Lỗi onLoad của '${name}': ${err?.message || err}`);
+      })
+    );
   }
+  await Promise.all(tasks);
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────

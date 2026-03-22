@@ -4,7 +4,7 @@
   "description": "Bot Zalo sử dụng zca-js, đăng nhập bằng cookie + IMEI. AI: Groq (llama-3.3-70b-versatile)",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node --max-old-space-size=512 index.js",
     "dev": "nodemon index.js",
     "new-cmd": "node scripts/new-cmd.js",
     "list-cmds": "node scripts/list-cmds.js",

@@ -156,8 +156,8 @@ async function createZaloClient() {
 
   const zalo = new Zalo({
     selfListen: true,
-    checkUpdate: true,
-    logging: true,
+    checkUpdate: false,
+    logging: false,
     imageMetadataGetter: async (filePath) => {
       const buf = await fs.promises.readFile(filePath);
       const dim = imageSize(buf);

@@ -126,9 +126,10 @@ async function ytSearch(keyword) {
     duration:  (item.duration || 0) * 1000,
     link:      item.url || item.webpage_url || "",
     _durSec:   item.duration || 0,
-    thumbnail: (resolveUrl(item.thumbnail || "") || "").replace(/&amp;/g, "&"),
+    thumbnail: item.id
+      ? `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`
+      : (resolveUrl(item.thumbnail || "") || "").replace(/&amp;/g, "&"),
   }));
-  if (mapped[0]) console.log("[MUSIC:yt] thumbnail[0]:", mapped[0].thumbnail?.slice(0, 120));
   return mapped;
 }
 
@@ -389,6 +390,7 @@ module.exports = {
         );
         const audioUrl = resolveUrl(res.data?.download_audio_url || res.data?.download_url);
         if (!audioUrl) return send("❌ Không lấy được link tải. Thử bài khác.");
+        const thumb = res.data?.thumbnail || t.thumbnail || t.artwork_url || "";
         let cardPath;
         try {
           cardPath = await getCanvas().drawNowPlayingCard({
@@ -396,7 +398,7 @@ module.exports = {
             title:    t.title,
             artist:   t.uploader,
             duration: fmtDurationSec(t.duration),
-            thumb:    t.thumbnail || t.artwork_url,
+            thumb,
           });
         } catch (_) {}
         if (cardPath) {
@@ -437,6 +439,7 @@ module.exports = {
         audioUrl = resolveUrl(mediaRes.data?.download_audio_url || mediaRes.data?.download_url || null);
 
         if (!audioUrl) return send("❌ Không lấy được link tải. Thử lại sau.");
+        const thumb = mediaRes.data?.thumbnail || track.thumbnail || "";
         let cardPath;
         try {
           cardPath = await getCanvas().drawNowPlayingCard({
@@ -444,7 +447,7 @@ module.exports = {
             title:    track.title,
             artist:   track.author,
             duration: durStr,
-            thumb:    track.thumbnail || "",
+            thumb,
           });
         } catch (_) {}
         if (cardPath) {
@@ -471,6 +474,7 @@ module.exports = {
         );
         const audioUrl = resolveUrl(mediaRes.data?.download_audio_url || mediaRes.data?.download_url || null);
         if (!audioUrl) return send("❌ Không lấy được link tải. Thử bài khác.");
+        const thumb = mediaRes.data?.thumbnail || track.thumbnail || "";
         let cardPath;
         try {
           cardPath = await getCanvas().drawNowPlayingCard({
@@ -478,7 +482,7 @@ module.exports = {
             title:    track.title,
             artist:   track.author,
             duration: durStr,
-            thumb:    track.thumbnail || "",
+            thumb,
           });
         } catch (_) {}
         if (cardPath) {
@@ -496,6 +500,17 @@ module.exports = {
       const r = results[choice - 1];
       const mixUrl = `https://www.mixcloud.com/${r.owner.username}/${r.slug}`;
       await addReactionWow();
+      let audioUrl = null;
+      let apiThumb = "";
+      try {
+        const mediaRes = await global.axios.get(
+          `${FOWN_API}/api/media?url=${encodeURIComponent(mixUrl)}`,
+          { timeout: 20000 }
+        );
+        audioUrl = resolveUrl(mediaRes.data?.download_audio_url || mediaRes.data?.download_url || null);
+        apiThumb = mediaRes.data?.thumbnail || "";
+      } catch (_) {}
+      const thumb = apiThumb || r.thumbnail || "";
       let cardPath;
       try {
         cardPath = await getCanvas().drawNowPlayingCard({
@@ -503,16 +518,8 @@ module.exports = {
           title:    r.name,
           artist:   r.owner.displayName,
           duration: formatDuration(r.audioLength),
-          thumb:    r.thumbnail || "",
+          thumb,
         });
-      } catch (_) {}
-      let audioUrl = null;
-      try {
-        const mediaRes = await global.axios.get(
-          `${FOWN_API}/api/media?url=${encodeURIComponent(mixUrl)}`,
-          { timeout: 20000 }
-        );
-        audioUrl = resolveUrl(mediaRes.data?.download_audio_url || mediaRes.data?.download_url || null);
       } catch (_) {}
       const fallbackText = `🎵 ${r.name}\n👤 ${r.owner.displayName}\n⏳ ${formatDuration(r.audioLength)}\n🔗 ${mixUrl}`;
       if (cardPath) {

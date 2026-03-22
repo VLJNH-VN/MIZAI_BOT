@@ -1,7 +1,7 @@
 /**
  * src/events/goibot.js
  * Mizai AI — event handler đầy đủ:
- * nhạc (SoundCloud), tính toán, sticker, reaction, tạo ảnh AI (HuggingFace), quản lý file
+ * nhạc (SoundCloud), tính toán, reaction, tạo ảnh AI (HuggingFace), quản lý file
  */
 
 const axios  = require("axios");
@@ -176,26 +176,6 @@ function safeCalc(expr) {
     return { ok: true, result: Math.round(result * 1e10) / 1e10 };
   } catch (e) {
     return { ok: false, error: "Biểu thức lỗi: " + e.message };
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════════
-//  STICKER
-// ════════════════════════════════════════════════════════════════════════════════
-async function sendStickerByKeyword(api, keyword, threadId, type) {
-  try {
-    const results = await api.searchSticker(keyword, 5);
-    if (!results || results.length === 0) return false;
-    const sticker = results[Math.floor(Math.random() * results.length)];
-    await api.sendSticker(
-      { id: sticker.sticker_id, cateId: sticker.cate_id, type: sticker.type ?? 1 },
-      threadId,
-      type
-    );
-    return true;
-  } catch (err) {
-    global.logWarn?.(`[goibot] Lỗi gửi sticker: ${err?.message}`);
-    return false;
   }
 }
 
@@ -631,56 +611,6 @@ async function handleProfileAction(api, profileAction, send) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-//  CUSTOM STICKER — Mizai tự vẽ / AI-gen sticker
-// ════════════════════════════════════════════════════════════════════════════════
-const { generateSticker } = require("../../utils/ai/stickerGen");
-
-async function handleCustomStickerAction(api, stickerAction, threadId, msgType, send, imgUrl = null) {
-  const mode      = (stickerAction.mode      || "text").trim();
-  const text      = (stickerAction.text      || "").trim();
-  const emotion   = (stickerAction.emotion   || "default").trim();
-  const aiPrompt  = (stickerAction.aiPrompt  || "").trim();
-
-  // Từ khóa để tìm sticker thật từ thư viện Zalo
-  const stickerKeyword = (aiPrompt || text || emotion || "cute")
-    .split(/[,\s]+/).slice(0, 3).join(" ").trim() || "cute";
-
-  let stickerPath = null;
-  let sentImage   = false;
-
-  // ── Bước 1: Gửi ảnh đã xử lý / AI-generated ──────────────────────────────
-  try {
-    stickerPath = await generateSticker({ text, emotion, aiPrompt, mode, imgUrl });
-    await api.sendMessage({ msg: "", attachments: [stickerPath] }, threadId, msgType);
-    sentImage = true;
-    global.logInfo?.(`[goibot/customSticker] Đã gửi ảnh (${mode}) → ${text || aiPrompt}`);
-  } catch (err) {
-    global.logWarn?.(`[goibot/customSticker] Lỗi gửi ảnh: ${err?.message}`);
-  } finally {
-    if (stickerPath) { try { fs.unlinkSync(stickerPath); } catch {} }
-  }
-
-  // ── Bước 2: Luôn gửi thêm sticker thật từ thư viện Zalo ──────────────────
-  try {
-    const sent = await sendStickerByKeyword(api, stickerKeyword, threadId, msgType);
-    if (sent) {
-      global.logInfo?.(`[goibot/customSticker] Đã gửi sticker Zalo → "${stickerKeyword}"`);
-    } else {
-      // Thử keyword ngắn hơn nếu không tìm thấy
-      const fallbackKw = (aiPrompt || text || "").split(/\s+/)[0] || "cute";
-      await sendStickerByKeyword(api, fallbackKw, threadId, msgType);
-    }
-  } catch (err) {
-    global.logWarn?.(`[goibot/customSticker] Lỗi gửi sticker Zalo: ${err?.message}`);
-  }
-
-  // ── Nếu cả 2 đều thất bại ─────────────────────────────────────────────────
-  if (!sentImage && send) {
-    await send("(Mizai thử tạo sticker nhưng bị lỗi ~)");
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════════
 //  TỰ CHỦ — Mizai tự quyết định đổi profile theo mood
 // ════════════════════════════════════════════════════════════════════════════════
 const SELF_REFLECT_MIN_MS = 3 * 60 * 60 * 1000;   // 3h
@@ -951,15 +881,8 @@ async function handleGoibot({ api, event }) {
         if (botMsg.memory.diary)    saveDiaryEntry(botMsg.memory.diary);
         if (botMsg.memory.globalNote) saveGlobalNote(botMsg.memory.globalNote);
       }
-      if (botMsg?.sticker?.status) {
-        const kw = botMsg.sticker.keyword || "cute";
-        await sendStickerByKeyword(api, kw, threadId, event.type);
-      }
       if (botMsg?.profile?.status) {
         await handleProfileAction(api, botMsg.profile, null);
-      }
-      if (botMsg?.customSticker?.status) {
-        await handleCustomStickerAction(api, botMsg.customSticker, threadId, event.type, null, imgUrlToUse);
       }
       return;
     }
@@ -1049,21 +972,6 @@ async function handleGoibot({ api, event }) {
       }
     }
 
-    // ── Sticker ────────────────────────────────────────────────────────────────
-    if (botMsg?.sticker?.status) {
-      const keyword = botMsg.sticker.keyword || "cute";
-      const sent    = await sendStickerByKeyword(api, keyword, threadId, event.type);
-      if (!sent) {
-        await handleCustomStickerAction(
-          api,
-          { mode: "text", text: keyword, emotion: keyword, aiPrompt: keyword },
-          threadId,
-          event.type,
-          send
-        );
-      }
-    }
-
     // ── Reaction ───────────────────────────────────────────────────────────────
     if (botMsg?.reaction?.status && hasQuote) {
       const reactionType = (botMsg.reaction.type || "thich").toLowerCase();
@@ -1083,11 +991,6 @@ async function handleGoibot({ api, event }) {
     // ── Profile — Mizai tự cập nhật avatar / bio / tên ────────────────────────
     if (botMsg?.profile?.status) {
       await handleProfileAction(api, botMsg.profile, send);
-    }
-
-    // ── Custom sticker — Mizai tự vẽ / AI-gen ──────────────────────────────────
-    if (botMsg?.customSticker?.status) {
-      await handleCustomStickerAction(api, botMsg.customSticker, threadId, event.type, send, imgUrlToUse);
     }
 
   } catch (err) {

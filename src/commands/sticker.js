@@ -16,7 +16,16 @@ const { exec }      = require("node:child_process");
 const { promisify } = require("node:util");
 const FormData      = require("form-data");
 const axios         = require("axios");
-const ffmpegPath    = require("ffmpeg-static");
+const ffmpegPath    = (() => {
+  try {
+    const p = require("ffmpeg-static");
+    if (p && require("node:fs").existsSync(p)) return p;
+  } catch {}
+  // Fallback về system ffmpeg
+  const { execSync } = require("node:child_process");
+  try { return execSync("which ffmpeg", { encoding: "utf8" }).trim(); } catch {}
+  return "ffmpeg";
+})();
 const { logError, logWarn, logInfo } = require("../../utils/system/logger");
 const { resolveQuote } = require("../../utils/bot/messageUtils");
 

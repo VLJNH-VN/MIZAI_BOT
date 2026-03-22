@@ -4,16 +4,17 @@
  * Module: Sticker
  *
  * Cách dùng:
- *   !stk                — Reply vào ảnh/video → chuyển thành ảnh WebP 512×512
+ *   !stk                — Reply vào ảnh/video → chuyển thành Zalo sticker WebP 512×512
  *   !stk <từ khóa>      — Tìm sticker Zalo theo từ khóa, gửi tối đa 3 sticker
  *   !stk spin <từ khóa> — Tìm ngẫu nhiên 1 sticker Zalo
- *   !stk ai <mô tả>     — AI vẽ ảnh (Pollinations) → gửi dưới dạng ảnh
+ *   !stk ai <mô tả>     — AI vẽ ảnh (Pollinations) → gửi dưới dạng Zalo sticker
  */
 
 const fs            = require("node:fs");
 const path          = require("node:path");
 const { exec }      = require("node:child_process");
 const { promisify } = require("node:util");
+const FormData      = require("form-data");
 const axios         = require("axios");
 const ffmpegPath    = require("ffmpeg-static");
 const { log }       = require("../../utils/system/logger");
@@ -47,6 +48,18 @@ async function downloadToFile(url, destPath) {
   });
 }
 
+async function getContentType(url) {
+  try {
+    const resp = await axios.head(url, {
+      timeout: 8_000,
+      headers: { "User-Agent": global.userAgent || "Mozilla/5.0" },
+    });
+    return (resp.headers["content-type"] || "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 async function convertToWebp(inputPath, outputPath, isAnimated = false) {
   const scale = `scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000`;
   let cmd;
@@ -56,6 +69,37 @@ async function convertToWebp(inputPath, outputPath, isAnimated = false) {
     cmd = `"${ffmpegPath}" -y -i "${inputPath}" -vcodec libwebp -vf "${scale}" -q:v 80 "${outputPath}"`;
   }
   await execPromise(cmd);
+}
+
+async function uploadToCatbox(filePath) {
+  const form = new FormData();
+  form.append("reqtype", "fileupload");
+  form.append("fileToUpload", fs.createReadStream(filePath), "sticker.webp");
+
+  const resp = await axios.post("https://catbox.moe/user/api.php", form, {
+    headers: form.getHeaders(),
+    timeout: 30_000,
+  });
+
+  if (
+    resp.status === 200 &&
+    typeof resp.data === "string" &&
+    resp.data.startsWith("http")
+  ) {
+    return resp.data.trim();
+  }
+  throw new Error("Catbox upload thất bại: " + String(resp.data).slice(0, 100));
+}
+
+async function sendAsSticker(api, webpUrl, isAnimated, threadID, threadType) {
+  await api.sendCustomSticker({
+    staticImgUrl:    webpUrl,
+    animationImgUrl: isAnimated ? webpUrl : undefined,
+    threadId:        threadID,
+    threadType,
+    width:  512,
+    height: 512,
+  });
 }
 
 // ── Sticker Zalo API: search + send ──────────────────────────────────────────
@@ -81,7 +125,7 @@ async function searchAndSendStickers(api, keyword, threadID, threadType, count =
   return sent;
 }
 
-// ── Sub-command: reply → WebP ─────────────────────────────────────────────────
+// ── Sub-command: reply → Zalo sticker WebP ───────────────────────────────────
 
 async function handleFromReply({ api, event, send, threadID, threadType, reactLoading, reactSuccess, reactError }) {
   const raw    = event?.data || {};
@@ -101,15 +145,22 @@ async function handleFromReply({ api, event, send, threadID, threadType, reactLo
 
   await reactLoading();
 
-  const isAnimated = quoted.type === "video" || /\.gif($|\?)/i.test(quoted.mediaUrl);
-  const inFile  = tmpPath("stk_in") + (isAnimated ? ".tmp" : ".tmp");
+  // Phát hiện animated qua Content-Type thực tế (tránh lỗi quoted.type undefined)
+  let isAnimated = /\.gif($|\?)/i.test(quoted.mediaUrl);
+  if (!isAnimated) {
+    const ct = await getContentType(quoted.mediaUrl);
+    isAnimated = ct.includes("video") || ct.includes("gif");
+  }
+
+  const inFile  = tmpPath("stk_in")  + ".tmp";
   const outFile = tmpPath("stk_out") + ".webp";
 
   try {
     await downloadToFile(quoted.mediaUrl, inFile);
     await convertToWebp(inFile, outFile, isAnimated);
 
-    await send({ msg: "", attachments: [outFile] });
+    const webpUrl = await uploadToCatbox(outFile);
+    await sendAsSticker(api, webpUrl, isAnimated, threadID, threadType);
     await reactSuccess();
   } catch (e) {
     log.error("[STK] Lỗi xử lý:", e.message);
@@ -159,7 +210,7 @@ async function handleSpin({ api, send, threadID, threadType, keyword, reactLoadi
   }
 }
 
-// ── Sub-command: AI vẽ ảnh ───────────────────────────────────────────────────
+// ── Sub-command: AI vẽ → Zalo sticker ────────────────────────────────────────
 
 async function handleAi({ api, send, threadID, threadType, prompt, reactLoading, reactSuccess, reactError }) {
   await reactLoading();
@@ -173,7 +224,8 @@ async function handleAi({ api, send, threadID, threadType, prompt, reactLoading,
     await downloadToFile(aiUrl, inFile);
     await convertToWebp(inFile, outFile, false);
 
-    await send({ msg: `🖼️ "${prompt}"`, attachments: [outFile] });
+    const webpUrl = await uploadToCatbox(outFile);
+    await sendAsSticker(api, webpUrl, false, threadID, threadType);
     await reactSuccess();
   } catch (e) {
     log.error("[STK-AI] Lỗi:", e.message);
@@ -190,16 +242,16 @@ module.exports = {
   config: {
     name           : "stk",
     aliases        : ["sticker"],
-    version        : "2.0.0",
+    version        : "2.1.0",
     hasPermssion   : 0,
     credits        : "MiZai",
     description    : "Tạo/tìm sticker từ ảnh, video, Zalo library hoặc AI",
     commandCategory: "Tiện Ích",
     usages         : [
-      "stk               — Reply ảnh/video → ảnh WebP 512×512",
+      "stk               — Reply ảnh/video → Zalo sticker WebP 512×512",
       "stk <từ khóa>     — Tìm sticker Zalo (tối đa 3)",
       "stk spin <từ khóa>— Lấy ngẫu nhiên 1 sticker Zalo",
-      "stk ai <mô tả>    — AI vẽ ảnh theo mô tả",
+      "stk ai <mô tả>    — AI vẽ sticker theo mô tả",
     ].join("\n"),
     cooldowns      : 5,
   },
@@ -213,7 +265,7 @@ module.exports = {
     const restText   = args.slice(1).join(" ").trim();
     const ctx        = { api, event, send, threadID, threadType, reactLoading, reactSuccess, reactError };
 
-    // Không có args → reply ảnh/video → WebP
+    // Không có args → reply ảnh/video → Zalo sticker
     if (!sub) {
       return handleFromReply(ctx);
     }

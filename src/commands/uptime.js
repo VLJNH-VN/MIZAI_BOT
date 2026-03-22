@@ -71,9 +71,10 @@ function getSystemData(pingMs) {
 
   // Số nhóm/thread đang hoạt động
   let threadCount = 0;
-  if (global.threads && typeof global.threads.size === "number") threadCount = global.threads.size;
-  else if (global.threadInfo && typeof global.threadInfo.size === "number") threadCount = global.threadInfo.size;
-  else if (Array.isArray(global.threadList)) threadCount = global.threadList.length;
+  try {
+    const ids = global.groupLoader?.getGroupIds?.();
+    if (Array.isArray(ids)) threadCount = ids.length;
+  } catch (_) {}
 
   // RAM cảnh báo
   const ramWarning = ramPct >= 85;

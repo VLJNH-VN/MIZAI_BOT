@@ -7,12 +7,16 @@
  * ┌─────────────────────────────────────────────────────────────────────────┐
  * │  GLOBAL SẴN CÓ SAU KHI BOT KHỞI ĐỘNG                                  │
  * ├──────────────────────┬──────────────────────────────────────────────────┤
- * │  global.config       │ Nội dung config.json                            │
+ * │  global.config       │ Nội dung config.json          (set tại index.js)│
  * │  global.userAgent    │ User-Agent dùng chung (lấy từ config.json)      │
  * │  global.api          │ Zalo API instance (set sau khi login)           │
- * │  global.botId        │ Zalo ID của bot (string)                        │
- * │  global.commands     │ Map<name, command> tất cả lệnh đang nạp         │
- * │  global.prefix       │ Prefix mặc định toàn cục (vd: ".")              │
+ * │  global.botId        │ Zalo ID của bot (string)      (set tại index.js)│
+ * │  global.commands     │ Map<name, command> tất cả lệnh(set tại index.js)│
+ * │  global.prefix       │ Prefix mặc định toàn cục      (set tại index.js)│
+ * ├──────────────────────┬──────────────────────────────────────────────────┤
+ * │  global.restartBot(reason?, delayMs?)                                  │
+ * │                      │ Restart bot an toàn  (set tại loader.js)        │
+ * │  global.txTime       │ Bộ đếm giây phiên Tài Xỉu   (set tại txLoop.js)│
  * ├──────────────────────┬──────────────────────────────────────────────────┤
  * │  global.Users        │ Controller người dùng (AURABOT-style)           │
  * │    .getData(uid, name?, gender?)  → { uid,name,gender,money,exp,... }  │

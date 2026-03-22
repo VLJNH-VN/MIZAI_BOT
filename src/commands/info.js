@@ -55,7 +55,7 @@ module.exports = {
       uid = String(raw.quote?.ownerId || raw.msgReply?.ownerId);
     } else if (args[0]) {
       if (isValidURL(args[0])) {
-        uid = await global.utils?.getUID?.(args[0]) || null;
+        return send("❌ Không hỗ trợ tra cứu qua link. Dùng UID hoặc @tag.");
       } else if (!isNaN(args[0])) {
         uid = args[0];
       }

@@ -48,7 +48,7 @@ function getLocalIP() {
 }
 
 // ── System data ───────────────────────────────────────────────────────────────
-function getSystemData(pingMs) {
+async function getSystemData(pingMs) {
   const uptime = process.uptime();
   const d  = Math.floor(uptime / 86400);
   const h  = Math.floor((uptime % 86400) / 3600);
@@ -76,7 +76,7 @@ function getSystemData(pingMs) {
   // Số nhóm/thread đang hoạt động
   let threadCount = 0;
   try {
-    const ids = global.groupLoader?.getGroupIds?.();
+    const ids = await global.groupLoader?.getGroupIds?.();
     if (Array.isArray(ids)) threadCount = ids.length;
   } catch (_) {}
 
@@ -170,7 +170,7 @@ module.exports = {
     } catch (_) {}
     const pingMs = Date.now() - t0;
 
-    const data = getSystemData(pingMs);
+    const data = await getSystemData(pingMs);
 
     // ── Cảnh báo RAM ─────────────────────────────────────────────────────────
     if (data.ramWarning) {

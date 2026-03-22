@@ -38,7 +38,10 @@ async function ensureSpotifyToken() {
     _spotifyTokenExpiry = 0;
     const sc  = err?.statusCode || err?.status || "";
     const msg = stringifyWebapiError(err);
-    throw new Error(`Spotify auth thất bại${sc ? ` (${sc})` : ""}: ${msg}`);
+    throw Object.assign(
+      new Error(`Spotify auth thất bại${sc ? ` (${sc})` : ""}: ${msg}`),
+      { spotifyBlocked: true }
+    );
   }
 }
 

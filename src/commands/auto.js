@@ -55,11 +55,13 @@ module.exports = {
         description: "Quản lý AutoSend + Bật/tắt Mizai AI + AutoDown",
         commandCategory: "Quản Trị",
         usages: [
-            "auto bot on|off                  — Bật/tắt Mizai AI cho nhóm",
-            "auto down on|off                 — Bật/tắt tự động tải video (AutoDown)",
-            "auto list                        — Danh sách lịch gửi tự động",
-            "auto add <HH:MM> <nội dung>      — Thêm lịch gửi mới",
-            "auto on|off|remove <stt>         — Bật/tắt/xoá lịch theo số thứ tự",
+            "auto bot on|off                              — Bật/tắt Mizai AI cho nhóm",
+            "auto down on|off                             — Bật/tắt tự động tải video (AutoDown)",
+            "auto list                                    — Danh sách lịch gửi tự động",
+            "auto add <HH:MM> <nội dung>                 — Thêm lịch gửi text",
+            "auto add <HH:MM> --vd <key>                 — Thêm lịch gửi video",
+            "auto add <HH:MM> --vd <key> --text <nội dung> — Thêm lịch gửi video + text",
+            "auto on|off|remove <stt>                    — Bật/tắt/xoá lịch theo số thứ tự",
         ].join("\n"),
         cooldowns: 3,
     },
@@ -86,6 +88,8 @@ module.exports = {
                 `📤 AutoSend:\n` +
                 `  ${prefix}auto list\n` +
                 `  ${prefix}auto add <HH:MM> <nội dung>\n` +
+                `  ${prefix}auto add <HH:MM> --vd <key>\n` +
+                `  ${prefix}auto add <HH:MM> --vd <key> --text <nội dung>\n` +
                 `  ${prefix}auto on <STT>\n` +
                 `  ${prefix}auto off <STT>\n` +
                 `  ${prefix}auto remove <STT>`
@@ -146,7 +150,10 @@ module.exports = {
                     ? `${c.threadIds.length} nhóm cụ thể`
                     : "Tất cả nhóm";
                 const preview = String(c.content || "").slice(0, 40) + (String(c.content || "").length > 40 ? "..." : "");
-                msg += `  ${st} [${i + 1}] ${c.time} — ${preview}\n       📡 ${targets}\n`;
+                msg += `  ${st} [${i + 1}] ${c.time}`;
+                if (preview) msg += ` — 📝 ${preview}`;
+                if (c.listapi) msg += `\n       🎬 Video: ${c.listapi}`;
+                msg += `\n       📡 ${targets}\n`;
             });
             msg += `╚════════════════════════╝\n`;
             msg += `💡 ${prefix}auto on/off/remove <STT>`;
@@ -158,33 +165,74 @@ module.exports = {
             if (!isGroup) return send("⛔ Lệnh này chỉ dùng được trong nhóm.");
 
             const timeArg = args[1] || "";
-            const content = args.slice(2).join(" ").trim();
 
             if (!timeArg) {
-                return send(`❌ Thiếu giờ gửi.\nDùng: ${prefix}auto add <HH:MM> <nội dung>\nVí dụ: ${prefix}auto add 08:00 Chào buổi sáng!`);
+                return send(
+                    `❌ Thiếu giờ gửi.\n` +
+                    `Dùng:\n` +
+                    `  ${prefix}auto add <HH:MM> <nội dung>\n` +
+                    `  ${prefix}auto add <HH:MM> --vd <key>\n` +
+                    `  ${prefix}auto add <HH:MM> --vd <key> --text <nội dung>\n` +
+                    `Ví dụ: ${prefix}auto add 08:00 --vd gaixinh --text Chào buổi sáng!`
+                );
             }
             if (!validateTime(timeArg)) {
                 return send(`❌ Giờ không hợp lệ: "${timeArg}".\nDùng định dạng HH:MM (24h), ví dụ: 08:00, 20:30`);
             }
-            if (!content) {
-                return send(`❌ Thiếu nội dung tin nhắn.\nDùng: ${prefix}auto add ${timeArg} <nội dung>`);
+
+            // Parse --vd <key> và --text <nội dung> từ phần còn lại
+            const rest = args.slice(2);
+            let listapi = null;
+            let content = "";
+
+            const vdIdx = rest.indexOf("--vd");
+            const textIdx = rest.indexOf("--text");
+
+            if (vdIdx !== -1) {
+                listapi = rest[vdIdx + 1] || null;
+                if (!listapi) return send(`❌ Thiếu tên key video sau --vd.\nVí dụ: ${prefix}auto add 08:00 --vd gaixinh`);
             }
 
-            configs.push({
+            if (textIdx !== -1) {
+                // Lấy tất cả token sau --text (cho đến --vd hoặc hết)
+                const textTokens = [];
+                for (let i = textIdx + 1; i < rest.length; i++) {
+                    if (rest[i] === "--vd") break;
+                    textTokens.push(rest[i]);
+                }
+                content = textTokens.join(" ").trim();
+                if (!content) return send(`❌ Thiếu nội dung sau --text.\nVí dụ: ${prefix}auto add 08:00 --text Chào buổi sáng!`);
+            } else if (vdIdx === -1) {
+                // Không có flag nào → toàn bộ là text (hành vi cũ)
+                content = rest.join(" ").trim();
+            }
+
+            if (!listapi && !content) {
+                return send(
+                    `❌ Cần ít nhất nội dung text hoặc video.\n` +
+                    `  ${prefix}auto add ${timeArg} <nội dung>\n` +
+                    `  ${prefix}auto add ${timeArg} --vd <key>\n` +
+                    `  ${prefix}auto add ${timeArg} --vd <key> --text <nội dung>`
+                );
+            }
+
+            const newEntry = {
                 time: timeArg,
                 content,
                 threadIds: [threadID],
                 enabled: true
-            });
+            };
+            if (listapi) newEntry.listapi = listapi;
+
+            configs.push(newEntry);
             writeAutoSend(configs);
 
-            return send(
-                `✅ Đã thêm lịch gửi tự động!\n` +
-                `  ⏰ Giờ: ${timeArg}\n` +
-                `  📌 Nhóm: nhóm này\n` +
-                `  📝 Nội dung: ${content.slice(0, 60)}${content.length > 60 ? "..." : ""}\n` +
-                `  STT: [${configs.length}]`
-            );
+            let confirmMsg = `✅ Đã thêm lịch gửi tự động!\n  ⏰ Giờ: ${timeArg}\n  📌 Nhóm: nhóm này\n`;
+            if (content) confirmMsg += `  📝 Text: ${content.slice(0, 60)}${content.length > 60 ? "..." : ""}\n`;
+            if (listapi) confirmMsg += `  🎬 Video: ${listapi}\n`;
+            confirmMsg += `  STT: [${configs.length}]`;
+
+            return send(confirmMsg);
         }
 
         // ── on / off / remove ─────────────────────────────────────────────────
@@ -202,19 +250,30 @@ module.exports = {
             if (sub === "on") {
                 configs[idx].enabled = true;
                 writeAutoSend(configs);
-                return send(`✅ Đã bật lịch gửi [${idxRaw}]: ${configs[idx].time} — ${String(configs[idx].content).slice(0, 40)}`);
+                const c = configs[idx];
+                let info = `${c.time}`;
+                if (c.content) info += ` — 📝 ${String(c.content).slice(0, 40)}`;
+                if (c.listapi) info += ` 🎬 ${c.listapi}`;
+                return send(`✅ Đã bật lịch gửi [${idxRaw}]: ${info}`);
             }
 
             if (sub === "off") {
                 configs[idx].enabled = false;
                 writeAutoSend(configs);
-                return send(`❌ Đã tắt lịch gửi [${idxRaw}]: ${configs[idx].time} — ${String(configs[idx].content).slice(0, 40)}`);
+                const c = configs[idx];
+                let info = `${c.time}`;
+                if (c.content) info += ` — 📝 ${String(c.content).slice(0, 40)}`;
+                if (c.listapi) info += ` 🎬 ${c.listapi}`;
+                return send(`❌ Đã tắt lịch gửi [${idxRaw}]: ${info}`);
             }
 
             if (["remove", "rm", "del"].includes(sub)) {
                 const removed = configs.splice(idx, 1)[0];
                 writeAutoSend(configs);
-                return send(`🗑️ Đã xóa lịch gửi [${idxRaw}]: ${removed.time} — ${String(removed.content).slice(0, 40)}`);
+                let info = `${removed.time}`;
+                if (removed.content) info += ` — 📝 ${String(removed.content).slice(0, 40)}`;
+                if (removed.listapi) info += ` 🎬 ${removed.listapi}`;
+                return send(`🗑️ Đã xóa lịch gửi [${idxRaw}]: ${info}`);
             }
         }
 

@@ -4,32 +4,32 @@
  * Module: Sticker
  *
  * Cách dùng:
- *   !stk                — Reply vào ảnh/video → chuyển thành Zalo sticker WebP 512×512
+ *   !stk                — Reply vào ảnh/video → chuyển thành WebP 512×512 và gửi
  *   !stk <từ khóa>      — Tìm sticker Zalo theo từ khóa, gửi tối đa 3 sticker
  *   !stk spin <từ khóa> — Tìm ngẫu nhiên 1 sticker Zalo
- *   !stk ai <mô tả>     — AI vẽ ảnh (Pollinations) → gửi dưới dạng Zalo sticker
+ *   !stk ai <mô tả>     — AI vẽ ảnh (Pollinations) → gửi dưới dạng ảnh
  */
 
 const fs            = require("node:fs");
 const path          = require("node:path");
-const { exec }      = require("node:child_process");
+const { exec, execSync } = require("node:child_process");
 const { promisify } = require("node:util");
 const FormData      = require("form-data");
 const axios         = require("axios");
-const ffmpegPath    = (() => {
-  try {
-    const p = require("ffmpeg-static");
-    if (p && require("node:fs").existsSync(p)) return p;
-  } catch {}
-  // Fallback về system ffmpeg
-  const { execSync } = require("node:child_process");
-  try { return execSync("which ffmpeg", { encoding: "utf8" }).trim(); } catch {}
-  return "ffmpeg";
-})();
 const { logError, logWarn, logInfo } = require("../../utils/system/logger");
 const { resolveQuote } = require("../../utils/bot/messageUtils");
 
 const execPromise = promisify(exec);
+
+// ── ffmpeg path (ưu tiên ffmpeg-static, fallback system ffmpeg) ───────────────
+const ffmpegPath = (() => {
+  try {
+    const p = require("ffmpeg-static");
+    if (p && fs.existsSync(p)) return p;
+  } catch {}
+  try { return execSync("which ffmpeg", { encoding: "utf8" }).trim(); } catch {}
+  return "ffmpeg";
+})();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -80,87 +80,46 @@ async function convertToWebp(inputPath, outputPath, isAnimated = false) {
   await execPromise(cmd);
 }
 
-async function uploadToCatbox(filePath) {
-  const form = new FormData();
-  form.append("reqtype", "fileupload");
-  form.append("fileToUpload", fs.createReadStream(filePath), "sticker.webp");
+// ── GitHub upload ─────────────────────────────────────────────────────────────
 
-  const resp = await axios.post("https://catbox.moe/user/api.php", form, {
-    headers: form.getHeaders(),
-    timeout: 25_000,
-  });
-
-  if (
-    resp.status === 200 &&
-    typeof resp.data === "string" &&
-    resp.data.startsWith("http")
-  ) {
-    return resp.data.trim();
+async function uploadToGithub(filePath, fileName) {
+  const { githubToken, repo, branch } = global.config || {};
+  if (!githubToken || !repo || !branch) {
+    throw new Error("Chưa cấu hình githubToken/repo/branch trong config.json");
   }
-  throw new Error("Catbox upload thất bại: " + String(resp.data).slice(0, 100));
-}
 
-async function uploadTo0x0(filePath) {
-  const form = new FormData();
-  form.append("file", fs.createReadStream(filePath), "sticker.webp");
+  const remotePath = `stickers/${fileName}`;
+  const apiUrl = `https://api.github.com/repos/${repo}/contents/${remotePath}`;
+  const headers = {
+    Authorization: `token ${githubToken}`,
+    "Content-Type": "application/json",
+  };
 
-  const resp = await axios.post("https://0x0.st", form, {
-    headers: form.getHeaders(),
-    timeout: 25_000,
-  });
-
-  const url = String(resp.data || "").trim();
-  if (url.startsWith("http")) return url;
-  throw new Error("0x0.st upload thất bại");
-}
-
-async function uploadToTmpfiles(filePath) {
-  const form = new FormData();
-  form.append("file", fs.createReadStream(filePath), "sticker.webp");
-
-  const resp = await axios.post("https://tmpfiles.org/api/v1/upload", form, {
-    headers: form.getHeaders(),
-    timeout: 25_000,
-  });
-
-  const rawUrl = resp.data?.data?.url;
-  if (!rawUrl) throw new Error("tmpfiles.org upload thất bại");
-  // tmpfiles.org trả về URL dạng https://tmpfiles.org/XXXXX/file.webp
-  // cần convert thành direct download URL
-  const directUrl = rawUrl.replace("tmpfiles.org/", "tmpfiles.org/dl/");
-  return directUrl;
-}
-
-async function uploadWebp(filePath) {
-  const services = [
-    { name: "Catbox",      fn: () => uploadToCatbox(filePath)    },
-    { name: "0x0.st",      fn: () => uploadTo0x0(filePath)       },
-    { name: "tmpfiles.org", fn: () => uploadToTmpfiles(filePath) },
-  ];
-
-  let lastErr;
-  for (const svc of services) {
-    try {
-      const url = await svc.fn();
-      logInfo(`[STK] Upload thành công qua ${svc.name}: ${url}`);
-      return url;
-    } catch (e) {
-      logWarn(`[STK] ${svc.name} lỗi: ${e.message} — thử dịch vụ tiếp theo...`);
-      lastErr = e;
-    }
+  let sha;
+  try {
+    const res = await axios.get(apiUrl, { headers, timeout: 15_000 });
+    sha = res.data.sha;
+  } catch (err) {
+    if (err.response?.status !== 404) throw err;
   }
-  throw new Error(`Tất cả dịch vụ upload đều thất bại. Lỗi cuối: ${lastErr?.message}`);
+
+  const content = fs.readFileSync(filePath).toString("base64");
+  await axios.put(apiUrl, {
+    message: `[sticker] Upload ${fileName}`,
+    content,
+    branch,
+    ...(sha ? { sha } : {}),
+  }, { headers, timeout: 30_000 });
+
+  const rawUrl = `https://raw.githubusercontent.com/${repo}/${branch}/${remotePath}`;
+  logInfo(`[STK] Upload GitHub thành công: ${rawUrl}`);
+  return rawUrl;
 }
 
-async function sendAsSticker(api, webpUrl, isAnimated, threadID, threadType) {
-  await api.sendCustomSticker({
-    staticImgUrl:    webpUrl,
-    animationImgUrl: isAnimated ? webpUrl : undefined,
-    threadId:        threadID,
-    threadType,
-    width:  512,
-    height: 512,
-  });
+// ── Gửi WebP dưới dạng ảnh đính kèm ─────────────────────────────────────────
+
+async function sendWebpFile(api, filePath, threadID, threadType) {
+  await api.sendMessage({ msg: "", attachments: [filePath] }, threadID, threadType);
 }
 
 // ── Sticker Zalo API: search + send ──────────────────────────────────────────
@@ -186,7 +145,7 @@ async function searchAndSendStickers(api, keyword, threadID, threadType, count =
   return sent;
 }
 
-// ── Sub-command: reply → Zalo sticker WebP ───────────────────────────────────
+// ── Sub-command: reply → WebP ─────────────────────────────────────────────────
 
 async function handleFromReply({ api, event, send, threadID, threadType, reactLoading, reactSuccess, reactError }) {
   const raw    = event?.data || {};
@@ -206,7 +165,6 @@ async function handleFromReply({ api, event, send, threadID, threadType, reactLo
 
   await reactLoading();
 
-  // Phát hiện animated qua Content-Type thực tế (tránh lỗi quoted.type undefined)
   let isAnimated = /\.gif($|\?)/i.test(quoted.mediaUrl);
   if (!isAnimated) {
     const ct = await getContentType(quoted.mediaUrl);
@@ -219,9 +177,7 @@ async function handleFromReply({ api, event, send, threadID, threadType, reactLo
   try {
     await downloadToFile(quoted.mediaUrl, inFile);
     await convertToWebp(inFile, outFile, isAnimated);
-
-    const webpUrl = await uploadWebp(outFile);
-    await sendAsSticker(api, webpUrl, isAnimated, threadID, threadType);
+    await sendWebpFile(api, outFile, threadID, threadType);
     await reactSuccess();
   } catch (e) {
     logError("[STK] Lỗi xử lý:", e.message);
@@ -271,7 +227,7 @@ async function handleSpin({ api, send, threadID, threadType, keyword, reactLoadi
   }
 }
 
-// ── Sub-command: AI vẽ → Zalo sticker ────────────────────────────────────────
+// ── Sub-command: AI vẽ ảnh ───────────────────────────────────────────────────
 
 async function handleAi({ api, send, threadID, threadType, prompt, reactLoading, reactSuccess, reactError }) {
   await reactLoading();
@@ -284,9 +240,7 @@ async function handleAi({ api, send, threadID, threadType, prompt, reactLoading,
   try {
     await downloadToFile(aiUrl, inFile);
     await convertToWebp(inFile, outFile, false);
-
-    const webpUrl = await uploadWebp(outFile);
-    await sendAsSticker(api, webpUrl, false, threadID, threadType);
+    await sendWebpFile(api, outFile, threadID, threadType);
     await reactSuccess();
   } catch (e) {
     logError("[STK-AI] Lỗi:", e.message);
@@ -303,16 +257,16 @@ module.exports = {
   config: {
     name           : "stk",
     aliases        : ["sticker"],
-    version        : "2.1.0",
+    version        : "2.2.0",
     hasPermssion   : 0,
     credits        : "MiZai",
     description    : "Tạo/tìm sticker từ ảnh, video, Zalo library hoặc AI",
     commandCategory: "Tiện Ích",
     usages         : [
-      "stk               — Reply ảnh/video → Zalo sticker WebP 512×512",
+      "stk               — Reply ảnh/video → WebP 512×512",
       "stk <từ khóa>     — Tìm sticker Zalo (tối đa 3)",
       "stk spin <từ khóa>— Lấy ngẫu nhiên 1 sticker Zalo",
-      "stk ai <mô tả>    — AI vẽ sticker theo mô tả",
+      "stk ai <mô tả>    — AI vẽ ảnh theo mô tả",
     ].join("\n"),
     cooldowns      : 5,
   },
@@ -326,24 +280,18 @@ module.exports = {
     const restText   = args.slice(1).join(" ").trim();
     const ctx        = { api, event, send, threadID, threadType, reactLoading, reactSuccess, reactError };
 
-    // Không có args → reply ảnh/video → Zalo sticker
-    if (!sub) {
-      return handleFromReply(ctx);
-    }
+    if (!sub) return handleFromReply(ctx);
 
-    // !stk ai <prompt>
     if (sub === "ai") {
       if (!restText) return send("⚠️ Nhập mô tả.\nVí dụ: !stk ai mèo phi hành gia");
       return handleAi({ ...ctx, prompt: restText });
     }
 
-    // !stk spin <keyword>
     if (sub === "spin") {
       if (!restText) return send("⚠️ Nhập từ khóa.\nVí dụ: !stk spin mèo");
       return handleSpin({ ...ctx, keyword: restText });
     }
 
-    // !stk <keyword> → tìm sticker Zalo
     const keyword = args.join(" ").trim();
     return handleSearch({ ...ctx, keyword, count: 3 });
   },

@@ -9,13 +9,19 @@
  *   .makestk webp <text hoặc emoji>     → Tạo text sticker WebP
  *   .makestk (reply ảnh)                → Chuyển ảnh thành sticker PNG bo góc
  *   .makestk webp (reply ảnh)           → Chuyển ảnh thành sticker WebP bo góc
+ *   .makestk (reply video)              → Lấy frame từ video → sticker PNG
+ *   .makestk webp (reply video)         → Lấy frame từ video → sticker WebP
+ *   .makestk t=5 (reply video)          → Lấy frame tại giây thứ 5
  */
 
 const { createCanvas, loadImage } = require("canvas");
-const fs   = require("fs");
-const path = require("path");
-const os   = require("os");
-const axios = require("axios");
+const fs      = require("fs");
+const path    = require("path");
+const os      = require("os");
+const axios   = require("axios");
+const { execFile } = require("child_process");
+const { promisify } = require("util");
+const execFileAsync = promisify(execFile);
 
 let _sharp;
 function getSharp() {
@@ -24,6 +30,8 @@ function getSharp() {
 }
 
 const STICKER_SIZE = 512;
+const FFMPEG_BIN   = "ffmpeg";
+const FFPROBE_BIN  = "ffprobe";
 
 // ── Màu chủ đề ngẫu nhiên ─────────────────────────────────────────────────────
 const THEMES = [
@@ -42,7 +50,7 @@ function pickTheme(seed) {
 }
 
 // ── Tính font size tự động theo độ dài text ───────────────────────────────────
-function autoFontSize(text, maxW) {
+function autoFontSize(text) {
   const len = [...text].length;
   if (len <= 2)  return 220;
   if (len <= 4)  return 160;
@@ -69,17 +77,68 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-// ── Tải ảnh từ URL ────────────────────────────────────────────────────────────
+// ── Tải file từ URL về buffer ─────────────────────────────────────────────────
 async function fetchBuffer(url) {
   const res = await axios.get(url, {
     responseType: "arraybuffer",
-    timeout: 15000,
+    timeout: 30000,
     headers: {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      "Referer": "https://www.google.com/",
+      "Referer":    "https://www.google.com/",
     },
   });
   return Buffer.from(res.data);
+}
+
+// ── Tải file từ URL xuống đường dẫn local ────────────────────────────────────
+async function downloadFile(url, dest) {
+  const res = await axios.get(url, {
+    responseType: "stream",
+    timeout: 60000,
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "Referer":    "https://www.google.com/",
+    },
+  });
+  await new Promise((resolve, reject) => {
+    const ws = fs.createWriteStream(dest);
+    res.data.pipe(ws);
+    ws.on("finish", resolve);
+    ws.on("error", reject);
+  });
+}
+
+// ── Lấy thời lượng video bằng ffprobe ────────────────────────────────────────
+async function getVideoDuration(videoPath) {
+  try {
+    const { stdout } = await execFileAsync(FFPROBE_BIN, [
+      "-v", "quiet",
+      "-print_format", "json",
+      "-show_streams",
+      "-select_streams", "v:0",
+      videoPath,
+    ], { timeout: 15000 });
+    const info = JSON.parse(stdout);
+    const stream = info?.streams?.[0];
+    const dur = parseFloat(stream?.duration || "0");
+    return isNaN(dur) ? 0 : dur;
+  } catch {
+    return 0;
+  }
+}
+
+// ── Trích frame từ video bằng ffmpeg ─────────────────────────────────────────
+async function extractFrame(videoPath, seekSec, outputPath) {
+  const seekStr = String(Math.max(0, seekSec).toFixed(3));
+  await execFileAsync(FFMPEG_BIN, [
+    "-y",
+    "-ss", seekStr,
+    "-i", videoPath,
+    "-frames:v", "1",
+    "-q:v", "2",
+    "-f", "image2",
+    outputPath,
+  ], { timeout: 30000 });
 }
 
 // ── Tạo text sticker ──────────────────────────────────────────────────────────
@@ -90,15 +149,12 @@ async function makeTextSticker(text, theme, outputFormat = "png") {
   const canvas = createCanvas(S, S);
   const ctx    = canvas.getContext("2d");
 
-  // Transparent background
   ctx.clearRect(0, 0, S, S);
 
-  // Tự động chọn font size
-  const fontSize = autoFontSize(text, S - PAD * 2);
+  const fontSize = autoFontSize(text);
   ctx.font = `bold ${fontSize}px "Noto Color Emoji", "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
 
-  // Wrap text
-  const maxW = S - PAD * 2;
+  const maxW  = S - PAD * 2;
   const lines = wrapText(ctx, text, maxW);
   const lineH = fontSize * 1.2;
   const totalH = lines.length * lineH;
@@ -110,30 +166,24 @@ async function makeTextSticker(text, theme, outputFormat = "png") {
     const x    = (S - lw) / 2;
     const y    = startY + i * lineH;
 
-    // Glow nếu có
     if (theme.glow) {
       ctx.save();
-      ctx.shadowColor  = theme.glow;
-      ctx.shadowBlur   = 30;
-      ctx.fillStyle    = theme.glow;
+      ctx.shadowColor = theme.glow;
+      ctx.shadowBlur  = 30;
+      ctx.fillStyle   = theme.glow;
       ctx.fillText(line, x, y);
       ctx.restore();
     }
 
-    // Drop shadow
     ctx.save();
     ctx.shadowColor   = theme.shadow;
     ctx.shadowBlur    = 12;
     ctx.shadowOffsetX = 4;
     ctx.shadowOffsetY = 4;
-
-    // Stroke (viền ngoài)
-    ctx.strokeStyle = theme.stroke;
-    ctx.lineWidth   = Math.max(6, Math.round(fontSize * 0.12));
-    ctx.lineJoin    = "round";
+    ctx.strokeStyle   = theme.stroke;
+    ctx.lineWidth     = Math.max(6, Math.round(fontSize * 0.12));
+    ctx.lineJoin      = "round";
     ctx.strokeText(line, x, y);
-
-    // Fill
     ctx.fillStyle = theme.fill;
     ctx.fillText(line, x, y);
     ctx.restore();
@@ -146,32 +196,30 @@ async function makeTextSticker(text, theme, outputFormat = "png") {
       .resize(S, S, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
       .webp({ quality: 90, lossless: false, alphaQuality: 100 })
       .toBuffer();
-    return { buffer: webpBuf, ext: "webp", mime: "image/webp" };
+    return { buffer: webpBuf, ext: "webp" };
   }
 
-  return { buffer: pngBuf, ext: "png", mime: "image/png" };
+  return { buffer: pngBuf, ext: "png" };
 }
 
-// ── Chuyển ảnh thành sticker (bo góc + transparent) ──────────────────────────
-async function makeImageSticker(imageUrl, outputFormat = "png") {
+// ── Chuyển ảnh/buffer thành sticker (bo góc + transparent) ───────────────────
+async function makeImageSticker(imageSource, outputFormat = "png") {
   const S = STICKER_SIZE;
-  const R = 60; // border radius
+  const R = 60;
 
-  // Tải ảnh gốc
-  const imgBuf = await fetchBuffer(imageUrl);
+  const imgBuf = Buffer.isBuffer(imageSource)
+    ? imageSource
+    : await fetchBuffer(imageSource);
 
-  // Resize ảnh về SxS (fit: cover, center)
   const resized = await getSharp()(imgBuf)
     .resize(S, S, { fit: "cover", position: "center" })
     .png()
     .toBuffer();
 
-  // Vẽ lên canvas với rounded corners mask
   const canvas = createCanvas(S, S);
   const ctx    = canvas.getContext("2d");
   ctx.clearRect(0, 0, S, S);
 
-  // Clip rounded rect
   ctx.beginPath();
   ctx.moveTo(R, 0);
   ctx.lineTo(S - R, 0);
@@ -194,63 +242,139 @@ async function makeImageSticker(imageUrl, outputFormat = "png") {
     const webpBuf = await getSharp()(pngBuf)
       .webp({ quality: 90, lossless: false, alphaQuality: 100 })
       .toBuffer();
-    return { buffer: webpBuf, ext: "webp", mime: "image/webp" };
+    return { buffer: webpBuf, ext: "webp" };
   }
 
-  return { buffer: pngBuf, ext: "png", mime: "image/png" };
+  return { buffer: pngBuf, ext: "png" };
+}
+
+// ── Tạo sticker từ video (trích frame) ───────────────────────────────────────
+async function makeVideoSticker(videoUrl, seekSec, outputFormat = "png") {
+  const tmpId   = Date.now();
+  const vidPath = path.join(os.tmpdir(), `stk_vid_${tmpId}.mp4`);
+  const frmPath = path.join(os.tmpdir(), `stk_frm_${tmpId}.jpg`);
+
+  try {
+    // Tải video về local
+    await downloadFile(videoUrl, vidPath);
+
+    // Nếu không chỉ định giây, lấy frame ở giữa video
+    let seek = seekSec;
+    if (seek == null) {
+      const dur = await getVideoDuration(vidPath);
+      seek = dur > 2 ? Math.min(dur * 0.3, dur - 0.5) : 0;
+    }
+
+    // Trích frame
+    await extractFrame(vidPath, seek, frmPath);
+
+    if (!fs.existsSync(frmPath)) throw new Error("ffmpeg không trích được frame");
+
+    const frameBuf = fs.readFileSync(frmPath);
+    return await makeImageSticker(frameBuf, outputFormat);
+  } finally {
+    for (const f of [vidPath, frmPath]) {
+      try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch (_) {}
+    }
+  }
 }
 
 // ── Lưu buffer ra file tạm ────────────────────────────────────────────────────
 function saveTmp(buffer, ext) {
-  const filePath = path.join(os.tmpdir(), `stk_${Date.now()}.${ext}`);
+  const filePath = path.join(os.tmpdir(), `stk_out_${Date.now()}.${ext}`);
   fs.writeFileSync(filePath, buffer);
   return filePath;
 }
 
-// ── Lấy image URL từ quoted/reply event ──────────────────────────────────────
-function getQuoteImageUrl(event) {
-  const raw = event?.data ?? {};
+// ── Parse t=N từ args ────────────────────────────────────────────────────────
+function parseSeek(args) {
+  const idx = args.findIndex(a => /^t=\d+(\.\d+)?$/i.test(a));
+  if (idx === -1) return { seekSec: null, filteredArgs: args };
+  const seekSec = parseFloat(args[idx].slice(2));
+  const filteredArgs = args.filter((_, i) => i !== idx);
+  return { seekSec, filteredArgs };
+}
 
-  // Zalo quote: raw.quote hoặc raw.refMessage
+// ── Lấy URL (ảnh hoặc video) từ quoted/reply event ───────────────────────────
+function getQuoteMedia(event) {
+  const raw   = event?.data ?? {};
   const quote = raw.quote || raw.refMessage || raw.quotedMsg || null;
-  if (quote) {
-    const qAttach = quote.attach;
-    if (qAttach) {
-      let items = qAttach;
-      if (typeof items === "string") {
-        try { items = JSON.parse(items); } catch { items = null; }
-      }
-      if (Array.isArray(items) && items[0]) {
-        const a = items[0];
-        const url = a.hdUrl || a.normalUrl || a.href || a.url || null;
-        if (url && typeof url === "string" && url.startsWith("http")) return url;
-      }
-      if (items && typeof items === "object" && !Array.isArray(items)) {
-        const url = items.hdUrl || items.normalUrl || items.href || items.url || null;
-        if (url && typeof url === "string" && url.startsWith("http")) return url;
-      }
-    }
-    const qUrl = quote.hdUrl || quote.normalUrl || quote.href || quote.url || null;
-    if (qUrl && typeof qUrl === "string" && qUrl.startsWith("http")) return qUrl;
+
+  if (!quote) return { imageUrl: null, videoUrl: null };
+
+  // Thử lấy từ attach array
+  let items = quote.attach;
+  if (typeof items === "string") {
+    try { items = JSON.parse(items); } catch { items = null; }
   }
 
-  return null;
+  const checkItem = (a) => {
+    if (!a || typeof a !== "object") return null;
+
+    // Ưu tiên video
+    const videoUrl = a.videoUrl || a.video_url || null;
+    if (videoUrl && typeof videoUrl === "string" && videoUrl.startsWith("http"))
+      return { type: "video", url: videoUrl };
+
+    // Ảnh
+    const imgUrl = a.hdUrl || a.normalUrl || a.href || a.url || null;
+    if (imgUrl && typeof imgUrl === "string" && imgUrl.startsWith("http")) {
+      // Phân loại theo đuôi / mime
+      const isVid = /\.(mp4|mov|avi|mkv|webm|3gp|flv|ts|m3u8)/i.test(imgUrl)
+                    || (a.fileType || "").toLowerCase().includes("video");
+      return { type: isVid ? "video" : "image", url: imgUrl };
+    }
+    return null;
+  };
+
+  if (Array.isArray(items)) {
+    for (const a of items) {
+      const r = checkItem(a);
+      if (r) return r.type === "video"
+        ? { imageUrl: null, videoUrl: r.url }
+        : { imageUrl: r.url, videoUrl: null };
+    }
+  } else if (items && typeof items === "object") {
+    const r = checkItem(items);
+    if (r) return r.type === "video"
+      ? { imageUrl: null, videoUrl: r.url }
+      : { imageUrl: r.url, videoUrl: null };
+  }
+
+  // Fallback: field trực tiếp trên quote
+  const directVideoUrl = quote.videoUrl || quote.video_url || null;
+  if (directVideoUrl && typeof directVideoUrl === "string" && directVideoUrl.startsWith("http"))
+    return { imageUrl: null, videoUrl: directVideoUrl };
+
+  const directImgUrl = quote.hdUrl || quote.normalUrl || quote.href || quote.url || null;
+  if (directImgUrl && typeof directImgUrl === "string" && directImgUrl.startsWith("http")) {
+    const isVid = /\.(mp4|mov|avi|mkv|webm|3gp|flv|ts|m3u8)/i.test(directImgUrl);
+    return isVid
+      ? { imageUrl: null, videoUrl: directImgUrl }
+      : { imageUrl: directImgUrl, videoUrl: null };
+  }
+
+  return { imageUrl: null, videoUrl: null };
 }
 
 // ── HELP ─────────────────────────────────────────────────────────────────────
 
 const HELP_MSG =
   "🎨 MAKE STICKER (PNG/WebP)\n" +
-  "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-  "• .makestk <text>            → Text sticker PNG\n" +
-  "• .makestk webp <text>       → Text sticker WebP\n" +
-  "• .makestk (reply ảnh)       → Ảnh → sticker PNG\n" +
-  "• .makestk webp (reply ảnh)  → Ảnh → sticker WebP\n" +
-  "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+  "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+  "• .makestk <text>              → Text sticker PNG\n" +
+  "• .makestk webp <text>         → Text sticker WebP\n" +
+  "• .makestk (reply ảnh)         → Ảnh → sticker PNG\n" +
+  "• .makestk webp (reply ảnh)    → Ảnh → sticker WebP\n" +
+  "• .makestk (reply video)       → Video → frame → sticker PNG\n" +
+  "• .makestk webp (reply video)  → Video → frame → sticker WebP\n" +
+  "• .makestk t=5 (reply video)   → Lấy frame tại giây thứ 5\n" +
+  "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
   "Ví dụ:\n" +
   "  .makestk 🔥 Hot!\n" +
   "  .makestk webp Haha 😂\n" +
-  "  (Reply ảnh) .makestk webp";
+  "  (Reply ảnh/video) .makestk webp\n" +
+  "  (Reply video) .makestk t=10";
 
 // ── COMMAND ───────────────────────────────────────────────────────────────────
 
@@ -258,42 +382,55 @@ module.exports = {
   config: {
     name:            "makestk",
     aliases:         ["taostk", "createstk", "mstk"],
-    version:         "1.0.0",
+    version:         "2.0.0",
     hasPermssion:    0,
     credits:         "MiZai",
-    description:     "Tạo sticker-like PNG/WebP từ text, emoji hoặc ảnh",
+    description:     "Tạo sticker PNG/WebP từ text, emoji, ảnh hoặc video",
     commandCategory: "Tiện Ích",
     usages:          HELP_MSG,
     cooldowns:       5,
   },
 
-  run: async ({ api, event, args, send, threadID }) => {
+  run: async ({ api, event, args, send, threadID, reactLoading, reactSuccess, reactError }) => {
+    // ── Parse --webp flag ─────────────────────────────────────────────────────
     let outputFormat = "png";
-    let queryArgs    = args;
+    let workArgs     = args;
 
-    if ((args[0] || "").toLowerCase() === "webp") {
+    if ((workArgs[0] || "").toLowerCase() === "webp") {
       outputFormat = "webp";
-      queryArgs    = args.slice(1);
+      workArgs     = workArgs.slice(1);
     }
 
-    const text = queryArgs.join(" ").trim();
+    // ── Parse t=N (seek giây) ─────────────────────────────────────────────────
+    const { seekSec, filteredArgs } = parseSeek(workArgs);
+    workArgs = filteredArgs;
 
-    // ── Thử lấy ảnh từ quoted message ────────────────────────────────────────
-    const quoteUrl = getQuoteImageUrl(event);
+    const text = workArgs.join(" ").trim();
 
-    if (!text && !quoteUrl) return send(HELP_MSG);
+    // ── Lấy media từ quoted message ──────────────────────────────────────────
+    const { imageUrl, videoUrl } = getQuoteMedia(event);
 
-    await send(`⏳ Đang tạo sticker ${outputFormat.toUpperCase()}...`);
+    if (!text && !imageUrl && !videoUrl) return send(HELP_MSG);
+
+    await reactLoading?.();
 
     let filePath = null;
     try {
       let result;
 
-      if (quoteUrl && !text) {
-        // Chế độ: convert ảnh thành sticker
-        result = await makeImageSticker(quoteUrl, outputFormat);
+      if (videoUrl) {
+        // ── Chế độ: video → frame → sticker
+        await send(`⏳ Đang trích frame từ video → tạo sticker ${outputFormat.toUpperCase()}...`);
+        result = await makeVideoSticker(videoUrl, seekSec, outputFormat);
+
+      } else if (imageUrl && !text) {
+        // ── Chế độ: ảnh → sticker
+        await send(`⏳ Đang tạo sticker ${outputFormat.toUpperCase()} từ ảnh...`);
+        result = await makeImageSticker(imageUrl, outputFormat);
+
       } else {
-        // Chế độ: text sticker
+        // ── Chế độ: text sticker
+        await send(`⏳ Đang tạo text sticker ${outputFormat.toUpperCase()}...`);
         const theme = pickTheme(text.charCodeAt(0));
         result = await makeTextSticker(text, theme, outputFormat);
       }
@@ -304,9 +441,12 @@ module.exports = {
         threadID,
         event.type
       );
+      await reactSuccess?.();
+
     } catch (err) {
       console.error("[MAKESTK] Lỗi:", err?.message || err);
       await send(`❌ Tạo sticker thất bại: ${err?.message || "Lỗi không xác định"}`);
+      await reactError?.();
     } finally {
       if (filePath) try { fs.unlinkSync(filePath); } catch (_) {}
     }

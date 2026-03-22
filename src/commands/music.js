@@ -126,7 +126,7 @@ async function ytSearch(keyword) {
     duration:  (item.duration || 0) * 1000,
     link:      item.url || item.webpage_url || "",
     _durSec:   item.duration || 0,
-    thumbnail: resolveUrl(item.thumbnail || "") || "",
+    thumbnail: (resolveUrl(item.thumbnail || "") || "").replace(/&amp;/g, "&"),
   }));
   if (mapped[0]) console.log("[MUSIC:yt] thumbnail[0]:", mapped[0].thumbnail?.slice(0, 120));
   return mapped;

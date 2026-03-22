@@ -11,8 +11,14 @@ const path  = require("path");
 const os    = require("os");
 const axios = require("axios");
 
+function decodeHtmlEntities(url) {
+  if (!url) return url;
+  return url.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
+}
+
 async function fetchImageBuffer(url) {
   if (!url) return null;
+  url = decodeHtmlEntities(url);
   try {
     const res = await axios.get(url, {
       responseType: "arraybuffer",

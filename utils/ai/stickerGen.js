@@ -157,10 +157,20 @@ async function createTextSticker({ text = "", emotion = "default", width = 400, 
   return canvas.toBuffer("image/png");
 }
 
+// ── Tải ảnh từ URL về Buffer ──────────────────────────────────────────────────
+async function fetchImageBuffer(url) {
+  const res = await axios.get(url, {
+    responseType: "arraybuffer",
+    timeout: 20000,
+    headers: { "User-Agent": "Mozilla/5.0" },
+  });
+  return Buffer.from(res.data);
+}
+
 // ── Tạo AI sticker dùng Flux API ─────────────────────────────────────────────
 const FLUX_API_BASE = "https://flux-image-gen-9rew.onrender.com";
 
-async function createAiSticker({ prompt, emotion = "cute" }) {
+async function createAiSticker({ prompt, emotion = "cute", imgUrl = null }) {
   const stickerPrompt = `${prompt}, cute anime sticker style, chibi, white background, simple, clean, high quality, sticker design`;
 
   try {
@@ -182,18 +192,30 @@ async function createAiSticker({ prompt, emotion = "cute" }) {
     if (!image) throw new Error("Flux API không trả về ảnh");
     return Buffer.from(image, "base64");
   } catch (err) {
-    // Fallback: vẽ canvas sticker với text từ prompt
-    global.logWarn?.(`[stickerGen/ai] Flux thất bại (${err.message}), fallback canvas...`);
+    global.logWarn?.(`[stickerGen/ai] Flux thất bại (${err.message}), fallback...`);
+
+    // Fallback 1: dùng ảnh gốc người dùng đã quote/gửi
+    if (imgUrl) {
+      try {
+        const buf = await fetchImageBuffer(imgUrl);
+        global.logInfo?.(`[stickerGen/ai] Dùng ảnh gốc từ URL làm sticker.`);
+        return buf;
+      } catch (dlErr) {
+        global.logWarn?.(`[stickerGen/ai] Không tải được ảnh gốc (${dlErr.message}), fallback canvas...`);
+      }
+    }
+
+    // Fallback 2: vẽ canvas sticker
     const shortText = prompt.slice(0, 40);
     return createTextSticker({ text: shortText, emotion });
   }
 }
 
 // ── Hàm chính — tạo sticker và lưu file tmp ──────────────────────────────────
-async function generateSticker({ text = "", emotion = "default", aiPrompt = "", mode = "text" }) {
+async function generateSticker({ text = "", emotion = "default", aiPrompt = "", mode = "text", imgUrl = null }) {
   let buf;
   if (mode === "ai" && aiPrompt) {
-    buf = await createAiSticker({ prompt: aiPrompt, emotion });
+    buf = await createAiSticker({ prompt: aiPrompt, emotion, imgUrl });
   } else {
     buf = await createTextSticker({ text, emotion });
   }

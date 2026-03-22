@@ -635,7 +635,7 @@ async function handleProfileAction(api, profileAction, send) {
 // ════════════════════════════════════════════════════════════════════════════════
 const { generateSticker } = require("../../utils/ai/stickerGen");
 
-async function handleCustomStickerAction(api, stickerAction, threadId, msgType, send) {
+async function handleCustomStickerAction(api, stickerAction, threadId, msgType, send, imgUrl = null) {
   const mode      = (stickerAction.mode      || "text").trim();
   const text      = (stickerAction.text      || "").trim();
   const emotion   = (stickerAction.emotion   || "default").trim();
@@ -643,7 +643,7 @@ async function handleCustomStickerAction(api, stickerAction, threadId, msgType, 
 
   let stickerPath = null;
   try {
-    stickerPath = await generateSticker({ text, emotion, aiPrompt, mode });
+    stickerPath = await generateSticker({ text, emotion, aiPrompt, mode, imgUrl });
 
     await api.sendMessage(
       {
@@ -943,7 +943,7 @@ async function handleGoibot({ api, event }) {
         await handleProfileAction(api, botMsg.profile, null);
       }
       if (botMsg?.customSticker?.status) {
-        await handleCustomStickerAction(api, botMsg.customSticker, threadId, event.type, null);
+        await handleCustomStickerAction(api, botMsg.customSticker, threadId, event.type, null, imgUrlToUse);
       }
       return;
     }
@@ -1071,7 +1071,7 @@ async function handleGoibot({ api, event }) {
 
     // ── Custom sticker — Mizai tự vẽ / AI-gen ──────────────────────────────────
     if (botMsg?.customSticker?.status) {
-      await handleCustomStickerAction(api, botMsg.customSticker, threadId, event.type, send);
+      await handleCustomStickerAction(api, botMsg.customSticker, threadId, event.type, send, imgUrlToUse);
     }
 
   } catch (err) {

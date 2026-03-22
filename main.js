@@ -11,6 +11,7 @@ const { scheduleCacheCleanup, scheduleKeyCheck }   = require("./utils/system/mai
 const { scheduleBackup }                           = require("./utils/system/githubBackup");
 const { startKeepAlive }                           = require("./utils/system/keepAlive");
 const { createZaloClient }                         = require("./utils/system/client");
+const { startExtraAccounts }                       = require("./utils/system/multiAccount");
 const { saveLastSeen }                             = require("./utils/system/lastSeen");
 const { fetchMissedMessages }                      = require("./utils/system/fetchMissed");
 
@@ -73,6 +74,9 @@ async function main(isFirstRun = true) {
       );
       fetchMissedMessages(api).catch(err =>
         logError(`[fetchMissed] Lỗi: ${err?.message}`)
+      );
+      startExtraAccounts().catch(err =>
+        logWarn(`[MultiAccount] Lỗi khởi động tài khoản phụ: ${err?.message}`)
       );
     }
   });

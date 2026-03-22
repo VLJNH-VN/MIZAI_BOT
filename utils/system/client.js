@@ -66,7 +66,8 @@ function cleanCookies(raw) {
 function saveCookieFile(cookiePath, cookies) {
   try {
     const clean = cleanCookies(cookies);
-    fs.writeFileSync(cookiePath, JSON.stringify(clean, null, 2), "utf-8");
+    const cookieStr = clean.map(c => `${c.key}=${c.value}`).join("; ");
+    fs.writeFileSync(cookiePath, JSON.stringify(cookieStr, null, 2), "utf-8");
     logInfo(`[Cookie] Đã lưu ${clean.length} cookie vào ${path.resolve(cookiePath)}`);
   } catch (err) {
     logWarn(`[Cookie] Không thể lưu cookie: ${err?.message}`);
@@ -198,4 +199,35 @@ async function createZaloClient() {
   return await loginWithQR(zalo, userAgent, cookiePath, qrPath, imei);
 }
 
-module.exports = { createZaloClient, looksLikeZaloImei, generateImei, persistImeiToConfig, normalizeCookies };
+// ── Kết nối thêm tài khoản từ cookie path ─────────────────────────────────────
+
+async function createZaloClientFromCookiePath(cookiePath) {
+  const config    = global.config;
+  const userAgent = (config.userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64)").trim();
+  const imei      = generateImei(userAgent);
+
+  const zalo = new Zalo({
+    selfListen:   true,
+    checkUpdate:  false,
+    logging:      false,
+    imageMetadataGetter: async (filePath) => {
+      const buf  = await fs.promises.readFile(filePath);
+      const dim  = imageSize(buf);
+      const stat = await fs.promises.stat(filePath);
+      return { width: dim?.width, height: dim?.height, size: stat?.size ?? buf.length };
+    },
+  });
+
+  const api = await loginWithCookie(zalo, userAgent, cookiePath, imei);
+  return api;
+}
+
+module.exports = {
+  createZaloClient,
+  createZaloClientFromCookiePath,
+  saveCookieFile,
+  looksLikeZaloImei,
+  generateImei,
+  persistImeiToConfig,
+  normalizeCookies,
+};

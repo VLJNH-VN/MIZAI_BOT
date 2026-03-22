@@ -1,7 +1,7 @@
 [
   {
     "key": "zpdid",
-    "value": "41Jyd53qhpSM4vUOLF74DnWLaPrQyC0n",
+    "value": "41Jyd5FogZeK5vALLlN1EXeJbP9Syi4-",
     "domain": "id.zalo.me",
     "path": "/",
     "secure": true,
@@ -9,7 +9,7 @@
   },
   {
     "key": "zlogin_session",
-    "value": "kW4JGLyjCnIxFnDDLXTbH-Tj1aDM6MD1ucqRKmjGRLcfBWr765jfMQqZ4rWVN6KL",
+    "value": "kW4JGLyjCnIxFnDDLXTbH-Tj1aDM6M50u6SPKWbQRrYh90z64bfrGg8v4q4YVG",
     "domain": "id.zalo.me",
     "path": "/",
     "secure": true,
@@ -25,7 +25,7 @@
   },
   {
     "key": "zpsid",
-    "value": "PgMC.454461147.11.sEwuWbp40Ow7GXULKCG1ZYctSxffy3MuRVKrkNvmDlG8G9QzNLu3JZN40Ou",
+    "value": "lATl.454461147.15.R-FR2R3rxRzhS_kalFNjlyM6duk5mTc9WSJPY9AenQZaSNgCiIxdVzdrxRy",
     "domain": "zalo.me",
     "path": "/",
     "secure": true,
@@ -33,7 +33,7 @@
   },
   {
     "key": "__zi",
-    "value": "3000.QOBlzDCV2uGerkFzm0LJrM3Kv_Z011xLOzIl-Cu26D5ZrQhv.1",
+    "value": "3000.QOBlzDCV2uGerkFzm0LJrM3Kv_Z011xLOzIl-Cu06TDhtghw.1",
     "domain": "zalo.me",
     "path": "/",
     "secure": true,
@@ -49,7 +49,7 @@
   },
   {
     "key": "zpsid",
-    "value": "eMKnVcAlVqAZUYmFKQTVBzqfL7XBfLigtIXBU4wy1bwRSszVIVrXSvnm64XhXcreZWq9Ka_3P4cB7oCPPD1FB8qO6W5Pps0El4qPL4-DQNkO11r2T8eJRdK",
+    "value": "eMKnVcAlVqAZUYmFRO560E4FJLTtWq85uGvILtQQFXcISZ8e0xfq6Tje6IKIiqi0_cCP6X7lGmpOO10x6UDv2_497b4IravZwWqZJY_qT6JrAXnzC-9QJ7a",
     "domain": "zaloapp.com",
     "path": "/",
     "secure": true,
@@ -57,7 +57,7 @@
   },
   {
     "key": "__zi",
-    "value": "3000.QOBlzDCV2uGerkFzm0LJrM3Kv_Z011xLOzIl-Cu26D5Zrwx-.1",
+    "value": "3000.QOBlzDCV2uGerkFzm0LJrM3Kv_Z011xLOzIl-Cu06TDergxw.1",
     "domain": "zaloapp.com",
     "path": "/",
     "secure": true,
@@ -65,7 +65,7 @@
   },
   {
     "key": "zpw_sek",
-    "value": "sImj.454461147.a0.YaVXo8S9sbzSZyn4fWdQN_mhlpIbC_WRot-mFkfFlnxAQAWOzLoKFUL4impmDETz-YjkQFrTNiYq24HTHs3QNm",
+    "value": "2ntf.454461147.a0.IFjBXqma4NANeWTfRIGHSZS6T1bk7ZD2Baz9GmbePXiF55e22buwHZfbOZex6InGCGPCMbjmbUL_9SnuZ4qHSW",
     "domain": "chat.zalo.me",
     "path": "/",
     "secure": true,

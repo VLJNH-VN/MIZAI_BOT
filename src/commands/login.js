@@ -1,19 +1,23 @@
 "use strict";
 
-const fs     = require("fs");
-const path   = require("path");
-const { Zalo }  = require("zca-js");
-const { imageSize } = require("image-size");
+const fs   = require("fs");
+const path = require("path");
+const { Zalo }       = require("zca-js");
+const { imageSize }  = require("image-size");
 const {
   looksLikeZaloImei,
   generateImei,
   persistImeiToConfig,
-  normalizeCookies,
+  saveCookieFile,
 } = require("../../utils/system/client");
+const {
+  isActive, enableAccount, disableAccount,
+  connectExtraAccount, disconnectExtraAccount,
+  ACCOUNTS_DIR,
+} = require("../../utils/system/multiAccount");
 const { readConfig } = require("../../utils/media/helpers");
 
-const ACCOUNTS_DIR = path.join(process.cwd(), "accounts");
-const QR_TIMEOUT_MS = 5 * 60 * 1000; // 5 phút
+const QR_TIMEOUT_MS = 5 * 60 * 1000;
 
 function cleanCookies(raw) {
   const arr = Array.isArray(raw) ? raw : (raw?.cookies || []);
@@ -27,29 +31,40 @@ function cleanCookies(raw) {
   })).filter(c => c.key && c.value);
 }
 
+function cookieToString(cleaned) {
+  return cleaned.map(c => `${c.key}=${c.value}`).join("; ");
+}
+
 function ensureAccountsDir() {
   if (!fs.existsSync(ACCOUNTS_DIR)) fs.mkdirSync(ACCOUNTS_DIR, { recursive: true });
 }
 
 function listAccounts() {
   ensureAccountsDir();
-  return fs.readdirSync(ACCOUNTS_DIR).filter(f => f.endsWith(".json")).map(f => f.replace(".json", ""));
+  return fs.readdirSync(ACCOUNTS_DIR)
+    .filter(f => f.endsWith(".json"))
+    .map(f => {
+      const cookiePath = path.join(ACCOUNTS_DIR, f);
+      return { name: f.replace(".json", ""), active: isActive(cookiePath), cookiePath };
+    });
 }
 
 module.exports = {
   config: {
     name:            "login",
-    version:         "1.0.0",
+    version:         "1.1.0",
     hasPermssion:    2,
     credits:         "MiZai",
-    description:     "Đăng nhập Zalo qua QR, đổi tài khoản và quản lý đa tài khoản",
+    description:     "Đăng nhập Zalo qua QR, đổi/lưu/chạy đồng thời nhiều tài khoản",
     commandCategory: "Quản Trị",
     usages: [
-      "login              — Đăng nhập & đổi tài khoản hiện tại",
-      "login save <tên>   — Đăng nhập & lưu tài khoản với tên",
-      "login use <tên>    — Chuyển sang tài khoản đã lưu + restart",
-      "login list         — Xem danh sách tài khoản đã lưu",
-      "login del <tên>    — Xóa tài khoản đã lưu",
+      "login               — Gửi QR đổi tài khoản chính",
+      "login save <tên>    — Đăng nhập + lưu tài khoản",
+      "login use <tên>     — Chuyển sang tài khoản (restart)",
+      "login active <tên>  — Bật tài khoản chạy đồng thời",
+      "login inactive <tên>— Tắt tài khoản chạy đồng thời",
+      "login list          — Xem danh sách + trạng thái",
+      "login del <tên>     — Xóa tài khoản đã lưu",
     ].join("\n"),
     cooldowns: 5,
   },
@@ -69,51 +84,68 @@ module.exports = {
           `💡 Dùng: login save <tên>  để đăng nhập và lưu tài khoản.`
         );
       }
+      const lines = accounts.map((a, i) =>
+        `  ${i + 1}. ${a.name}  ${a.active ? "🟢 đang chạy" : "⚫ không chạy"}`
+      );
       return send(
-        `📋 Danh sách tài khoản đã lưu (${accounts.length}):\n` +
-        accounts.map((n, i) => `  ${i + 1}. ${n}`).join("\n") + "\n" +
-        `\n💡 Chuyển tài khoản: login use <tên>`
+        `📋 Danh sách tài khoản (${accounts.length}):\n` +
+        lines.join("\n") + "\n\n" +
+        `🟢 Bật đồng thời: login active <tên>\n` +
+        `⚫ Tắt:           login inactive <tên>\n` +
+        `🔀 Chuyển chính:  login use <tên>`
       );
     }
 
     // ── del ───────────────────────────────────────────────────────────────────
-    if (sub === "del" || sub === "delete" || sub === "xoa") {
+    if (sub === "del" || sub === "delete") {
       if (!name) return send("❌ Nhập tên tài khoản cần xóa.\nVí dụ: login del acc1");
       const filePath = path.join(ACCOUNTS_DIR, `${name}.json`);
-      if (!fs.existsSync(filePath)) {
-        return send(`❌ Không tìm thấy tài khoản "${name}".\nDùng: login list để xem danh sách.`);
-      }
+      if (!fs.existsSync(filePath)) return send(`❌ Không tìm thấy tài khoản "${name}".`);
+      disableAccount(filePath);
+      disconnectExtraAccount(name);
       fs.unlinkSync(filePath);
       return send(`🗑️ Đã xóa tài khoản "${name}" thành công.`);
     }
 
     // ── use / switch ──────────────────────────────────────────────────────────
-    if (sub === "use" || sub === "switch" || sub === "dung") {
+    if (sub === "use" || sub === "switch") {
       if (!name) return send("❌ Nhập tên tài khoản muốn dùng.\nVí dụ: login use acc1");
       const filePath = path.join(ACCOUNTS_DIR, `${name}.json`);
-      if (!fs.existsSync(filePath)) {
-        return send(
-          `❌ Không tìm thấy tài khoản "${name}".\n` +
-          `📋 Dùng: login list để xem danh sách.`
-        );
-      }
+      if (!fs.existsSync(filePath)) return send(`❌ Không tìm thấy tài khoản "${name}".`);
       const cfg = readConfig();
       const cookiePath = path.join(process.cwd(), cfg.cookiePath || "./cookie.json");
       fs.copyFileSync(filePath, cookiePath);
-      await send(
-        `✅ Đã chuyển sang tài khoản "${name}"!\n` +
-        `🔄 Bot đang restart, vui lòng chờ...`
-      );
+      await send(`✅ Đã chuyển sang tài khoản "${name}"!\n🔄 Bot đang restart...`);
       setTimeout(() => global.restartBot?.(`Chuyển tài khoản → ${name}`, 2000), 500);
       return;
     }
 
+    // ── active (bật chạy đồng thời) ──────────────────────────────────────────
+    if (sub === "active") {
+      if (!name) return send("❌ Nhập tên tài khoản muốn bật.\nVí dụ: login active acc1");
+      const filePath = path.join(ACCOUNTS_DIR, `${name}.json`);
+      if (!fs.existsSync(filePath)) return send(`❌ Không tìm thấy tài khoản "${name}".`);
+      if (isActive(filePath)) return send(`✅ Tài khoản "${name}" đã đang chạy rồi.`);
+      enableAccount(filePath);
+      await send(`🔄 Đang kết nối tài khoản "${name}"...`);
+      const ok = await connectExtraAccount(filePath);
+      if (ok) return send(`🟢 Tài khoản "${name}" đã kết nối và đang chạy đồng thời!`);
+      return send(`❌ Không thể kết nối tài khoản "${name}". Kiểm tra cookie còn hạn không.`);
+    }
+
+    // ── inactive (tắt chạy đồng thời) ────────────────────────────────────────
+    if (sub === "inactive") {
+      if (!name) return send("❌ Nhập tên tài khoản muốn tắt.\nVí dụ: login inactive acc1");
+      const filePath = path.join(ACCOUNTS_DIR, `${name}.json`);
+      if (!fs.existsSync(filePath)) return send(`❌ Không tìm thấy tài khoản "${name}".`);
+      disableAccount(filePath);
+      disconnectExtraAccount(name);
+      return send(`⚫ Đã tắt tài khoản "${name}" khỏi chế độ đồng thời.`);
+    }
+
     // ── login / login save <tên> ──────────────────────────────────────────────
     const saveName = (sub === "save" && name) ? name : null;
-
-    if (sub === "save" && !name) {
-      return send("❌ Nhập tên tài khoản muốn lưu.\nVí dụ: login save acc1");
-    }
+    if (sub === "save" && !name) return send("❌ Nhập tên tài khoản muốn lưu.\nVí dụ: login save acc1");
 
     const cfg        = readConfig();
     const userAgent  = (cfg.userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64)").trim();
@@ -136,9 +168,9 @@ module.exports = {
 
     try {
       const zalo = new Zalo({
-        selfListen:   true,
-        checkUpdate:  false,
-        logging:      false,
+        selfListen:  true,
+        checkUpdate: false,
+        logging:     false,
         imageMetadataGetter: async (fp) => {
           const buf  = await fs.promises.readFile(fp);
           const dim  = imageSize(buf);
@@ -147,20 +179,17 @@ module.exports = {
         },
       });
 
-      // Không await — chạy ngầm để không block các lệnh khác
       zalo.loginQR({ userAgent, qrPath }, async (qrEvent) => {
         const { type, data, actions } = qrEvent;
 
         if (type === 0) {
-          // QR mới — lưu file và gửi vào nhóm
           await actions.saveToFile(qrPath);
           try {
             await api.sendMessage(
               {
                 msg:
                   `📱 Quét mã QR để đăng nhập Zalo` +
-                  (saveName ? ` (lưu thành "${saveName}")` : "") +
-                  `:\n` +
+                  (saveName ? ` (lưu thành "${saveName}")` : "") + `:\n` +
                   `📌 Zalo → Cá nhân → Đăng nhập thiết bị khác → Quét mã\n` +
                   `⏱️ Mã hết hạn sau ~60 giây`,
                 attachments: [qrPath],
@@ -170,37 +199,35 @@ module.exports = {
             );
           } catch {}
         } else if (type === 1) {
-          // QR hết hạn → retry
           actions.retry();
           await send("🔄 Mã QR đã hết hạn, đang tạo mã mới...").catch(() => {});
         } else if (type === 2) {
           await send("✅ Đã quét mã QR!\n📲 Vui lòng xác nhận trên điện thoại...").catch(() => {});
         } else if (type === 3) {
-          await send("❌ Đăng nhập bị từ chối trên điện thoại.\n🔄 Đang thử lại...").catch(() => {});
-          qrSent = false;
+          await send("❌ Đăng nhập bị từ chối. Đang thử lại...").catch(() => {});
           actions.retry();
         } else if (type === 4) {
-          // Đăng nhập thành công
           clearTimeout(timer);
           loginDone = true;
 
           if (data?.cookie) {
             const cleaned  = cleanCookies(data.cookie);
             const newImei  = data.imei || imei;
-            cfg.imei = newImei;
             persistImeiToConfig(newImei);
 
-            // Lưu vào accounts/<tên>.json nếu có saveName
+            // Lưu dạng "key=value; key=value" (dễ copy-paste)
+            const cookieStr = cookieToString(cleaned);
+
             if (saveName) {
               const savePath = path.join(ACCOUNTS_DIR, `${saveName}.json`);
-              fs.writeFileSync(savePath, JSON.stringify(cleaned, null, 2), "utf-8");
+              fs.writeFileSync(savePath, JSON.stringify(cookieStr, null, 2), "utf-8");
             }
 
             // Ghi đè cookie chính
-            fs.writeFileSync(cookiePath, JSON.stringify(cleaned, null, 2), "utf-8");
+            fs.writeFileSync(cookiePath, JSON.stringify(cookieStr, null, 2), "utf-8");
 
             const msg = saveName
-              ? `✅ Đăng nhập thành công!\n💾 Đã lưu tài khoản "${saveName}".\n🔄 Bot đang restart với tài khoản mới...`
+              ? `✅ Đăng nhập thành công!\n💾 Đã lưu tài khoản "${saveName}".\n🔄 Bot đang restart...`
               : `✅ Đăng nhập thành công!\n🔄 Bot đang restart với tài khoản mới...`;
 
             await send(msg).catch(() => {});
@@ -210,12 +237,12 @@ module.exports = {
       }).catch(async (err) => {
         clearTimeout(timer);
         if (!loginDone) {
-          await send(`❌ Lỗi trong quá trình đăng nhập: ${err?.message || err}`).catch(() => {});
+          await send(`❌ Lỗi đăng nhập: ${err?.message || err}`).catch(() => {});
         }
       });
     } catch (err) {
       clearTimeout(timer);
-      await send(`❌ Lỗi khởi tạo Zalo: ${err?.message || err}`).catch(() => {});
+      await send(`❌ Lỗi khởi tạo: ${err?.message || err}`).catch(() => {});
     }
   },
 };

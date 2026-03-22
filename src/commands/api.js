@@ -525,8 +525,18 @@ module.exports = {
       }
 
       let res;
+      let lastProgressSent = 0;
+      const onProgress = async (i, total, status) => {
+        const now = Date.now();
+        if (i === total || now - lastProgressSent >= 20000 || i % 10 === 0) {
+          lastProgressSent = now;
+          const pct = total > 0 ? Math.round((i / total) * 100) : 0;
+          const icon = status === "ok" ? "✅" : status === "fail" ? "❌" : "⏭";
+          await send(`${icon} Đang xử lý ${i}/${total} video (${pct}%)...`);
+        }
+      };
       try {
-        res = await global.cawr.tt.bulkAdd(tipName, query, limit);
+        res = await global.cawr.tt.bulkAdd(tipName, query, limit, onProgress);
       } catch (err) {
         return send(`❌ Lỗi: ${err?.message || "Không xác định"}`);
       }

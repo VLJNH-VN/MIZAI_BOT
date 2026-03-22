@@ -350,13 +350,19 @@ async function bulkAdd(tipName, query, limit = 0, onProgress = null) {
       let finalUrl = null;
 
       if (item._useFown) {
-        // Ưu tiên: lấy raw_url từ fown (GitHub CDN) — không cần tải về local
-        finalUrl = await fownGetRawUrl(item.tiktokUrl);
+        // Ưu tiên: lấy raw_url từ fown — retry tối đa 3 lần khi thất bại
+        for (let retry = 0; retry < 3 && !finalUrl; retry++) {
+          if (retry > 0) await new Promise(r => setTimeout(r, 2000 * retry));
+          finalUrl = await fownGetRawUrl(item.tiktokUrl);
+        }
 
         if (!finalUrl) {
-          // Fallback: fown đang stream trực tiếp → tự tải về và upload GitHub
+          // Fallback: fown stream trực tiếp → tự tải về và upload GitHub (retry 2 lần)
           const fownStreamUrl = `${FOWN_API}/api/download?url=${encodeURIComponent(item.tiktokUrl)}`;
-          finalUrl = await uploadVideo(fownStreamUrl, tipName, uid);
+          for (let retry = 0; retry < 2 && !finalUrl; retry++) {
+            if (retry > 0) await new Promise(r => setTimeout(r, 3000));
+            finalUrl = await uploadVideo(fownStreamUrl, tipName, uid);
+          }
         }
 
         if (!finalUrl) {
@@ -366,14 +372,17 @@ async function bulkAdd(tipName, query, limit = 0, onProgress = null) {
           continue;
         }
       } else {
-        // Tải về local rồi upload GitHub (flow cũ cho search keyword)
+        // Tải về local rồi upload GitHub — retry 2 lần khi thất bại
         if (!item.videoUrl) {
           skipped++;
           addHistory(item.id);
           onProgress?.(i + 1, results.length, "skip_image");
           continue;
         }
-        finalUrl = await uploadVideo(item.videoUrl, tipName, uid);
+        for (let retry = 0; retry < 2 && !finalUrl; retry++) {
+          if (retry > 0) await new Promise(r => setTimeout(r, 3000));
+          finalUrl = await uploadVideo(item.videoUrl, tipName, uid);
+        }
         if (!finalUrl) {
           failed++;
           failReasons.push("Không lấy được URL GitHub");

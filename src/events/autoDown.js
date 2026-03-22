@@ -89,26 +89,42 @@ function isTikTokUrl(url) {
     return /(?:vm\.|vt\.|www\.)?tiktok\.com|douyin\.com|capcut\.com/.test(url);
 }
 
-// ─── Facebook URL resolver — follow redirect fb.watch / fb.me → canonical URL ──
-//  fb.watch/abc và fb.me/abc là short link, cần resolve trước để yt-dlp xử lý tốt
+// ─── Facebook URL resolver — follow redirect → canonical URL ──────────────────
+//  Các dạng cần resolve (yt-dlp không tự xử lý redirect được):
+//    fb.watch/<id>            — short watch link
+//    fb.me/<id>               — short link
+//    facebook.com/share/<id>/ — plain share (không có r/ hay v/ prefix)
+//      → redirect đến video/reel/post thực sự
+//  Các dạng KHÔNG cần resolve (yt-dlp xử lý được trực tiếp):
+//    facebook.com/share/r/<id>/   — share reel (có r/ prefix)
+//    facebook.com/share/v/<id>/   — share video (có v/ prefix)
+//    facebook.com/watch?v=        — watch link
+//    facebook.com/reel/<id>       — reel link
+//    facebook.com/USER/videos/    — video trên profile
+const FB_NEEDS_RESOLVE = /fb\.watch(?:\/|$)|fb\.me(?:\/|$)|facebook\.com\/share\/(?!r\/|v\/)([A-Za-z0-9_-]+)/i;
+
 async function resolveFbUrl(url) {
-    const isShort = /fb\.watch(?:\/|$)|fb\.me(?:\/|$)/i.test(url);
-    if (!isShort) return url;
+    if (!FB_NEEDS_RESOLVE.test(url)) return url;
     try {
         const res = await axios.get(url, {
-            timeout:          10000,
-            maxRedirects:     5,
-            headers: { "User-Agent": global.userAgent || "Mozilla/5.0" },
-            validateStatus:   () => true,
+            timeout:        12000,
+            maxRedirects:   10,
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8",
+            },
+            validateStatus: () => true,
         });
-        const canonical = res?.request?.res?.responseUrl
-            || res?.request?.path
+        // Axios ghi lại URL cuối cùng sau redirect ở đây
+        const finalUrl = res?.request?.res?.responseUrl
+            || (typeof res?.config?.url === "string" ? res.config.url : null)
             || url;
-        const finalUrl = typeof canonical === "string" && canonical.startsWith("http")
-            ? canonical : url;
-        if (finalUrl !== url) logDebug(`[AutoDown] FB resolve: ${url} → ${finalUrl}`);
-        return finalUrl;
-    } catch {
+        const resolved = typeof finalUrl === "string" && finalUrl.startsWith("http")
+            ? finalUrl : url;
+        if (resolved !== url) logDebug(`[AutoDown] FB resolve: ${url} → ${resolved}`);
+        return resolved;
+    } catch (e) {
+        logWarn(`[AutoDown] FB resolve thất bại (${e.message}), dùng URL gốc.`);
         return url;
     }
 }

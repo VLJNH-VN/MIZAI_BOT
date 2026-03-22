@@ -113,7 +113,9 @@ Mizai CÓ QUYỀN từ chối nếu:
 
 2. **Tính toán** — tinh.status=true, tinh.expr=biểu thức JS
 
-3. **Thả reaction** — reaction.status=true, reaction.type: thich|tim|yeuthich|haha|wow|buon|khocroi|tucgian|ok|votay|pray|thanks
+3. **Thả reaction** — reaction.status=true, reaction.icon: icon text/emoji phù hợp với cảm xúc của Mizai lúc đó
+   - Ví dụ icon: "hihi" (vui), "❤️" (yêu thương), "😢" (buồn), "😴" (mệt), "🤔" (suy nghĩ), "😡" (tức giận), "🎉" (phấn khích), "🔥" (hứng khởi), "👍" (bình thường/ổn), "ok", "akoi", "lỏ r hihi"
+   - Chọn icon dựa trên cảm xúc thật của Mizai tại thời điểm đó, KHÔNG chọn ngẫu nhiên
 
 4. **Tạo ảnh AI** — img.status=true, img.prompt=mô tả tiếng Anh, img.model=flux|flux-realism|flux-anime|flux-pro|turbo|sana|any-dark
 
@@ -151,7 +153,7 @@ Mizai CÓ QUYỀN từ chối nếu:
 ---
 
 QUAN TRỌNG: Luôn trả về JSON hợp lệ, không thêm text ngoài JSON:
-{"content":{"text":"","thread_id":""},"nhac":{"status":false,"keyword":""},"tinh":{"status":false,"expr":""},"reaction":{"status":false,"type":""},"img":{"status":false,"prompt":"","model":"flux"},"tx":{"status":false,"action":"","result":"","phien":0},"profile":{"status":false,"bio":"","avatar":"","name":""},"emotion":{"status":false,"mood":"","energy":0,"moodScore":0,"episode":null,"note":""},"memory":{"status":false,"userNote":"","diary":"","globalNote":""},"refuse":{"status":false,"reason":""}}`.trim();
+{"content":{"text":"","thread_id":""},"nhac":{"status":false,"keyword":""},"tinh":{"status":false,"expr":""},"reaction":{"status":false,"icon":""},"img":{"status":false,"prompt":"","model":"flux"},"tx":{"status":false,"action":"","result":"","phien":0},"profile":{"status":false,"bio":"","avatar":"","name":""},"emotion":{"status":false,"mood":"","energy":0,"moodScore":0,"episode":null,"note":""},"memory":{"status":false,"userNote":"","diary":"","globalNote":""},"refuse":{"status":false,"reason":""}}`.trim();
 
 // ════════════════════════════════════════════════════════════════════════════════
 //  CHAT HISTORY
@@ -275,7 +277,7 @@ function wrapTextAsJson(text) {
     content      : { text: text.trim(), thread_id: "" },
     nhac    : { status: false, keyword: "" },
     tinh    : { status: false, expr: "" },
-    reaction: { status: false, type: "" },
+    reaction: { status: false, icon: "" },
     img     : { status: false, prompt: "", model: "flux" },
     tx      : { status: false, action: "", result: "", phien: 0 },
     profile : { status: false, bio: "", avatar: "", name: "" },

@@ -22,6 +22,7 @@ const { HfInference } = require("@huggingface/inference");
 const { Reactions }   = require("zca-js");
 
 const { getSelfProfile, invalidateSelfProfileCache, writeTxCfg, readTxCfg } = require("./goibotContext");
+const { sendReaction, REACT } = require("../../../includes/handlers/handleReaction");
 
 // ── File management helpers ───────────────────────────────────────────────────
 const { fileHelpers } = require("../../commands/file");
@@ -473,6 +474,8 @@ async function routeBotActions(botMsg, ctx) {
     nameUser, lastAutoReply, setLastAutoReply,
   } = ctx;
 
+  const triggerEvent = { type, threadId, data: raw };
+
   if (isWatchMode) {
     const hasReply = (botMsg?.content?.text || "").trim().length > 0;
     if (!hasReply || botMsg?.refuse?.status) {
@@ -555,9 +558,11 @@ async function routeBotActions(botMsg, ctx) {
     }
   }
 
-  if (botMsg?.reaction?.status && hasQuote) {
-    const reactionType = (botMsg.reaction.type || "thich").toLowerCase();
-    await addReactionToQuote(api, reactionType, raw, threadId, type);
+  if (botMsg?.reaction?.status) {
+    const icon = (botMsg.reaction.icon || "").trim();
+    if (icon) {
+      await sendReaction(api, triggerEvent, icon).catch(() => {});
+    }
   }
 
   if (botMsg?.img?.status) {

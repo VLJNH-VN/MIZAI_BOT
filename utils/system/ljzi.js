@@ -128,8 +128,20 @@ async function _prepareOne(name) {
       try { if (fs.existsSync(h264Path)) fs.unlinkSync(h264Path); } catch (_) {}
     }
 
-    const meta = probeStreams(finalPath);
-    _cache[name].push({ filePath: finalPath, meta });
+    const meta      = probeStreams(finalPath);
+    const fileSize  = fs.statSync(finalPath).size;
+
+    // ── Pre-upload lên GitHub ngầm — khi gửi sẽ dùng ngay, không chờ ──────
+    let releaseUrl = null;
+    if (typeof global.githubReleaseUpload === "function" && fileSize < 50 * 1024 * 1024) {
+      try {
+        releaseUrl = await global.githubReleaseUpload(finalPath, `ljzi_${id}.mp4`);
+      } catch (e) {
+        global.logWarn?.(`[Ljzi] Pre-upload GitHub lỗi: ${e.message}`);
+      }
+    }
+
+    _cache[name].push({ filePath: finalPath, meta, releaseUrl });
     return true;
   } catch (e) {
     global.logWarn?.(`[Ljzi] _prepareOne "${name}" lỗi: ${e.message}`);
@@ -159,36 +171,43 @@ async function _fillCache(name) {
 
 // ── Gửi video từ file đã chuẩn bị sẵn ────────────────────────────────────────
 
-async function _sendFromFile(api, event, filePath, meta, caption) {
+async function _sendFromFile(api, event, filePath, meta, caption, releaseUrl) {
   const fileSize = fs.statSync(filePath).size;
 
+  // Upload thumbnail + chuẩn bị release URL song song
   let thumbnailUrl = "";
-  try {
-    thumbnailUrl = await global.zaloUploadThumbnail(api, filePath, event.threadId, event.type) || "";
-  } catch (et) {
-    global.logWarn?.(`[Ljzi] Thumbnail lỗi: ${et.message}`);
-  }
+  let finalReleaseUrl = releaseUrl || null;
+
+  const thumbPromise = global.zaloUploadThumbnail
+    ? global.zaloUploadThumbnail(api, filePath, event.threadId, event.type).catch(() => "")
+    : Promise.resolve("");
+
+  // Nếu chưa có releaseUrl sẵn, upload GitHub song song với thumbnail
+  const ghPromise = (!finalReleaseUrl && typeof global.githubReleaseUpload === "function" && fileSize < 50 * 1024 * 1024)
+    ? global.githubReleaseUpload(filePath, `ljzi_${uid()}.mp4`).catch(e => {
+        global.logWarn?.(`[Ljzi] Release upload thất bại: ${e.message}`);
+        return null;
+      })
+    : Promise.resolve(finalReleaseUrl);
+
+  [thumbnailUrl, finalReleaseUrl] = await Promise.all([thumbPromise, ghPromise]);
 
   let sentAsVideo = false;
 
-  if (typeof global.githubReleaseUpload === "function" && fileSize < 50 * 1024 * 1024) {
+  if (finalReleaseUrl) {
     try {
-      const id         = uid();
-      const releaseUrl = await global.githubReleaseUpload(filePath, `ljzi_${id}.mp4`);
-      if (releaseUrl) {
-        await api.sendVideo({
-          videoUrl:     releaseUrl,
-          thumbnailUrl,
-          msg:          caption || "",
-          width:        meta.width,
-          height:       meta.height,
-          duration:     meta.duration * 1000,
-          ttl:          500_000,
-        }, event.threadId, event.type);
-        sentAsVideo = true;
-      }
+      await api.sendVideo({
+        videoUrl:     finalReleaseUrl,
+        thumbnailUrl: thumbnailUrl || "",
+        msg:          caption || "",
+        width:        meta.width,
+        height:       meta.height,
+        duration:     meta.duration * 1000,
+        ttl:          500_000,
+      }, event.threadId, event.type);
+      sentAsVideo = true;
     } catch (e) {
-      global.logWarn?.(`[Ljzi] Release upload/sendVideo thất bại: ${e.message}`);
+      global.logWarn?.(`[Ljzi] sendVideo thất bại: ${e.message}`);
     }
   }
 
@@ -254,7 +273,7 @@ global.Ljzi = {
     if (_cache[name] && _cache[name].length > 0) {
       const item = _cache[name].shift();
       _fillCache(name).catch(() => {});
-      await _sendFromFile(api, event, item.filePath, item.meta, cap);
+      await _sendFromFile(api, event, item.filePath, item.meta, cap, item.releaseUrl);
     } else {
       global.logWarn?.(`[Ljzi] Cache "${name}" trống, download on-demand...`);
       const url = this.pick(name);

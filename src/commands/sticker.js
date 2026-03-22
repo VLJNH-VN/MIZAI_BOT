@@ -17,7 +17,7 @@ const { promisify } = require("node:util");
 const FormData      = require("form-data");
 const axios         = require("axios");
 const ffmpegPath    = require("ffmpeg-static");
-const { log }       = require("../../utils/system/logger");
+const { logError, logWarn, logInfo } = require("../../utils/system/logger");
 const { resolveQuote } = require("../../utils/bot/messageUtils");
 
 const execPromise = promisify(exec);
@@ -133,10 +133,10 @@ async function uploadWebp(filePath) {
   for (const svc of services) {
     try {
       const url = await svc.fn();
-      log.info(`[STK] Upload thành công qua ${svc.name}: ${url}`);
+      logInfo(`[STK] Upload thành công qua ${svc.name}: ${url}`);
       return url;
     } catch (e) {
-      log.warn(`[STK] ${svc.name} lỗi: ${e.message} — thử dịch vụ tiếp theo...`);
+      logWarn(`[STK] ${svc.name} lỗi: ${e.message} — thử dịch vụ tiếp theo...`);
       lastErr = e;
     }
   }
@@ -171,7 +171,7 @@ async function searchAndSendStickers(api, keyword, threadID, threadType, count =
       await api.sendSticker(sticker, threadID, threadType);
       sent++;
     } catch (e) {
-      log.warn(`[STK] Gửi sticker ${sticker.id} lỗi: ${e.message}`);
+      logWarn(`[STK] Gửi sticker ${sticker.id} lỗi: ${e.message}`);
     }
   }
   return sent;
@@ -215,7 +215,7 @@ async function handleFromReply({ api, event, send, threadID, threadType, reactLo
     await sendAsSticker(api, webpUrl, isAnimated, threadID, threadType);
     await reactSuccess();
   } catch (e) {
-    log.error("[STK] Lỗi xử lý:", e.message);
+    logError("[STK] Lỗi xử lý:", e.message);
     await reactError();
     await send(`⚠️ Lỗi tạo sticker: ${e.message}`);
   } finally {
@@ -235,7 +235,7 @@ async function handleSearch({ api, send, threadID, threadType, keyword, count, r
     }
     await reactSuccess();
   } catch (e) {
-    log.error("[STK-SEARCH] Lỗi:", e.message);
+    logError("[STK-SEARCH] Lỗi:", e.message);
     await reactError();
     await send(`⚠️ Lỗi tìm sticker: ${e.message}`);
   }
@@ -256,7 +256,7 @@ async function handleSpin({ api, send, threadID, threadType, keyword, reactLoadi
     await api.sendSticker(stickers[0], threadID, threadType);
     await reactSuccess();
   } catch (e) {
-    log.error("[STK-SPIN] Lỗi:", e.message);
+    logError("[STK-SPIN] Lỗi:", e.message);
     await reactError();
     await send(`⚠️ Lỗi: ${e.message}`);
   }
@@ -280,7 +280,7 @@ async function handleAi({ api, send, threadID, threadType, prompt, reactLoading,
     await sendAsSticker(api, webpUrl, false, threadID, threadType);
     await reactSuccess();
   } catch (e) {
-    log.error("[STK-AI] Lỗi:", e.message);
+    logError("[STK-AI] Lỗi:", e.message);
     await reactError();
     await send(`⚠️ AI vẽ lỗi: ${e.message}`);
   } finally {

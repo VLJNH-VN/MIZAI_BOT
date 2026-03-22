@@ -204,11 +204,7 @@ async function handleCommand({ api, event, commands, prefix }) {
         `📋 Gõ ${effectivePrefix}help để xem danh sách lệnh.\n` +
         `⏰ Uptime: ${formatUptime()}`;
 
-      if (global.Ljzi?.cacheSize("vdgai") > 0) {
-        await global.Ljzi.send(api, event, "vdgai", notFoundText).catch(() => send(notFoundText));
-      } else {
-        await send(notFoundText);
-      }
+      await send(notFoundText);
       return;
     }
 

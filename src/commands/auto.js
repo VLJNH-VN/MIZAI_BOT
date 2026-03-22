@@ -9,8 +9,8 @@ const { ThreadType } = require("zca-js");
 const { setEnabled, isEnabled } = require('../../utils/ai/goibot');
 const { setSetting, getSetting } = require('../../includes/database/groupSettings');
 
-const AUTOSEND_FILE = path.join(process.cwd(), "includes", "data", "autoSend.json");
-const AUTO_JSON     = path.join(process.cwd(), "includes", "data", "auto.json");
+const AUTOSEND_FILE = path.join(process.cwd(), "includes", "data", "config", "autoSend.json");
+const AUTO_JSON     = path.join(process.cwd(), "includes", "data", "config", "auto.json");
 
 // ─── One-time migration: auto.json → groups.settings ─────────────────────────
 (function _migrateAutoJson() {

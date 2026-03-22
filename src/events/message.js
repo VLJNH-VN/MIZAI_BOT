@@ -4,7 +4,7 @@ const { handleCommand } = require("../../includes/handlers/handleCommand");
 const { handleReply } = require("../../includes/handlers/handleReply");
 const { handleUploadAttachments } = require("../../includes/handlers/handleUploadAttachments");
 
-const AUTOREPLY_PATH = path.join(__dirname, "../../includes/data/autoreply.json");
+const AUTOREPLY_PATH = path.join(__dirname, "../../includes/data/runtime/autoreply.json");
 const { TRIGGER_KEYWORDS } = require("../../utils/ai/goibot");
 
 function loadAutoReplyRules() {

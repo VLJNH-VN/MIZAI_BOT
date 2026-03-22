@@ -56,7 +56,7 @@ function pickRandomVideo() {
   } catch { return null; }
 }
 
-const CONFIG_FILE = path.join(process.cwd(), "includes", "data", "autoSend.json");
+const CONFIG_FILE = path.join(process.cwd(), "includes", "data", "config", "autoSend.json");
 const { getAllGroupIds } = require("../../includes/database/groupSettings");
 
 const INTERVAL_MS = 60 * 1000;

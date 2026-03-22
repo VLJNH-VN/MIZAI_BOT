@@ -1,5 +1,5 @@
 const { ThreadType } = require("zca-js");
-const { readConfig, writeConfig } = require('../../utils/helpers');
+const { readConfig, writeConfig } = require('../../utils/media/helpers');
 const { getAllGroupIds } = require('../../includes/database/groupSettings');
 
 // ── Lấy UID từ mention hoặc args ─────────────────────────────────────────────

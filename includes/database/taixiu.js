@@ -12,7 +12,7 @@ const path = require("path");
 const { getDb, run, get, all } = require("./sqlite");
 
 // ── Migrate dữ liệu từ JSON cũ (chỉ chạy 1 lần) ──────────────────────────────
-const TX_DIR   = path.join(process.cwd(), "includes", "data", "taixiu");
+const TX_DIR   = path.join(process.cwd(), "includes", "data", "game", "taixiu");
 const BET_DIR  = path.join(TX_DIR, "betHistory");
 const LSGD_DIR = path.join(TX_DIR, "lichsuGD");
 

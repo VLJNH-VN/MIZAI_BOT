@@ -11,12 +11,12 @@ const BACKUP_BRANCH   = process.env.GITHUB_BACKUP_BRANCH || "main";
 
 // ── Danh sách file cần backup ─────────────────────────────────────────────────
 const BACKUP_FILES = [
-  { local: path.join(process.cwd(), "includes", "data", "key.json"),                          remote: "backup/includes/data/key.json" },
-  { local: path.join(process.cwd(), "includes", "data", "users.json"),                        remote: "backup/includes/data/users.json" },
-  { local: path.join(process.cwd(), "includes", "data", "groups.json"),                       remote: "backup/includes/data/groups.json" },
-  { local: path.join(process.cwd(), "includes", "data", "rentKey.json"),                      remote: "backup/includes/data/rentKey.json" },
-  { local: path.join(process.cwd(), "includes", "data", "taixiu", "money.json"),              remote: "backup/includes/data/taixiu/money.json" },
-  { local: path.join(process.cwd(), "includes", "data", "taixiu", "txConfig.json"),           remote: "backup/includes/data/taixiu/txConfig.json" },
+  { local: path.join(process.cwd(), "includes", "data", "runtime", "key.json"),                          remote: "backup/includes/data/key.json" },
+  { local: path.join(process.cwd(), "includes", "data", "runtime", "users.json"),                        remote: "backup/includes/data/users.json" },
+  { local: path.join(process.cwd(), "includes", "data", "runtime", "groups.json"),                       remote: "backup/includes/data/groups.json" },
+  { local: path.join(process.cwd(), "includes", "data", "runtime", "rentKey.json"),                      remote: "backup/includes/data/rentKey.json" },
+  { local: path.join(process.cwd(), "includes", "data", "game", "taixiu", "money.json"),              remote: "backup/includes/data/taixiu/money.json" },
+  { local: path.join(process.cwd(), "includes", "data", "game", "taixiu", "txConfig.json"),           remote: "backup/includes/data/taixiu/txConfig.json" },
   { local: path.join(process.cwd(), "includes", "database", "groupsCache.json"),              remote: "backup/includes/database/groupsCache.json" },
   { local: path.join(process.cwd(), "artifacts", "flux-image-gen", "server", "data", "credentials.json"), remote: "backup/flux-server/credentials.json" },
   { local: path.join(process.cwd(), "artifacts", "flux-image-gen", "server", "data", "keys.json"),        remote: "backup/flux-server/keys.json" },

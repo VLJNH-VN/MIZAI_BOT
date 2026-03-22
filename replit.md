@@ -49,13 +49,14 @@ MIZAI_BOT/
 │       ├── message.js          # Điều phối tin nhắn → handleCommand
 │       ├── autoDown.js         # Tự động tải media
 │       ├── autoSend.js         # Tự động gửi tin định kỳ
-│       ├── goibot.js           # AI Mizai — main handler (thin, ~230 dòng)
-│       ├── goibotThrottle.js   # Anti-spam & cooldown state
-│       ├── goibotContext.js    # TX context, self-profile cache, safeCalc, self-reflect
-│       ├── goibotRouter.js     # Action dispatch, image gen, file ops, reaction
 │       ├── groupEvents.js      # Sự kiện nhóm
 │       ├── tuongTac.js         # Tương tác tự động
-│       └── txLoop.js           # Vòng lặp game Tài Xỉu
+│       ├── txLoop.js           # Vòng lặp game Tài Xỉu
+│       └── goibot/             # AI Mizai (tách thành subfolder)
+│           ├── index.js        # Main handler (~230 dòng)
+│           ├── goibotThrottle.js  # Anti-spam & cooldown state
+│           ├── goibotContext.js   # TX context, self-profile cache, safeCalc
+│           └── goibotRouter.js   # Action dispatch, image gen, file ops
 │
 ├── includes/
 │   ├── handlers/               # Xử lý lệnh, reply, reaction, undo
@@ -65,15 +66,21 @@ MIZAI_BOT/
 │   │   ├── taixiu.js           # Game Tài Xỉu (money, bets, rounds, config, groups)
 │   │   ├── tuongtac.js         # Tương tác người dùng theo ngày/tuần/tháng
 │   │   └── aiMemory.js         # AI memory, mood/state, bot group toggle
-│   ├── data/                   # Dữ liệu JSON còn lại (anti, auto, key, users...)
+│   ├── data/                   # Dữ liệu JSON phân theo mục đích
+│   │   ├── config/             # Cấu hình tĩnh: anti.json, auto.json, autoSend.json, auto_xo_so.json
+│   │   ├── runtime/            # Dữ liệu hoạt động: users, groups, key, rentKey, lastSeen, muted...
+│   │   └── game/               # Dữ liệu game: taixiu/ (money, phien, betHistory, ...)
 │   ├── listapi/                # Danh sách API
 │   └── cache/                  # Cache bộ nhớ
 │
 ├── utils/
 │   ├── ai/goibot.js            # Logic AI (Groq, Gemini)
-│   ├── bot/                    # botManager, messageUtils
+│   ├── bot/                    # botManager, messageUtils, cawr
 │   ├── system/                 # client, global, loader, logger, maintenance, keepAlive, githubBackup
-│   └── zaloMedia.js            # Gửi video/voice Zalo chuẩn (GwenDev pattern) — xem mục bên dưới
+│   └── media/                  # Tiện ích xử lý media & config
+│       ├── canvas.js           # Vẽ card ảnh (join/leave, menu, uptime...)
+│       ├── zaloMedia.js        # Gửi video/voice Zalo chuẩn (GwenDev pattern)
+│       └── helpers.js          # Hàm tiện ích dùng chung (readConfig, fmtMoney...)
 │
 └── scripts/                    # Script tiện ích (chạy bằng npm run ...)
     ├── new-cmd.js              # Tạo lệnh mới
@@ -134,7 +141,7 @@ npm run backup                      # Backup dữ liệu lên GitHub
 | ai | 3 | Trí tuệ nhân tạo |
 | utility | 8 | Tiện ích hệ thống |
 
-## utils/zaloMedia.js — Gửi media Zalo chuẩn (GwenDev pattern)
+## utils/media/zaloMedia.js — Gửi media Zalo chuẩn (GwenDev pattern)
 
 Module tái sử dụng cho mọi dự án `zca-js`. Copy file vào `utils/` và import là dùng được ngay.
 

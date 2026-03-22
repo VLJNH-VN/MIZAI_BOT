@@ -6,7 +6,7 @@ const stringSimilarity = require("string-similarity");
 const { registerReply } = require("./handleReply");
 const { registerReaction, reactError, reactSuccess, reactLoading } = require("./handleReaction");
 const { registerUndo } = require("./handleUndo");
-const { readConfig } = require("../../utils/helpers");
+const { readConfig } = require("../../utils/media/helpers");
 const { getRentInfo, isRentExpired } = require("../database/rent");
 const { checkAndSet: checkCooldownDb } = require("../database/cooldown");
 

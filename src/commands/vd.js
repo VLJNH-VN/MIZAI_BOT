@@ -20,7 +20,7 @@ const fs             = require("fs");
 const path           = require("path");
 const axios          = require("axios");
 const { execSync }   = require("child_process");
-const { uploadThumbnail } = require("../../utils/zaloMedia");
+const { uploadThumbnail } = require("../../utils/media/zaloMedia");
 
 const LISTAPI_DIR = path.join(process.cwd(), "includes", "listapi");
 const TEMP_DIR    = path.join(process.cwd(), "includes", "cache");

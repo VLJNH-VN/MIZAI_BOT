@@ -10,7 +10,7 @@ const fs   = require("fs");
 const path = require("path");
 const { ThreadType } = require("zca-js");
 
-const DATA_FILE = path.join(process.cwd(), "includes", "data", "auto_xo_so.json");
+const DATA_FILE = path.join(process.cwd(), "includes", "data", "config", "auto_xo_so.json");
 const { getAllGroupIds } = require("../../includes/database/groupSettings");
 
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify([]));

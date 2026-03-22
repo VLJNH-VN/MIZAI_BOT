@@ -1,7 +1,7 @@
 const { ThreadType } = require("zca-js");
 const { handleNewUser } = require("../../utils/ai/goibot");
 const { getGroupAnti } = require("../../utils/bot/botManager");
-const { drawJoinCard, drawLeaveCard } = require("../../utils/canvas");
+const { drawJoinCard, drawLeaveCard } = require("../../utils/media/canvas");
 const fs = require("fs");
 
 // ── Bot detection keywords ────────────────────────────────────────────────────

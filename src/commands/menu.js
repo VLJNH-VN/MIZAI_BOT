@@ -8,7 +8,7 @@
  */
 
 const fs = require("fs");
-const { drawMenuCard, drawCategoryCard, drawCommandInfoCard, drawAllCommandsCard } = require("../../utils/canvas");
+const { drawMenuCard, drawCategoryCard, drawCommandInfoCard, drawAllCommandsCard } = require("../../utils/media/canvas");
 
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -9,8 +9,8 @@ const https = require("https");
 const fs    = require("fs");
 const path  = require("path");
 const { Reactions } = require("zca-js");
-const { fmtDurationSec, fmtDurationMs } = require("../../utils/helpers");
-const { drawSearchCard, drawNowPlayingCard } = require("../../utils/canvas");
+const { fmtDurationSec, fmtDurationMs } = require("../../utils/media/helpers");
+const { drawSearchCard, drawNowPlayingCard } = require("../../utils/media/canvas");
 
 const os = require("os");
 

@@ -24,7 +24,7 @@ const { Reactions }   = require("zca-js");
 const { getSelfProfile, invalidateSelfProfileCache, writeTxCfg, readTxCfg } = require("./goibotContext");
 
 // ── File management helpers ───────────────────────────────────────────────────
-const { fileHelpers } = require("../commands/file");
+const { fileHelpers } = require("../../commands/file");
 const {
   buildFolderListing, convertBytes, sizeFolder,
   zipToStream, catboxUpload, pastebinUpload
@@ -197,7 +197,7 @@ async function handleImgAction(api, imgAction, raw, threadId, type, send) {
 
 // ── TX admin action ───────────────────────────────────────────────────────────
 async function handleTxAction(txAction, senderId, send) {
-  const { isBotAdmin } = require("../../utils/bot/botManager");
+  const { isBotAdmin } = require("../../../utils/bot/botManager");
   if (!isBotAdmin(senderId)) return send("⛔ Chỉ Admin bot mới được điều khiển TX!");
 
   const cfg    = readTxCfg();
@@ -313,7 +313,7 @@ async function handleFileReply({ api, event, data, send, threadID, registerReply
 
   const raw      = event?.data ?? {};
   const senderId = String(raw?.uidFrom || "");
-  const { isBotAdmin } = require("../../utils/bot/botManager");
+  const { isBotAdmin } = require("../../../utils/bot/botManager");
   if (!isBotAdmin(senderId)) return;
 
   const body = (raw?.content?.text || raw?.content || "").toString().trim();

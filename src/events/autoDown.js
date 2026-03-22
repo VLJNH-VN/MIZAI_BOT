@@ -15,7 +15,7 @@ const { execSync }   = require("child_process");
 const { Downloader } = require("@tobyg74/tiktok-api-dl");
 const { extractBody }        = require("../../utils/bot/messageUtils");
 const { normalizeAttachment } = require("../../includes/handlers/handleUploadAttachments");
-const { uploadThumbnail, zaloSendVoice, uploadAttachmentToZalo } = require("../../utils/zaloMedia");
+const { uploadThumbnail, zaloSendVoice, uploadAttachmentToZalo } = require("../../utils/media/zaloMedia");
 
 const tempDir  = path.join(process.cwd(), "includes", "cache");
 const API_BASE = "https://fown.onrender.com";

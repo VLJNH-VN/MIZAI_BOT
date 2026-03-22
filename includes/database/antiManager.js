@@ -17,7 +17,7 @@
 const fs   = require("fs");
 const path = require("path");
 
-const ANTI_FILE = path.join(__dirname, "../data/anti.json");
+const ANTI_FILE = path.join(__dirname, "../data/config/anti.json");
 
 const DEFAULT_ANTI = {
   antiLink:          false,

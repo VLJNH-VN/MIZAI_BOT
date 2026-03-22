@@ -9,7 +9,7 @@
 const { getUserMoney, updateUserMoney } = require('../../includes/database/economy');
 const { resolveSenderName }             = require('../../includes/database/infoCache');
 const { isBotAdmin, isGroupAdmin }      = require('../../utils/bot/botManager');
-const { fmtMoney, fmtTimeNow }          = require('../../utils/helpers');
+const { fmtMoney, fmtTimeNow }          = require('../../utils/media/helpers');
 const tx = require('../../includes/database/taixiu');
 
 // ── Helpers ────────────────────────────────────────────────────────────────────

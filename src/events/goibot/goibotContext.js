@@ -21,7 +21,7 @@ const fs   = require("fs");
 const path = require("path");
 
 // ── TX — Tài Xỉu context ─────────────────────────────────────────────────────
-const TX_DIR      = path.join(process.cwd(), "includes", "data", "taixiu");
+const TX_DIR      = path.join(process.cwd(), "includes", "data", "game", "taixiu");
 const TX_CFG_FILE = path.join(TX_DIR, "txConfig.json");
 const TX_MON_FILE = path.join(TX_DIR, "money.json");
 const TX_PHI_FILE = path.join(TX_DIR, "phien.json");
@@ -133,7 +133,7 @@ async function runSelfReflect(api) {
       sendToGroq, clearChatHistory,
       buildMemoryContext, getMoodContext, updateMoodState, decayEnergy, saveDiaryEntry,
       getCurrentTimeInVietnam,
-    } = require("../../utils/ai/goibot");
+    } = require("../../../utils/ai/goibot");
     const { handleProfileAction } = require("./goibotRouter");
 
     await decayEnergy();

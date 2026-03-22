@@ -1,4 +1,4 @@
-const { readConfig } = require("../../utils/helpers");
+const { readConfig } = require("../../utils/media/helpers");
 const {
   getRentInfo, setRentInfo, removeRentInfo, listRentInfo,
   addKey, useKey, isKeyUsed, isKeyExists, listUnusedKeys,

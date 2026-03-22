@@ -19,7 +19,7 @@
 const fs   = require("fs");
 const path = require("path");
 
-const MUTE_FILE = path.join(__dirname, "../data/muted.json");
+const MUTE_FILE = path.join(__dirname, "../data/runtime/muted.json");
 
 // ── In-memory cache ───────────────────────────────────────────────────────────
 // Map<"groupId:userId", {name, mutedAt, expireAt}>

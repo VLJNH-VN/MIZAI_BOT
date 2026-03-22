@@ -4,7 +4,7 @@ const fs   = require("fs");
 const path = require("path");
 const os   = require("os");
 
-const { drawUptimeCard } = require("../../utils/canvas");
+const { drawUptimeCard } = require("../../utils/media/canvas");
 
 const ROOT       = process.cwd();
 const BG_IMAGE   = path.join(ROOT, "attached_assets", "generated_images", "uptime_tech.png");

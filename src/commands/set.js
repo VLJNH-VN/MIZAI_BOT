@@ -1,6 +1,6 @@
 const { ThreadType } = require("zca-js");
 const { isBotAdmin, isGroupAdmin, setGroupSetting, getGroupSetting } = require('../../utils/bot/botManager');
-const { readConfig, writeConfig } = require('../../utils/helpers');
+const { readConfig, writeConfig } = require('../../utils/media/helpers');
 
 module.exports = {
   config: {

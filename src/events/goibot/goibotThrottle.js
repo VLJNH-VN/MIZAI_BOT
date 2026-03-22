@@ -41,7 +41,7 @@ function getLastAutoReply(threadId)     { return _lastAutoReply[threadId] || 0; 
 function setLastAutoReply(threadId, ts) { _lastAutoReply[threadId] = ts; }
 
 // ── AutoReply keyword check ────────────────────────────────────────────────────
-const AUTOREPLY_DATA_PATH = path.join(process.cwd(), "includes", "data", "autoreply.json");
+const AUTOREPLY_DATA_PATH = path.join(process.cwd(), "includes", "data", "runtime", "autoreply.json");
 
 function loadAutoReplyKeywords() {
   try {

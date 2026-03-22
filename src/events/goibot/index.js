@@ -13,9 +13,9 @@ const {
   fetchImageAsBase64, extractImageUrl, extractUrls,
   buildMemoryContext, saveUserNote, saveDiaryEntry, saveGlobalNote,
   getMoodContext, updateMoodState, decayEnergy,
-} = require("../../utils/ai/goibot");
+} = require("../../../utils/ai/goibot");
 
-const { isTracked, registerReply } = require("../../includes/handlers/handleReply");
+const { isTracked, registerReply } = require("../../../includes/handlers/handleReply");
 
 const {
   isUserProcessing, setUserProcessing,
@@ -118,7 +118,7 @@ async function handleGoibot({ api, event }) {
 
     const hasQuote = !!raw.quote;
 
-    const { isBotAdmin } = require("../../utils/bot/botManager");
+    const { isBotAdmin } = require("../../../utils/bot/botManager");
     const isAdmin = isBotAdmin(senderId);
 
     const imageParts   = [];

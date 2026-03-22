@@ -10,9 +10,9 @@ const fs   = require("fs");
 const path = require("path");
 const { getDb, run, get, all } = require("./sqlite");
 
-const MEMORY_FILE  = path.join(process.cwd(), "includes", "data", "mizai_memory.json");
-const STATE_FILE   = path.join(process.cwd(), "includes", "data", "mizai_state.json");
-const GOIBOT_FILE  = path.join(process.cwd(), "includes", "data", "goibot.json");
+const MEMORY_FILE  = path.join(process.cwd(), "includes", "data", "runtime", "mizai_memory.json");
+const STATE_FILE   = path.join(process.cwd(), "includes", "data", "runtime", "mizai_state.json");
+const GOIBOT_FILE  = path.join(process.cwd(), "includes", "data", "runtime", "goibot.json");
 
 const MEMORY_MAX_DIARY  = 30;
 const MEMORY_MAX_NOTES  = 10;

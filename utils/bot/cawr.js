@@ -51,7 +51,7 @@ function buildFullCookie(baseCookie) {
 const LISTAPI_DIR  = path.join(process.cwd(), "includes", "listapi");
 const TEMP_DIR     = path.join(process.cwd(), "includes", "cache");
 const DATA_DIR     = path.join(process.cwd(), "includes", "data");
-const HISTORY_FILE = path.join(DATA_DIR, "tt_history.json");
+const HISTORY_FILE = path.join(process.cwd(), "includes", "data", "runtime", "tt_history.json");
 const FOWN_API     = "https://fown.onrender.com";
 
 // ─────────────────────────────────────────────────────────────────────────────

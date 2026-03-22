@@ -9,7 +9,7 @@
  */
 
 const { parseMentionIds } = require('../../utils/bot/messageUtils');
-const { fmtTimestamp: fmtTime } = require('../../utils/helpers');
+const { fmtTimestamp: fmtTime } = require('../../utils/media/helpers');
 
 function isValidURL(s) { try { new URL(s); return true; } catch { return false; } }
 

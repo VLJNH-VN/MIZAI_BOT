@@ -28,8 +28,8 @@
 const fs   = require("fs");
 const path = require("path");
 
-const THUEBOT_PATH = path.join(__dirname, "../data/thuebot.json");
-const RENTKEY_PATH = path.join(__dirname, "../data/rentKey.json");
+const THUEBOT_PATH = path.join(__dirname, "../data/runtime/thuebot.json");
+const RENTKEY_PATH = path.join(__dirname, "../data/runtime/rentKey.json");
 
 // ── In-memory stores ──────────────────────────────────────────────────────────
 const _rentCache  = new Map();

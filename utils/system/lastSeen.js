@@ -6,7 +6,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const LAST_SEEN_PATH = path.join(__dirname, "../../includes/data/lastSeen.json");
+const LAST_SEEN_PATH = path.join(__dirname, "../../includes/data/runtime/lastSeen.json");
 
 function saveLastSeen() {
   try {

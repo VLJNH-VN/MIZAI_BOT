@@ -377,39 +377,52 @@ function setApi(apiInstance) {
       releaseId = created.data.id;
     }
 
-    // Xóa asset cũ cùng tên nếu tồn tại (tránh conflict)
+    // Xóa asset trùng tên + asset bị kẹt "new" state (tránh 422 conflict)
     try {
       const assets = await axios.get(
         `https://api.github.com/repos/${owner}/${repoName}/releases/${releaseId}/assets`,
         { headers }
       );
-      const dup = assets.data.find(a => a.name === filename);
-      if (dup) {
-        await axios.delete(
-          `https://api.github.com/repos/${owner}/${repoName}/releases/assets/${dup.id}`,
-          { headers }
-        );
+      const toDelete = assets.data.filter(a => a.name === filename || a.state === "new");
+      for (const a of toDelete) {
+        try {
+          await axios.delete(
+            `https://api.github.com/repos/${owner}/${repoName}/releases/assets/${a.id}`,
+            { headers }
+          );
+        } catch (_) {}
       }
     } catch (_) {}
 
-    // Upload asset
+    // Upload asset — retry tối đa 3 lần nếu 422 (đổi tên để tránh conflict)
     const fileData = fs.readFileSync(localFilePath);
-    const uploadRes = await axios.post(
-      `https://uploads.github.com/repos/${owner}/${repoName}/releases/${releaseId}/assets?name=${encodeURIComponent(filename)}`,
-      fileData,
-      {
-        headers: {
-          ...headers,
-          "Content-Type": "application/octet-stream",
-          "Content-Length": fileData.length,
-        },
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity,
+    let uploadRes, lastName = filename;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        uploadRes = await axios.post(
+          `https://uploads.github.com/repos/${owner}/${repoName}/releases/${releaseId}/assets?name=${encodeURIComponent(lastName)}`,
+          fileData,
+          {
+            headers: {
+              ...headers,
+              "Content-Type": "application/octet-stream",
+              "Content-Length": fileData.length,
+            },
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+          }
+        );
+        break;
+      } catch (e) {
+        if (e.response?.status === 422 && attempt < 3) {
+          lastName = filename.replace(".mp4", `_r${attempt}.mp4`);
+          await new Promise(r => setTimeout(r, 1000));
+        } else {
+          throw e;
+        }
       }
-    );
+    }
 
-    // Trả về browser_download_url (stable URL, Zalo server tự follow redirect khi play)
-    // Không resolve redirect vì URL đã resolve có thể là signed/time-limited URL
     return uploadRes.data?.browser_download_url || null;
   };
 

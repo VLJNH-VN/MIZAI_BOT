@@ -28,9 +28,23 @@ let _spotifyTokenExpiry = 0;
 
 async function ensureSpotifyToken() {
   if (Date.now() < _spotifyTokenExpiry - 30000) return;
-  const data = await spotifyApi.clientCredentialsGrant();
-  spotifyApi.setAccessToken(data.body.access_token);
-  _spotifyTokenExpiry = Date.now() + data.body.expires_in * 1000;
+  try {
+    const data = await spotifyApi.clientCredentialsGrant();
+    spotifyApi.setAccessToken(data.body.access_token);
+    _spotifyTokenExpiry = Date.now() + data.body.expires_in * 1000;
+  } catch (err) {
+    const detail = typeof err?.message === "string" ? err.message : JSON.stringify(err?.message ?? err);
+    throw new Error(`Spotify auth thất bại: ${detail}`);
+  }
+}
+
+function stringifyError(err) {
+  if (!err) return "Không xác định";
+  if (typeof err.message === "string" && err.message) return err.message;
+  if (typeof err.message === "object" && err.message !== null) {
+    return err.message.error_description || err.message.error?.message || err.message.error || JSON.stringify(err.message);
+  }
+  return err.toString?.() || JSON.stringify(err);
 }
 
 function fmtNum(n) {
@@ -254,7 +268,8 @@ module.exports = {
         if (sentId) registerReply({ messageId: String(sentId), commandName: "music", payload: { platform: "mix", results } });
       }
     } catch (err) {
-      return send(`❌ Lỗi tìm kiếm: ${err?.message || "Không xác định"}`);
+      console.error(`[MUSIC:${platform}] Lỗi tìm kiếm:`, err);
+      return send(`❌ Lỗi tìm kiếm: ${stringifyError(err)}`);
     }
   },
 
@@ -348,7 +363,7 @@ module.exports = {
           await send(`🎵 ${track.title}\n👤 ${track.author}\n⏳ ${durStr}`);
         }
         await global.zaloSendVoice(api, audioUrl, event.threadId, event.type);
-      } catch (err) { return send(`❌ Lỗi tải nhạc: ${err.message}`); }
+      } catch (err) { console.error("[MUSIC:spt] Lỗi tải nhạc:", err); return send(`❌ Lỗi tải nhạc: ${stringifyError(err)}`); }
 
     } else if (platform === "yt") {
       if (!tracks.length) return send("❌ Hết dữ liệu. Vui lòng tìm lại.");
@@ -382,7 +397,7 @@ module.exports = {
           await send(`🎬 ${track.title}\n👤 ${track.author}\n⏳ ${durStr}`);
         }
         await global.zaloSendVoice(api, audioUrl, event.threadId, event.type);
-      } catch (err) { return send(`❌ Lỗi tải nhạc: ${err.message}`); }
+      } catch (err) { console.error("[MUSIC:yt] Lỗi tải nhạc:", err); return send(`❌ Lỗi tải nhạc: ${stringifyError(err)}`); }
 
     } else if (platform === "mix") {
       if (!results.length) return send("❌ Hết dữ liệu. Vui lòng tìm lại.");

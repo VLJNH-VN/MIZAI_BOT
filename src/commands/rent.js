@@ -1,80 +1,29 @@
-const fs = require("fs");
-const path = require("path");
-const { readConfig, readJsonFile, writeJsonFile } = require("../../utils/helpers");
-
-const THUEBOT_PATH = path.join(__dirname, "../../includes/data/thuebot.json");
-const RENTKEY_PATH = path.join(__dirname, "../../includes/data/rentKey.json");
-
-// ── Helpers ngày tháng ────────────────────────────────────────────────────────
-
-function todayStr() {
-  const d = new Date(Date.now() + 7 * 3600 * 1000); // UTC+7
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const yyyy = d.getUTCFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-}
-
-function parseDate(str) {
-  const [dd, mm, yyyy] = str.split("/").map(Number);
-  return new Date(Date.UTC(yyyy, mm - 1, dd));
-}
-
-function addDays(dateStr, days) {
-  const d = parseDate(dateStr);
-  d.setUTCDate(d.getUTCDate() + days);
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const yyyy = d.getUTCFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-}
-
-function isExpired(dateStr) {
-  return parseDate(dateStr).getTime() <= Date.now() + 7 * 3600 * 1000;
-}
-
-function isAfter(a, b) {
-  return parseDate(a).getTime() > parseDate(b).getTime();
-}
-
-// ── Đọc / lưu dữ liệu ─────────────────────────────────────────────────────────
-
-function readThuebot() {
-  return readJsonFile(THUEBOT_PATH, []);
-}
-
-function saveThuebot(data) {
-  writeJsonFile(THUEBOT_PATH, data);
-}
-
-function readRentKey() {
-  const def = { used_keys: [], unUsed_keys: [] };
-  if (!fs.existsSync(RENTKEY_PATH)) {
-    writeJsonFile(RENTKEY_PATH, def);
-    return def;
-  }
-  return readJsonFile(RENTKEY_PATH, def);
-}
-
-function saveRentKey(data) {
-  writeJsonFile(RENTKEY_PATH, data);
-}
-
-// ── Tạo key ngẫu nhiên ────────────────────────────────────────────────────────
+const { readConfig } = require("../../utils/helpers");
+const {
+  getRentInfo, setRentInfo, removeRentInfo, listRentInfo,
+  addKey, useKey, isKeyUsed, isKeyExists, listUnusedKeys,
+  isRentExpired, parseDateVN, addDays, todayStr,
+} = require("../../includes/database/rent");
 
 function genKey(days) {
-  const cfg = readConfig();
+  const cfg    = readConfig();
   const prefix = cfg.keyRent || "MiZai";
   const suffix = Math.random().toString(36).substring(2, 9);
   return `${prefix}_${days}_${suffix}`;
 }
 
-// ── Module export ─────────────────────────────────────────────────────────────
+function isAfter(a, b) {
+  return parseDateVN(a).getTime() > parseDateVN(b).getTime();
+}
+
+function isExpired(dateStr) {
+  return parseDateVN(dateStr).getTime() <= Date.now() + 7 * 3600 * 1000;
+}
 
 module.exports = {
   config: {
     name: "rent",
-    version: "1.0.0",
+    version: "2.0.0",
     hasPermssion: 2,
     credits: "convert từ Niio-team (Vtuan)",
     description: "Quản lý thuê bot theo nhóm",
@@ -88,23 +37,18 @@ module.exports = {
   },
 
   run: async ({ api, event, args, send, prefix, threadID, senderId, registerReply }) => {
-    const FLAG_MAP = {
-      "-a": "add", "-d": "del", "-l": "list",
-      "-r": "reg", "-i": "info", "-k": "usekey",
-    };
-    const sub = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase().trim();
-    let data = readThuebot();
+    const FLAG_MAP = { "-a": "add", "-d": "del", "-l": "list", "-r": "reg", "-i": "info", "-k": "usekey" };
+    const sub      = FLAG_MAP[args[0]] || (args[0] || "").toLowerCase().trim();
 
     // ── rent add ──────────────────────────────────────────────────────────────
     if (sub === "add") {
-      const days = parseInt(args[1], 10) || 30;
+      const days  = parseInt(args[1], 10) || 30;
       const today = todayStr();
-      const found = data.find(item => item.t_id === threadID);
+      const found = getRentInfo(threadID);
 
       if (!found) {
         const endDate = addDays(today, days);
-        data.push({ t_id: threadID, id: senderId, time_start: today, time_end: endDate });
-        saveThuebot(data);
+        setRentInfo(threadID, { owner_id: senderId, time_start: today, time_end: endDate });
         return send(
           `✅ Đã thêm thuê bot cho nhóm ${threadID}\n` +
           `📅 Từ: ${today}\n` +
@@ -116,8 +60,7 @@ module.exports = {
       if (!isAfter(newEnd, found.time_start)) {
         return send(`❌ Ngày kết thúc không thể trước ngày bắt đầu (${found.time_start}).`);
       }
-      found.time_end = newEnd;
-      saveThuebot(data);
+      setRentInfo(threadID, { ...found, time_end: newEnd });
       return send(
         `✅ Nhóm ${threadID} đã thuê trước đó.\n` +
         `📅 Thời hạn mới kéo dài đến: ${newEnd}`
@@ -126,29 +69,27 @@ module.exports = {
 
     // ── rent del ──────────────────────────────────────────────────────────────
     if (sub === "del") {
-      const idx = data.findIndex(item => item.t_id === threadID);
-      if (idx === -1) {
-        return send(`❌ Không tìm thấy thông tin thuê bot cho nhóm ${threadID}.`);
-      }
-      data.splice(idx, 1);
-      saveThuebot(data);
+      if (!getRentInfo(threadID)) return send(`❌ Không tìm thấy thông tin thuê bot cho nhóm ${threadID}.`);
+      removeRentInfo(threadID);
       return send(`✅ Đã xóa thông tin thuê bot cho nhóm ${threadID}.`);
     }
 
     // ── rent list ─────────────────────────────────────────────────────────────
     if (sub === "list") {
-      if (data.length === 0) return send("📭 Chưa có nhóm nào thuê bot.");
-      const page = parseInt(args[1], 10) || 1;
+      const data = listRentInfo();
+      if (!data.length) return send("📭 Chưa có nhóm nào thuê bot.");
+
+      const page    = parseInt(args[1], 10) || 1;
       const perPage = 10;
-      const total = Math.ceil(data.length / perPage);
-      const start = (page - 1) * perPage;
-      const slice = data.slice(start, start + perPage);
+      const total   = Math.ceil(data.length / perPage);
+      const start   = (page - 1) * perPage;
+      const slice   = data.slice(start, start + perPage);
 
       const lines = slice.map((item, i) => {
         const status = isExpired(item.time_end) ? "Đã Hết Hạn ❎" : "Chưa Hết Hạn ✅";
         return (
-          `${start + i + 1}. Nhóm: ${item.t_id}\n` +
-          `   👤 ID: ${item.id}\n` +
+          `${start + i + 1}. Nhóm: ${item.group_id}\n` +
+          `   👤 ID: ${item.owner_id}\n` +
           `   📝 Trạng thái: ${status}\n` +
           `   📅 Từ: ${item.time_start} → Đến: ${item.time_end}`
         );
@@ -164,25 +105,20 @@ module.exports = {
         `💡 Reply "out <stt>" để thoát nhóm`;
 
       const sentMsg = await api.sendMessage({ msg }, threadID, event.type);
-      const msgId = sentMsg?.msgId || sentMsg?.messageId || sentMsg?.cliMsgId;
+      const msgId   = sentMsg?.msgId || sentMsg?.messageId || sentMsg?.cliMsgId;
       if (msgId && registerReply) {
-        registerReply({
-          messageId: String(msgId),
-          commandName: "rent",
-          payload: { type: "list", data: slice, page, total }
-        });
+        registerReply({ messageId: String(msgId), commandName: "rent", payload: { type: "list", data: slice, page, total } });
       }
       return;
     }
 
     // ── rent reg ──────────────────────────────────────────────────────────────
     if (sub === "reg") {
-      const days = parseInt(args[1], 10) || 30;
-      const keyData = readRentKey();
-      let key = genKey(days);
-      while (keyData.used_keys.includes(key)) key = genKey(days);
-      keyData.unUsed_keys.push(key);
-      saveRentKey(keyData);
+      const days    = parseInt(args[1], 10) || 30;
+      const unused  = listUnusedKeys();
+      let key       = genKey(days);
+      while (isKeyExists(key)) key = genKey(days);
+      addKey(key, days);
       return send(
         `🔑 Key thuê bot (${days} ngày):\n` +
         `${key}\n\n` +
@@ -192,19 +128,15 @@ module.exports = {
 
     // ── rent info ─────────────────────────────────────────────────────────────
     if (sub === "info") {
-      const rentInfo = data.find(item => item.t_id === threadID);
+      const rentInfo = getRentInfo(threadID);
       if (!rentInfo) {
-        return send(
-          `ℹ️ Thông tin thuê bot:\n` +
-          `🌾 Nhóm: ${threadID}\n` +
-          `📝 Trạng thái: Chưa thuê bot`
-        );
+        return send(`ℹ️ Thông tin thuê bot:\n🌾 Nhóm: ${threadID}\n📝 Trạng thái: Chưa thuê bot`);
       }
       const status = isExpired(rentInfo.time_end) ? "Đã Hết Hạn ❎" : "Chưa Hết Hạn ✅";
       return send(
         `ℹ️ Thông tin thuê bot:\n` +
         `🌾 Nhóm: ${threadID}\n` +
-        `👤 Người thuê (ID): ${rentInfo.id}\n` +
+        `👤 Người thuê (ID): ${rentInfo.owner_id}\n` +
         `📅 Từ: ${rentInfo.time_start}\n` +
         `📅 Đến: ${rentInfo.time_end}\n` +
         `📝 Trạng thái: ${status}`
@@ -215,10 +147,9 @@ module.exports = {
     if (sub === "usekey") {
       const key = args[1] ? args[1].trim() : "";
       if (!key) return send(`❌ Thiếu key.\nDùng: ${prefix}rent usekey <key>`);
-      return _activateKey({ key, threadID, senderId, data, send });
+      return _activateKey({ key, threadID, senderId, send });
     }
 
-    // ── Hướng dẫn sử dụng ────────────────────────────────────────────────────
     return send(
       `📋 Các lệnh con:\n` +
       `  ${prefix}rent add [ngày]   — Thêm / gia hạn (mặc định 30)\n` +
@@ -230,122 +161,80 @@ module.exports = {
     );
   },
 
-  // ── onReply: xử lý khi user reply ────────────────────────────────────────
   onReply: async ({ api, event, data: replyData, send, registerReply }) => {
     if (!replyData) return;
-
-    const raw = event?.data;
-    const body = (raw?.content || raw?.msg || "").trim();
+    const raw      = event?.data;
+    const body     = (raw?.content || raw?.msg || "").trim();
     const threadID = event.threadId;
     const senderId = raw?.uidFrom ? String(raw.uidFrom) : String(event.senderId || "");
 
-    // ── Reply nhập key kích hoạt (từ thông báo chặn chưa thuê) ───────────────
     if (replyData.type === "RentKey") {
       const key = body.trim();
       if (!key) return send("❌ Vui lòng nhập key thuê bot.");
-      const data = readThuebot();
-      return _activateKey({ key, threadID, senderId, data, send });
+      return _activateKey({ key, threadID, senderId, send });
     }
 
-    // ── Reply trong danh sách rent list ───────────────────────────────────────
     if (replyData.type === "list") {
-      const parts = body.split(/\s+/);
-      const cmd = (parts[0] || "").toLowerCase();
-      const stt = parseInt(parts[1], 10);
+      const parts    = body.split(/\s+/);
+      const cmd      = (parts[0] || "").toLowerCase();
+      const stt      = parseInt(parts[1], 10);
       const { data: listSlice } = replyData;
 
       if (cmd === "giahan") {
-        if (!stt || stt < 1 || stt > listSlice.length) {
-          return send(`❌ STT không hợp lệ (1–${listSlice.length}).`);
-        }
-        const days = parseInt(parts[2], 10) || 30;
-        const allData = readThuebot();
+        if (!stt || stt < 1 || stt > listSlice.length) return send(`❌ STT không hợp lệ (1–${listSlice.length}).`);
+        const days   = parseInt(parts[2], 10) || 30;
         const target = listSlice[stt - 1];
-        const rec = allData.find(item => item.t_id === target.t_id);
+        const rec    = getRentInfo(target.group_id);
         if (!rec) return send("❌ Không tìm thấy nhóm trong dữ liệu.");
         const newEnd = addDays(rec.time_end, days);
-        if (!isAfter(newEnd, rec.time_start)) {
-          return send(`❌ Ngày kết thúc không thể trước ngày bắt đầu (${rec.time_start}).`);
-        }
-        rec.time_end = newEnd;
-        saveThuebot(allData);
-        return send(`✅ Đã gia hạn nhóm ${rec.t_id} đến: ${newEnd}`);
+        if (!isAfter(newEnd, rec.time_start)) return send(`❌ Ngày kết thúc không thể trước ngày bắt đầu (${rec.time_start}).`);
+        setRentInfo(target.group_id, { ...rec, time_end: newEnd });
+        return send(`✅ Đã gia hạn nhóm ${rec.group_id} đến: ${newEnd}`);
       }
 
       if (cmd === "del") {
-        if (!stt || stt < 1 || stt > listSlice.length) {
-          return send(`❌ STT không hợp lệ (1–${listSlice.length}).`);
-        }
+        if (!stt || stt < 1 || stt > listSlice.length) return send(`❌ STT không hợp lệ (1–${listSlice.length}).`);
         const target = listSlice[stt - 1];
-        const allData = readThuebot();
-        const idx = allData.findIndex(item => item.t_id === target.t_id);
-        if (idx === -1) return send("❌ Không tìm thấy nhóm trong dữ liệu.");
-        allData.splice(idx, 1);
-        saveThuebot(allData);
-        return send(`✅ Đã xóa thông tin thuê bot nhóm ${target.t_id}.`);
+        removeRentInfo(target.group_id);
+        return send(`✅ Đã xóa thông tin thuê bot nhóm ${target.group_id}.`);
       }
 
       if (cmd === "out") {
         const stts = parts.slice(1).map(Number).filter(n => n >= 1 && n <= listSlice.length);
-        if (stts.length === 0) return send("❌ Không có STT hợp lệ.");
+        if (!stts.length) return send("❌ Không có STT hợp lệ.");
         for (const n of stts) {
-          const target = listSlice[n - 1];
-          try {
-            await api.leaveGroup(target.t_id);
-          } catch {}
+          try { await api.leaveGroup(listSlice[n - 1].group_id); } catch {}
         }
         return send(`✅ Đã thoát ${stts.length} nhóm theo yêu cầu.`);
       }
 
-      return send(
-        `❓ Không hiểu lệnh reply.\n` +
-        `💡 Các lệnh hợp lệ:\n` +
-        `  giahan <stt> [ngày]\n` +
-        `  del <stt>\n` +
-        `  out <stt>`
-      );
+      return send(`❓ Không hiểu lệnh reply.\n💡 Các lệnh hợp lệ:\n  giahan <stt> [ngày]\n  del <stt>\n  out <stt>`);
     }
   },
 };
 
-// ── Kích hoạt key (dùng chung cho usekey và các nơi khác) ────────────────────
-async function _activateKey({ key, threadID, senderId, data, send }) {
-  const keyData = readRentKey();
-
-  if (keyData.used_keys.includes(key)) {
-    return send(`❎ Key "${key}" đã được sử dụng rồi!`);
-  }
-  if (!keyData.unUsed_keys.includes(key)) {
-    return send(`❎ Key "${key}" không tồn tại!`);
-  }
+async function _activateKey({ key, threadID, senderId, send }) {
+  if (isKeyUsed(key))    return send(`❎ Key "${key}" đã được sử dụng rồi!`);
+  if (!isKeyExists(key)) return send(`❎ Key "${key}" không tồn tại!`);
 
   const parts = key.split("_");
-  const days = parseInt(parts[parts.length - 2], 10);
-  if (!days || isNaN(days)) {
-    return send("❎ Key không hợp lệ (không lấy được số ngày).");
-  }
+  const days  = parseInt(parts[parts.length - 2], 10);
+  if (!days || isNaN(days)) return send("❎ Key không hợp lệ (không lấy được số ngày).");
 
-  const today = todayStr();
-  const existing = data.findIndex(item => item.t_id === threadID);
+  const today    = todayStr();
+  const existing = getRentInfo(threadID);
   let endDate;
 
-  if (existing !== -1) {
-    const base = isExpired(data[existing].time_end) ? today : data[existing].time_end;
-    endDate = addDays(base, days);
-    data[existing].time_end = endDate;
+  if (existing) {
+    const base = isExpired(existing.time_end) ? today : existing.time_end;
+    endDate    = addDays(base, days);
+    setRentInfo(threadID, { ...existing, time_end: endDate });
     await send(`✅ Gia hạn thuê bot thành công!\n📅 Thời hạn mới đến: ${endDate}`);
   } else {
     endDate = addDays(today, days);
-    data.push({ t_id: threadID, id: senderId, time_start: today, time_end: endDate });
-    await send(
-      `✅ Kích hoạt thuê bot thành công!\n` +
-      `📅 Từ: ${today}\n` +
-      `📅 Đến: ${endDate}`
-    );
+    setRentInfo(threadID, { owner_id: senderId, time_start: today, time_end: endDate });
+    await send(`✅ Kích hoạt thuê bot thành công!\n📅 Từ: ${today}\n📅 Đến: ${endDate}`);
   }
 
-  keyData.unUsed_keys = keyData.unUsed_keys.filter(k => k !== key);
-  keyData.used_keys.push(key);
-  saveRentKey(keyData);
-  saveThuebot(data);
+  useKey(key);
 }

@@ -6,80 +6,24 @@ const stringSimilarity = require("string-similarity");
 const { registerReply } = require("./handleReply");
 const { registerReaction, reactError, reactSuccess, reactLoading } = require("./handleReaction");
 const { registerUndo } = require("./handleUndo");
-const fs = require("fs");
-const path = require("path");
 const { readConfig } = require("../../utils/helpers");
+const { getRentInfo, isRentExpired } = require("../database/rent");
+const { checkAndSet: checkCooldownDb } = require("../database/cooldown");
 
-// ── Đọc dữ liệu thuê bot ──────────────────────────────────────────────────────
-const THUEBOT_PATH = path.join(__dirname, "../../includes/data/thuebot.json");
-
-function readThuebot() {
-  try {
-    if (fs.existsSync(THUEBOT_PATH)) return JSON.parse(fs.readFileSync(THUEBOT_PATH, "utf-8"));
-  } catch {}
-  return [];
-}
-
-function parseDateVN(str) {
-  const [dd, mm, yyyy] = str.split("/").map(Number);
-  return new Date(Date.UTC(yyyy, mm - 1, dd));
-}
-
-function isRentExpired(dateStr) {
-  // So sánh với giờ VN (UTC+7)
-  return parseDateVN(dateStr).getTime() <= Date.now() + 7 * 3600 * 1000;
-}
-
-// ── Ghi nhớ nhóm cho broadcast ────────────────────────────────────────────────
-const GROUPS_CACHE_PATH = path.join(__dirname, "../../includes/database/groupsCache.json");
-
-function trackGroupForBroadcast(threadID) {
+// ── Ghi nhớ nhóm vào bảng groups (SQLite, thay cho groupsCache.json) ─────────
+async function trackGroupForBroadcast(threadID) {
   if (!threadID) return;
   try {
-    let cache = {};
-    try { cache = JSON.parse(fs.readFileSync(GROUPS_CACHE_PATH, "utf-8")); } catch {}
-    if (!cache[threadID]) {
-      cache[threadID] = { addedAt: Date.now() };
-      fs.writeFileSync(GROUPS_CACHE_PATH, JSON.stringify(cache, null, 2), "utf-8");
-    }
+    const { getDb, run } = require("../database/sqlite");
+    const db  = await getDb();
+    const now = Date.now();
+    await run(db,
+      `INSERT INTO groups (group_id, name, first_seen, updated_at)
+       VALUES (?, '', ?, ?)
+       ON CONFLICT(group_id) DO NOTHING`,
+      [String(threadID), now, now]
+    );
   } catch {}
-}
-
-// ── Cooldown store ─────────────────────────────────────────────────────────────
-const cooldownStore = new Map();
-
-function getSenderId(raw) {
-  return raw?.uidFrom ? String(raw.uidFrom) : "unknown";
-}
-
-function formatUptime() {
-  const totalSec = Math.floor(process.uptime());
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  return `${h}h ${m}m ${s}s`;
-}
-
-function buildSend(api, raw, threadID, eventType) {
-  return async (message) => {
-    if (!threadID) return null;
-    try {
-      const payload =
-        typeof message === "string"
-          ? { msg: message, quote: raw }
-          : message;
-      return await api.sendMessage(payload, threadID, eventType);
-    } catch {
-      // Quote bị từ chối hoặc lỗi API → thử lại không quote
-      try {
-        const fallback =
-          typeof message === "string" ? { msg: message } : message;
-        return await api.sendMessage(fallback, threadID, eventType);
-      } catch {
-        return null;
-      }
-    }
-  };
 }
 
 // ── Permission check ───────────────────────────────────────────────────────────
@@ -117,25 +61,43 @@ async function checkPermission({ permLevel, senderId, event, threadID, send, api
   return true;
 }
 
-// ── Cooldown check ─────────────────────────────────────────────────────────────
-// canonicalName: tên gốc của command (cfg.name), không phải alias
-// Đảm bảo alias chia sẻ cùng cooldown với lệnh gốc
+// ── Cooldown check (persistent SQLite) ────────────────────────────────────────
 async function checkCooldown({ canonicalName, senderId, cooldownSec, send }) {
-  if (!Number.isFinite(cooldownSec) || cooldownSec <= 0) return true;
-
-  const key = `${canonicalName}:${senderId}`;
-  const last = cooldownStore.get(key) || 0;
-  const elapsed = Date.now() - last;
-  const waitMs = cooldownSec * 1000 - elapsed;
-
-  if (waitMs > 0) {
-    const waitSec = Math.ceil(waitMs / 1000);
+  const { ok, waitSec } = await checkCooldownDb(canonicalName, senderId, cooldownSec);
+  if (!ok) {
     await send(`⏳ Vui lòng chờ ${waitSec}s rồi dùng lại lệnh \`${canonicalName}\`.`);
     return false;
   }
-
-  cooldownStore.set(key, Date.now());
   return true;
+}
+
+function getSenderId(raw) {
+  return raw?.uidFrom ? String(raw.uidFrom) : "unknown";
+}
+
+function formatUptime() {
+  const totalSec = Math.floor(process.uptime());
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${h}h ${m}m ${s}s`;
+}
+
+function buildSend(api, raw, threadID, eventType) {
+  return async (message) => {
+    if (!threadID) return null;
+    try {
+      const payload = typeof message === "string" ? { msg: message, quote: raw } : message;
+      return await api.sendMessage(payload, threadID, eventType);
+    } catch {
+      try {
+        const fallback = typeof message === "string" ? { msg: message } : message;
+        return await api.sendMessage(fallback, threadID, eventType);
+      } catch {
+        return null;
+      }
+    }
+  };
 }
 
 // ── Main handler ───────────────────────────────────────────────────────────────
@@ -147,21 +109,17 @@ async function handleCommand({ api, event, commands, prefix }) {
     let body = extractBody(raw);
     if (!body) return;
 
-    // ── Lấy prefix riêng nhóm (nếu là tin nhắn nhóm) ─────────────────────────
+    // ── Lấy prefix riêng nhóm ─────────────────────────────────────────────
     const isGroupMsg = event.type === ThreadType.Group;
     let effectivePrefix = prefix;
     if (isGroupMsg && event.threadId && global.Threads) {
-      try {
-        effectivePrefix = await global.Threads.getPrefix(event.threadId);
-      } catch (_) {}
+      try { effectivePrefix = await global.Threads.getPrefix(event.threadId); } catch (_) {}
     }
 
-    // ── Strip leading @mention(s): "@Tên người !lệnh" → "!lệnh" ──────────────
+    // ── Strip leading @mention(s) ─────────────────────────────────────────
     if (!body.startsWith(effectivePrefix)) {
       const idx = body.indexOf(effectivePrefix);
-      if (idx > 0 && /^@/.test(body.slice(0, idx).trim())) {
-        body = body.slice(idx);
-      }
+      if (idx > 0 && /^@/.test(body.slice(0, idx).trim())) body = body.slice(idx);
     }
 
     if (!body.startsWith(effectivePrefix)) return;
@@ -170,28 +128,23 @@ async function handleCommand({ api, event, commands, prefix }) {
 
     const senderId = getSenderId(raw);
     const threadID = event.threadId;
-    const isGroup = event.type === ThreadType.Group;
-    const send = buildSend(api, raw, threadID, event.type);
+    const isGroup  = event.type === ThreadType.Group;
+    const send     = buildSend(api, raw, threadID, event.type);
 
-    // ── Kiểm tra thuê bot (chỉ trong nhóm, bỏ qua admin bot) ─────────────────
+    // ── Kiểm tra thuê bot (từ in-memory cache, O(1)) ─────────────────────
     if (isGroup && threadID && !isBotAdmin(senderId)) {
-      const thuebot = readThuebot();
-      const rentInfo = thuebot.find(item => String(item.t_id) === String(threadID));
+      const rentInfo = getRentInfo(threadID);
 
       const sendRentBlock = async (msg) => {
         const sentMsg = await api.sendMessage({ msg }, threadID, event.type);
-        const msgId = sentMsg?.msgId || sentMsg?.messageId || sentMsg?.cliMsgId;
+        const msgId   = sentMsg?.msgId || sentMsg?.messageId || sentMsg?.cliMsgId;
         if (msgId) {
-          registerReply({
-            messageId: String(msgId),
-            commandName: "rent",
-            payload: { type: "RentKey", threadID, senderId }
-          });
+          registerReply({ messageId: String(msgId), commandName: "rent", payload: { type: "RentKey", threadID, senderId } });
         }
       };
 
       if (!rentInfo) {
-        const cfg = readConfig();
+        const cfg     = readConfig();
         const fbAdmin = cfg.FACEBOOK_ADMIN || cfg.facebookAdmin || "";
         await sendRentBlock(
           `❎ Nhóm của bạn chưa thuê bot!\n` +
@@ -201,8 +154,8 @@ async function handleCommand({ api, event, commands, prefix }) {
         return;
       }
 
-      if (isRentExpired(rentInfo.time_end)) {
-        const cfg = readConfig();
+      if (isRentExpired(threadID)) {
+        const cfg     = readConfig();
         const fbAdmin = cfg.FACEBOOK_ADMIN || cfg.facebookAdmin || "";
         await sendRentBlock(
           `⚠️ Thời hạn thuê bot của nhóm đã hết (${rentInfo.time_end})!\n` +
@@ -213,44 +166,31 @@ async function handleCommand({ api, event, commands, prefix }) {
       }
     }
 
-    // ── Prefix một mình (gõ "!" hoặc "@Bot !") → hiện help ───────────────────
-    /*if (!withoutPrefix) {
-      if (isGroup && threadID) trackGroupForBroadcast(threadID);
-      const helpCmd = commands.get("help") || commands.get("menu");
-      if (helpCmd) {
-        await helpCmd.run({
-          api, event, args: [], send, commands, prefix: effectivePrefix,
-          commandName: "help", senderId, threadID, isGroup,
-          isBotAdmin, isGroupAdmin, registerReply, registerReaction, registerUndo
-        });
-      }
-      return;
-    }*/
-
-    const parts = withoutPrefix.split(/\s+/);
+    const parts       = withoutPrefix.split(/\s+/);
     const commandName = parts.shift().toLowerCase();
-    const args = parts;
+    const args        = parts;
 
-    if (isGroup && threadID) trackGroupForBroadcast(threadID);
+    if (!commandName) return;
+
+    // ── Ghi nhớ nhóm cho broadcast (async, không block) ──────────────────
+    if (isGroup && threadID) trackGroupForBroadcast(threadID).catch(() => {});
 
     const command = commands.get(commandName);
 
-    // ── Lệnh không tồn tại → gợi ý ───────────────────────────────────────────
+    // ── Lệnh không tồn tại → gợi ý ───────────────────────────────────────
     if (!command) {
-      // Chỉ gợi ý từ tên lệnh chính (cfg.name), không include alias
-      const seen = new Set();
+      const seen      = new Set();
       const mainNames = [];
       for (const [, cmd] of commands) {
         const n = cmd?.config?.name;
         if (n && !seen.has(n)) { seen.add(n); mainNames.push(n); }
       }
-      if (mainNames.length === 0) return;
+      if (!mainNames.length) return;
 
       const { bestMatch } = stringSimilarity.findBestMatch(commandName, mainNames);
-      const suggestion =
-        bestMatch.rating >= 0.3
-          ? `${effectivePrefix}${bestMatch.target}`
-          : `${effectivePrefix}help`;
+      const suggestion    = bestMatch.rating >= 0.3
+        ? `${effectivePrefix}${bestMatch.target}`
+        : `${effectivePrefix}help`;
 
       let userName = senderId;
       try { userName = await resolveSenderName({ api, userId: senderId }); } catch {}
@@ -268,62 +208,34 @@ async function handleCommand({ api, event, commands, prefix }) {
     const cfg          = command.config || {};
     const canonicalName = cfg.name ? String(cfg.name).toLowerCase() : commandName;
 
-    // ── Permission ─────────────────────────────────────────────────────────────
-    const allowed = await checkPermission({
-      permLevel: cfg.hasPermssion,
-      senderId,
-      event,
-      threadID,
-      send,
-      api
-    });
+    // ── Permission ─────────────────────────────────────────────────────────
+    const allowed = await checkPermission({ permLevel: cfg.hasPermssion, senderId, event, threadID, send, api });
     if (!allowed) return;
 
-    // ── Cooldown — dùng canonicalName để alias chia sẻ cooldown với lệnh gốc ──
-    const cooldownOk = await checkCooldown({
-      canonicalName,
-      senderId,
-      cooldownSec: Number(cfg.cooldowns ?? 0),
-      send
-    });
+    // ── Cooldown (persistent SQLite) ───────────────────────────────────────
+    const cooldownOk = await checkCooldown({ canonicalName, senderId, cooldownSec: Number(cfg.cooldowns ?? 0), send });
     if (!cooldownOk) return;
 
-    // ── Thực thi lệnh ─────────────────────────────────────────────────────────
+    // ── Thực thi lệnh ─────────────────────────────────────────────────────
     const startTime = Date.now();
     await command.run({
-      api,
-      event,
-      args,
-      send,
-      commands,
-      prefix: effectivePrefix,
-      commandName: canonicalName,
-      senderId,
-      threadID,
-      isGroup,
-      isBotAdmin,
-      isGroupAdmin,
-      registerReply,
-      registerReaction,
-      registerUndo,
-      reactError,
-      reactSuccess,
-      reactLoading,
+      api, event, args, send, commands,
+      prefix: effectivePrefix, commandName: canonicalName,
+      senderId, threadID, isGroup,
+      isBotAdmin, isGroupAdmin,
+      registerReply, registerReaction, registerUndo,
+      reactError, reactSuccess, reactLoading,
     });
     const execTime = Date.now() - startTime;
 
-    // ── Log ────────────────────────────────────────────────────────────────────
-    let userName = senderId;
+    // ── Log ────────────────────────────────────────────────────────────────
+    let userName  = senderId;
     let groupName = isGroup ? String(threadID) : "Nhắn riêng";
-    try { userName = await resolveSenderName({ api, userId: senderId }); } catch {}
-    try {
-      if (isGroup && threadID) groupName = await resolveGroupName({ api, groupId: threadID });
-    } catch {}
+    try { userName  = await resolveSenderName({ api, userId: senderId }); } catch {}
+    try { if (isGroup && threadID) groupName = await resolveGroupName({ api, groupId: threadID }); } catch {}
 
     const argsStr = args.length > 0 ? args.join(" ") : "(không có)";
-    logEvent(
-      `[ CMD:${canonicalName.toUpperCase()} ] ${userName} | ${groupName} | args: ${argsStr} | ${execTime}ms`
-    );
+    logEvent(`[ CMD:${canonicalName.toUpperCase()} ] ${userName} | ${groupName} | args: ${argsStr} | ${execTime}ms`);
   } catch (err) {
     logError(`❎ Lỗi thực thi lệnh: ${err?.message || err}`);
   }

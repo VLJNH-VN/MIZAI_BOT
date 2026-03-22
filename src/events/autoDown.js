@@ -17,9 +17,8 @@ const { extractBody }        = require("../../utils/bot/messageUtils");
 const { normalizeAttachment } = require("../../includes/handlers/handleUploadAttachments");
 const { uploadThumbnail, zaloSendVoice, uploadAttachmentToZalo } = require("../../utils/zaloMedia");
 
-const tempDir       = path.join(process.cwd(), "includes", "cache");
-const SETTINGS_FILE = path.join(process.cwd(), "includes", "data", "auto.json");
-const API_BASE      = "https://fown.onrender.com";
+const tempDir  = path.join(process.cwd(), "includes", "cache");
+const API_BASE = "https://fown.onrender.com";
 
 // ─── Danh sách platform hỗ trợ (yt-dlp) — KHÔNG bao gồm TikTok/Douyin/CapCut ─
 const SUPPORTED_LINKS = [
@@ -80,14 +79,11 @@ function isTikTokUrl(url) {
     return /(?:vm\.|vt\.|www\.)?tiktok\.com|douyin\.com|capcut\.com/.test(url);
 }
 
-// ─── Settings ──────────────────────────────────────────────────────────────────
-function isAutoDownEnabled(threadId) {
+// ─── Settings (dùng groups.settings SQLite) ───────────────────────────────────
+async function isAutoDownEnabled(threadId) {
     try {
-        if (!fs.existsSync(SETTINGS_FILE)) return true;
-        const data = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf-8"));
-        if (data[threadId]?.autodown !== undefined) return data[threadId].autodown !== false;
-        if (data["__global"]?.autodown !== undefined) return data["__global"].autodown !== false;
-        return true;
+        const { getSetting } = require("../../includes/database/groupSettings");
+        return await getSetting(String(threadId), "autodown", true);
     } catch { return true; }
 }
 
@@ -637,7 +633,7 @@ function startAutoDown(api) {
         // Các platform khác → chỉ xử lý nếu nằm trong SUPPORTED_LINKS
         if (!isTikTok && !SUPPORTED_LINKS.some(rx => rx.test(url))) return;
 
-        if (!isAutoDownEnabled(threadId)) return;
+        if (!(await isAutoDownEnabled(threadId))) return;
 
         logDebug(`[AutoDown] Link: ${url}`);
 

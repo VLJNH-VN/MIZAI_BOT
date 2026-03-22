@@ -321,6 +321,48 @@ async function initSchema(db) {
     enabled  INTEGER DEFAULT 1
   )`);
 
+  // ── Anti settings per group ───────────────────────────────────────────────
+  await run(db, `CREATE TABLE IF NOT EXISTS group_anti (
+    group_id   TEXT PRIMARY KEY,
+    cfg_json   TEXT NOT NULL DEFAULT '{}',
+    updated_at INTEGER DEFAULT 0
+  )`);
+
+  // ── Muted users per group ─────────────────────────────────────────────────
+  await run(db, `CREATE TABLE IF NOT EXISTS group_muted (
+    group_id TEXT,
+    user_id  TEXT,
+    name     TEXT DEFAULT '',
+    muted_at INTEGER DEFAULT 0,
+    expire_at INTEGER DEFAULT 0,
+    PRIMARY KEY (group_id, user_id)
+  )`);
+  await run(db, "CREATE INDEX IF NOT EXISTS idx_group_muted_gid ON group_muted(group_id);").catch(() => {});
+
+  // ── Rent groups & keys ─────────────────────────────────────────────────────
+  await run(db, `CREATE TABLE IF NOT EXISTS rent_groups (
+    group_id   TEXT PRIMARY KEY,
+    owner_id   TEXT DEFAULT '',
+    time_start TEXT DEFAULT '',
+    time_end   TEXT DEFAULT '',
+    created_at INTEGER DEFAULT 0,
+    updated_at INTEGER DEFAULT 0
+  )`);
+  await run(db, `CREATE TABLE IF NOT EXISTS rent_keys (
+    key_str    TEXT PRIMARY KEY,
+    days       INTEGER DEFAULT 30,
+    is_used    INTEGER DEFAULT 0,
+    created_at INTEGER DEFAULT 0
+  )`);
+
+  // ── Persistent cooldowns ─────────────────────────────────────────────────
+  await run(db, `CREATE TABLE IF NOT EXISTS cooldowns (
+    cmd_name  TEXT,
+    user_id   TEXT,
+    last_used INTEGER DEFAULT 0,
+    PRIMARY KEY (cmd_name, user_id)
+  )`);
+
 }
 
 // ════════════════════════════════════════

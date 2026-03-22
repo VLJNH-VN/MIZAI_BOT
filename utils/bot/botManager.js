@@ -53,77 +53,36 @@ async function isGroupAdmin({ api, groupId, userId }) {
   }
 }
 
-// ── Anti Manager ──────────────────────────────────────────────────────────────
+// ── Anti Manager (SQLite-backed in-memory cache) ───────────────────────────────
+const {
+  getGroupAnti,
+  setGroupAnti,
+  isAntiUndoEnabled,
+  getAllAntiGroupIds,
+} = require("../../includes/database/antiManager");
 
-const ANTI_FILE     = path.join(__dirname, "../../includes/data/anti.json");
-const ANTI_OUT_FILE = path.join(__dirname, "../../includes/data/antiOut.json");
-
-function readAnti() {
-  return readJsonFile(ANTI_FILE, {});
-}
-
-function saveAnti(data) {
-  writeJsonFile(ANTI_FILE, data);
-}
-
-function getGroupAnti(groupId) {
-  const data = readAnti();
-  if (!data[groupId]) data[groupId] = {};
-  const g = data[groupId];
-  return {
-    antiLink:          g.antiLink          ?? false,
-    antiSpam:          g.antiSpam          ?? false,
-    antiNsfw:          g.antiNsfw          ?? false,
-    antiFake:          g.antiFake          ?? false,
-    antiOut:           g.antiOut           ?? false,
-    antiUndo:          g.antiUndo          ?? false,
-    antiBot:           g.antiBot           ?? false,
-    antiBotUids:       Array.isArray(g.antiBotUids) ? g.antiBotUids : [],
-    antiLinkWhitelist: g.antiLinkWhitelist ?? [],
-    antiSpamThreshold: g.antiSpamThreshold ?? 5,
-    antiSpamWindow:    g.antiSpamWindow    ?? 5,
-    antiOutMaxRejoins: g.antiOutMaxRejoins ?? 3,
-  };
-}
-
-function setGroupAnti(groupId, key, value) {
-  const data = readAnti();
-  if (!data[groupId]) data[groupId] = {};
-  data[groupId][key] = value;
-  saveAnti(data);
-}
-
-function readAntiOut() {
-  return readJsonFile(ANTI_OUT_FILE, {});
-}
-
-function saveAntiOut(data) {
-  writeJsonFile(ANTI_OUT_FILE, data);
-}
+// ── AntiOut tracking (in-memory — không cần persist) ─────────────────────────
+const _antiOutStore = new Map();
 
 function recordJoin(groupId, userId) {
-  const data = readAntiOut();
-  if (!data[groupId]) data[groupId] = {};
-  if (!data[groupId][userId]) data[groupId][userId] = { joinCount: 0, lastJoin: 0 };
-  data[groupId][userId].joinCount += 1;
-  data[groupId][userId].lastJoin = Date.now();
-  saveAntiOut(data);
-  return data[groupId][userId].joinCount;
+  const key = `${groupId}:${userId}`;
+  if (!_antiOutStore.has(key)) _antiOutStore.set(key, { joinCount: 0, lastJoin: 0 });
+  const rec = _antiOutStore.get(key);
+  rec.joinCount += 1;
+  rec.lastJoin = Date.now();
+  return rec.joinCount;
 }
 
 function resetJoinCount(groupId, userId) {
-  const data = readAntiOut();
-  if (data[groupId] && data[groupId][userId]) {
-    data[groupId][userId].joinCount = 0;
-    saveAntiOut(data);
-  }
+  const key = `${groupId}:${userId}`;
+  if (_antiOutStore.has(key)) _antiOutStore.get(key).joinCount = 0;
 }
 
 function getJoinCount(groupId, userId) {
-  const data = readAntiOut();
-  return data[groupId]?.[userId]?.joinCount ?? 0;
+  return _antiOutStore.get(`${groupId}:${userId}`)?.joinCount ?? 0;
 }
 
+// ── Spam tracking (in-memory) ─────────────────────────────────────────────────
 const spamStore = new Map();
 
 function recordMessage(groupId, userId) {
@@ -143,8 +102,7 @@ function clearSpam(groupId, userId) {
   spamStore.delete(key);
 }
 
-// ── Group Settings (rank on/off, v.v.) ───────────────────────────────────────
-
+// ── Group Settings (rank on/off) — dùng groups.settings SQLite ───────────────
 const GROUP_SETTINGS_FILE = path.join(__dirname, "../../includes/data/groupSettings.json");
 
 function readGroupSettings() {
@@ -175,12 +133,13 @@ module.exports = {
   isGroupAdmin,
   getGroupAnti,
   setGroupAnti,
+  getAllAntiGroupIds,
   recordJoin,
   resetJoinCount,
   getJoinCount,
   recordMessage,
   clearSpam,
-  isAntiUndoEnabled: (groupId) => getGroupAnti(groupId).antiUndo,
+  isAntiUndoEnabled,
   getGroupSetting,
   setGroupSetting,
 };

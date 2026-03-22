@@ -641,26 +641,42 @@ async function handleCustomStickerAction(api, stickerAction, threadId, msgType, 
   const emotion   = (stickerAction.emotion   || "default").trim();
   const aiPrompt  = (stickerAction.aiPrompt  || "").trim();
 
+  // Từ khóa để tìm sticker thật từ thư viện Zalo
+  const stickerKeyword = (aiPrompt || text || emotion || "cute")
+    .split(/[,\s]+/).slice(0, 3).join(" ").trim() || "cute";
+
   let stickerPath = null;
+  let sentImage   = false;
+
+  // ── Bước 1: Gửi ảnh đã xử lý / AI-generated ──────────────────────────────
   try {
     stickerPath = await generateSticker({ text, emotion, aiPrompt, mode, imgUrl });
-
-    await api.sendMessage(
-      {
-        msg         : "",
-        attachments : [stickerPath],
-      },
-      threadId,
-      msgType
-    );
-    global.logInfo?.(`[goibot/customSticker] Đã gửi sticker (${mode}) → ${text || aiPrompt}`);
+    await api.sendMessage({ msg: "", attachments: [stickerPath] }, threadId, msgType);
+    sentImage = true;
+    global.logInfo?.(`[goibot/customSticker] Đã gửi ảnh (${mode}) → ${text || aiPrompt}`);
   } catch (err) {
-    global.logWarn?.(`[goibot/customSticker] Lỗi: ${err?.message}`);
-    if (send) await send("(Mizai thử tạo sticker nhưng bị lỗi ~)");
+    global.logWarn?.(`[goibot/customSticker] Lỗi gửi ảnh: ${err?.message}`);
   } finally {
-    if (stickerPath) {
-      try { fs.unlinkSync(stickerPath); } catch {}
+    if (stickerPath) { try { fs.unlinkSync(stickerPath); } catch {} }
+  }
+
+  // ── Bước 2: Luôn gửi thêm sticker thật từ thư viện Zalo ──────────────────
+  try {
+    const sent = await sendStickerByKeyword(api, stickerKeyword, threadId, msgType);
+    if (sent) {
+      global.logInfo?.(`[goibot/customSticker] Đã gửi sticker Zalo → "${stickerKeyword}"`);
+    } else {
+      // Thử keyword ngắn hơn nếu không tìm thấy
+      const fallbackKw = (aiPrompt || text || "").split(/\s+/)[0] || "cute";
+      await sendStickerByKeyword(api, fallbackKw, threadId, msgType);
     }
+  } catch (err) {
+    global.logWarn?.(`[goibot/customSticker] Lỗi gửi sticker Zalo: ${err?.message}`);
+  }
+
+  // ── Nếu cả 2 đều thất bại ─────────────────────────────────────────────────
+  if (!sentImage && send) {
+    await send("(Mizai thử tạo sticker nhưng bị lỗi ~)");
   }
 }
 

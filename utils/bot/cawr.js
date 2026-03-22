@@ -189,34 +189,56 @@ async function search(query, limit = 8) {
  */
 async function getUserVideos(username, limit = "all") {
   const uid = username.replace(/^@/, "");
-
   const svl = (limit === "all" || !limit) ? "all" : Math.max(1, Number(limit));
 
-  let res;
+  // ── Thử fown API trước ────────────────────────────────────────────────────
   try {
-    res = await axios.get(`${FOWN_API}/api/search`, {
+    const res = await axios.get(`${FOWN_API}/api/search`, {
       params: { ttuser: uid, svl },
       timeout: 60000,
+      validateStatus: () => true,
     });
+
+    if (res.status === 200) {
+      const videos = res.data?.results;
+      if (Array.isArray(videos) && videos.length > 0) {
+        return videos.map(v => ({
+          id:        String(v.id || `${Date.now()}_${Math.random().toString(36).slice(2,6)}`),
+          videoUrl:  null,
+          tiktokUrl: v.url || `https://www.tiktok.com/@${uid}/video/${v.id}`,
+          title:     v.title || "",
+          author:    uid,
+          _useFown:  true,
+        }));
+      }
+    }
+    const errDetail = res.data?.error || res.data?.message || `HTTP ${res.status}`;
+    global.logWarn?.(`[cawr.tt] Fown API thất bại (${errDetail}), fallback TikTok package…`);
   } catch (e) {
-    throw new Error(`Fown search lỗi: ${e.message}`);
+    global.logWarn?.(`[cawr.tt] Fown API lỗi mạng: ${e.message}, fallback TikTok package…`);
   }
 
-  const videos = res.data?.results;
-  if (!Array.isArray(videos) || videos.length === 0) {
-    const msg = `Không tìm thấy video nào của @${uid} (fown trả về rỗng)`;
-    global.logWarn?.(`[cawr.tt] getUserVideos: ${msg}`);
-    throw new Error(msg);
+  // ── Fallback: TikTok.GetUserPosts (không cần cookie) ─────────────────────
+  const cookie = global.config?.tiktokCookie;
+  const maxCount = (svl === "all" || !svl) ? 35 : Math.min(Number(svl), 35);
+  const result = await TikTok.GetUserPosts(uid, { count: maxCount, cookie: cookie || undefined });
+
+  if (result?.status !== "success" || !Array.isArray(result.result) || result.result.length === 0) {
+    throw new Error(`Không tìm thấy video nào của @${uid}`);
   }
 
-  return videos.map(v => ({
-    id:        String(v.id || `${Date.now()}_${Math.random().toString(36).slice(2,6)}`),
-    videoUrl:  null,                 // Không có direct URL; dùng fown download
-    tiktokUrl: v.url || `https://www.tiktok.com/@${uid}/video/${v.id}`,
-    title:     v.title || "",
-    author:    uid,
-    _useFown:  true,                 // Báo hiệu bulkAdd dùng fown để lấy raw_url
-  }));
+  return result.result.map(v => {
+    const vid = String(v.id || `${Date.now()}_${Math.random().toString(36).slice(2,6)}`);
+    const videoUrl = v.video?.downloadAddr || v.video?.playAddr || null;
+    return {
+      id:        vid,
+      videoUrl,
+      tiktokUrl: `https://www.tiktok.com/@${uid}/video/${vid}`,
+      title:     v.desc || "",
+      author:    v.author?.uniqueId || uid,
+      _useFown:  false,
+    };
+  });
 }
 
 /**

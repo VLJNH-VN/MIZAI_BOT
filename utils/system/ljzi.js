@@ -5,10 +5,16 @@
  * Module Ljzi — Quản lý danh sách video gái/anime + gửi video chuẩn zca-js
  *
  * Đăng ký global:
- *   global.Ljzi.vdgai          → string[]   danh sách URL video gái
- *   global.Ljzi.vdani          → string[]   danh sách URL video anime
- *   global.Ljzi.pick(name)     → string|null  lấy random 1 URL từ "vdgai" hoặc "vdani"
- *   global.Ljzi.send(api, event, name) → Promise  download → H264 → sendVideo/fallback
+ *   global.Ljzi.vdgai                    → string[]   danh sách URL video gái
+ *   global.Ljzi.vdani                    → string[]   danh sách URL video anime
+ *   global.Ljzi.pick(name)               → string|null  lấy random 1 URL
+ *   global.Ljzi.send(api, event, name)   → Promise      gửi video (ưu tiên cache)
+ *   global.Ljzi.cacheSize(name)          → number       số video đang có trong cache
+ *
+ * Cache:
+ *   Khi khởi động, tự động tải sẵn CACHE_SIZE video về local (download + H264).
+ *   Khi send() lấy 1 video từ cache, tự động bổ sung 1 video mới vào cache ngầm.
+ *   Nếu cache trống (lần đầu hoặc chưa kịp tải), fallback download on-demand.
  */
 
 const fs           = require("fs");
@@ -18,6 +24,7 @@ const { execSync } = require("child_process");
 
 const LISTAPI_DIR = path.join(__dirname, "../../includes/listapi");
 const TEMP_DIR    = path.join(__dirname, "../../includes/cache");
+const CACHE_SIZE  = 5;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -87,9 +94,122 @@ function loadList(filename) {
   return [];
 }
 
-// ── sendOneVideo: download → H264 → thumbnail → sendVideo / fallback ──────────
+// ── Video cache ────────────────────────────────────────────────────────────────
+// Mỗi entry: { filePath: string, meta: { width, height, duration } }
 
-async function sendOneVideo(api, event, srcUrl, caption) {
+const _cache   = { vdgai: [], vdani: [] };
+const _filling = { vdgai: false, vdani: false };
+
+/**
+ * Tải + convert 1 video ngẫu nhiên từ list vào cache.
+ * @returns {boolean} true nếu thành công
+ */
+async function _prepareOne(name) {
+  const list = global.Ljzi?.[name];
+  if (!list || !list.length) return false;
+
+  const url      = list[Math.floor(Math.random() * list.length)];
+  const id       = uid();
+  const rawPath  = path.join(TEMP_DIR, `ljzi_raw_${id}.mp4`);
+  const h264Path = path.join(TEMP_DIR, `ljzi_h264_${id}.mp4`);
+
+  try {
+    await downloadFile(url, rawPath);
+
+    let finalPath = rawPath;
+    try {
+      convertToH264(rawPath, h264Path);
+      if (fs.existsSync(h264Path) && fs.statSync(h264Path).size > 0) {
+        finalPath = h264Path;
+        cleanup(rawPath);
+      }
+    } catch (e) {
+      global.logWarn?.(`[Ljzi] Convert H264 lỗi khi cache: ${e.message}`);
+      try { if (fs.existsSync(h264Path)) fs.unlinkSync(h264Path); } catch (_) {}
+    }
+
+    const meta = probeStreams(finalPath);
+    _cache[name].push({ filePath: finalPath, meta });
+    global.logInfo?.(`[Ljzi] Cache +1 "${name}" → ${_cache[name].length}/${CACHE_SIZE} (${path.basename(finalPath)})`);
+    return true;
+  } catch (e) {
+    global.logWarn?.(`[Ljzi] _prepareOne "${name}" lỗi: ${e.message}`);
+    cleanup(rawPath, h264Path);
+    return false;
+  }
+}
+
+/**
+ * Chạy ngầm để bổ sung cache đến CACHE_SIZE.
+ */
+async function _fillCache(name) {
+  if (_filling[name]) return;
+  if (!_cache[name]) return;
+  if (_cache[name].length >= CACHE_SIZE) return;
+
+  _filling[name] = true;
+  global.logInfo?.(`[Ljzi] Bắt đầu fill cache "${name}" (hiện: ${_cache[name].length}/${CACHE_SIZE})...`);
+
+  while (_cache[name].length < CACHE_SIZE) {
+    const ok = await _prepareOne(name);
+    if (!ok) break;
+  }
+
+  global.logInfo?.(`[Ljzi] Cache "${name}" đã đủ: ${_cache[name].length}/${CACHE_SIZE}`);
+  _filling[name] = false;
+}
+
+// ── Gửi video từ file đã chuẩn bị sẵn ────────────────────────────────────────
+
+async function _sendFromFile(api, event, filePath, meta, caption) {
+  const fileSize = fs.statSync(filePath).size;
+  global.logInfo?.(`[Ljzi] Gửi từ cache: ${path.basename(filePath)} | size=${(fileSize/1024).toFixed(0)}KB`);
+
+  let thumbnailUrl = "";
+  try {
+    thumbnailUrl = await global.zaloUploadThumbnail(api, filePath, event.threadId, event.type) || "";
+  } catch (et) {
+    global.logWarn?.(`[Ljzi] Thumbnail lỗi: ${et.message}`);
+  }
+
+  let sentAsVideo = false;
+
+  if (typeof global.githubReleaseUpload === "function" && fileSize < 50 * 1024 * 1024) {
+    try {
+      const id         = uid();
+      const releaseUrl = await global.githubReleaseUpload(filePath, `ljzi_${id}.mp4`);
+      if (releaseUrl) {
+        await api.sendVideo({
+          videoUrl:     releaseUrl,
+          thumbnailUrl,
+          msg:          caption || "",
+          width:        meta.width,
+          height:       meta.height,
+          duration:     meta.duration * 1000,
+          ttl:          500_000,
+        }, event.threadId, event.type);
+        global.logInfo?.("[Ljzi] sendVideo (Release) thành công.");
+        sentAsVideo = true;
+      }
+    } catch (e) {
+      global.logWarn?.(`[Ljzi] Release upload/sendVideo thất bại: ${e.message}`);
+    }
+  }
+
+  if (!sentAsVideo) {
+    await api.sendMessage(
+      { msg: caption || "", attachments: [filePath], ttl: 500_000 },
+      event.threadId, event.type
+    );
+    global.logInfo?.("[Ljzi] fallback sendMessage attachment thành công.");
+  }
+
+  cleanup(filePath);
+}
+
+// ── On-demand: download → H264 → gửi (khi cache trống) ───────────────────────
+
+async function _sendOnDemand(api, event, srcUrl, caption) {
   const id       = uid();
   const rawPath  = path.join(TEMP_DIR, `ljzi_raw_${id}.mp4`);
   const h264Path = path.join(TEMP_DIR, `ljzi_h264_${id}.mp4`);
@@ -103,50 +223,11 @@ async function sendOneVideo(api, event, srcUrl, caption) {
       if (fs.existsSync(h264Path) && fs.statSync(h264Path).size > 0)
         uploadPath = h264Path;
     } catch (e) {
-      global.logWarn?.(`[Ljzi] Convert H264 lỗi, dùng file gốc: ${e.message}`);
+      global.logWarn?.(`[Ljzi] Convert H264 on-demand lỗi: ${e.message}`);
     }
 
-    const meta     = probeStreams(uploadPath);
-    const fileSize = fs.statSync(uploadPath).size;
-    global.logInfo?.(`[Ljzi] size=${(fileSize / 1024).toFixed(0)}KB w=${meta.width} h=${meta.height} dur=${meta.duration}s`);
-
-    let thumbnailUrl = "";
-    try {
-      thumbnailUrl = await global.zaloUploadThumbnail(api, uploadPath, event.threadId, event.type) || "";
-    } catch (et) {
-      global.logWarn?.(`[Ljzi] Thumbnail lỗi: ${et.message}`);
-    }
-
-    let sentAsVideo = false;
-
-    if (typeof global.githubReleaseUpload === "function" && fileSize < 50 * 1024 * 1024) {
-      try {
-        const releaseUrl = await global.githubReleaseUpload(uploadPath, `ljzi_${id}.mp4`);
-        if (releaseUrl) {
-          await api.sendVideo({
-            videoUrl:     releaseUrl,
-            thumbnailUrl,
-            msg:          caption || "",
-            width:        meta.width,
-            height:       meta.height,
-            duration:     meta.duration * 1000,
-            ttl:          500_000,
-          }, event.threadId, event.type);
-          global.logInfo?.("[Ljzi] sendVideo (Release) thành công.");
-          sentAsVideo = true;
-        }
-      } catch (e) {
-        global.logWarn?.(`[Ljzi] Release upload/sendVideo thất bại: ${e.message}`);
-      }
-    }
-
-    if (!sentAsVideo) {
-      await api.sendMessage(
-        { msg: caption || "", attachments: [uploadPath], ttl: 500_000 },
-        event.threadId, event.type
-      );
-      global.logInfo?.("[Ljzi] fallback sendMessage attachment thành công.");
-    }
+    const meta = probeStreams(uploadPath);
+    await _sendFromFile(api, event, uploadPath, meta, caption);
 
   } finally {
     cleanup(rawPath, h264Path);
@@ -168,11 +249,29 @@ global.Ljzi = {
     return list[Math.floor(Math.random() * list.length)];
   },
 
+  cacheSize(name) {
+    return _cache[name]?.length ?? 0;
+  },
+
   async send(api, event, name) {
-    const url = this.pick(name);
-    if (!url) throw new Error(`[Ljzi] Danh sách "${name}" trống hoặc chưa có.`);
-    await sendOneVideo(api, event, url, `🎬 ${name}`);
+    const caption = `🎬 ${name}`;
+
+    if (_cache[name] && _cache[name].length > 0) {
+      const item = _cache[name].shift();
+      _fillCache(name).catch(() => {});
+      await _sendFromFile(api, event, item.filePath, item.meta, caption);
+    } else {
+      global.logWarn?.(`[Ljzi] Cache "${name}" trống, download on-demand...`);
+      const url = this.pick(name);
+      if (!url) throw new Error(`[Ljzi] Danh sách "${name}" trống hoặc chưa có.`);
+      await _sendOnDemand(api, event, url, caption);
+      _fillCache(name).catch(() => {});
+    }
   },
 };
 
 global.logInfo?.(`[Ljzi] Đã load: vdgai=${vdgai.length} | vdani=${vdani.length}`);
+
+// Bắt đầu fill cache ngầm ngay khi khởi động
+if (vdgai.length) _fillCache("vdgai").catch(() => {});
+if (vdani.length) _fillCache("vdani").catch(() => {});

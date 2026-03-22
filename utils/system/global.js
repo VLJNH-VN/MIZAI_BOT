@@ -377,7 +377,7 @@ function setApi(apiInstance) {
       releaseId = created.data.id;
     }
 
-    // Xóa asset trùng tên + asset bị kẹt "new" state (tránh 422 conflict)
+    // Xóa asset trùng tên + asset kẹt "new" state trước khi upload (tránh 422)
     try {
       const assets = await axios.get(
         `https://api.github.com/repos/${owner}/${repoName}/releases/${releaseId}/assets`,
@@ -394,7 +394,7 @@ function setApi(apiInstance) {
       }
     } catch (_) {}
 
-    // Upload asset — retry tối đa 3 lần nếu 422 (đổi tên để tránh conflict)
+    // Upload asset — retry tối đa 3 lần (422 đổi tên, lỗi mạng giữ tên)
     const fileData = fs.readFileSync(localFilePath);
     let uploadRes, lastName = filename;
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -408,15 +408,22 @@ function setApi(apiInstance) {
               "Content-Type": "application/octet-stream",
               "Content-Length": fileData.length,
             },
-            maxBodyLength: Infinity,
+            maxBodyLength:    Infinity,
             maxContentLength: Infinity,
+            timeout:          180000,
           }
         );
         break;
       } catch (e) {
-        if (e.response?.status === 422 && attempt < 3) {
-          lastName = filename.replace(".mp4", `_r${attempt}.mp4`);
-          await new Promise(r => setTimeout(r, 1000));
+        const is422    = e.response?.status === 422;
+        const isNetErr = !e.response && (
+          e.code === "ECONNRESET" || e.code === "ECONNABORTED" ||
+          e.code === "ETIMEDOUT"  || (e.message || "").includes("socket hang up")
+        );
+        if ((is422 || isNetErr) && attempt < 3) {
+          if (is422) lastName = filename.replace(".mp4", `_r${attempt}.mp4`);
+          global.logWarn?.(`[githubReleaseUpload] Lần ${attempt} lỗi (${e.message}), thử lại...`);
+          await new Promise(r => setTimeout(r, 2000 * attempt));
         } else {
           throw e;
         }

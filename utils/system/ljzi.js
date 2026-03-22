@@ -182,15 +182,24 @@ async function _sendFromFile(api, event, filePath, meta, caption, releaseUrl) {
     ? global.zaloUploadThumbnail(api, filePath, event.threadId, event.type).catch(() => "")
     : Promise.resolve("");
 
-  // Nếu chưa có releaseUrl sẵn, upload GitHub song song với thumbnail
-  const ghPromise = (!finalReleaseUrl && typeof global.githubReleaseUpload === "function" && fileSize < 50 * 1024 * 1024)
-    ? global.githubReleaseUpload(filePath, `ljzi_${uid()}.mp4`).catch(e => {
-        global.logWarn?.(`[Ljzi] Release upload thất bại: ${e.message}`);
+  // Nếu chưa có releaseUrl: thử GitHub → thử Zalo CDN (uploadAttachment mp4)
+  const uploadPromise = (!finalReleaseUrl && fileSize < 50 * 1024 * 1024)
+    ? (async () => {
+        // 1. Thử GitHub
+        if (typeof global.githubReleaseUpload === "function") {
+          try { return await global.githubReleaseUpload(filePath, `ljzi_${uid()}.mp4`); }
+          catch (e) { global.logWarn?.(`[Ljzi] GitHub thất bại: ${e.message}`); }
+        }
+        // 2. Fallback: upload lên Zalo CDN
+        try {
+          const url = await global.zaloUploadAttachment(api, filePath, event.threadId, event.type);
+          if (url) { global.logInfo?.(`[Ljzi] Zalo CDN OK`); return url; }
+        } catch (e) { global.logWarn?.(`[Ljzi] Zalo CDN thất bại: ${e.message}`); }
         return null;
-      })
+      })()
     : Promise.resolve(finalReleaseUrl);
 
-  [thumbnailUrl, finalReleaseUrl] = await Promise.all([thumbPromise, ghPromise]);
+  [thumbnailUrl, finalReleaseUrl] = await Promise.all([thumbPromise, uploadPromise]);
 
   let sentAsVideo = false;
 

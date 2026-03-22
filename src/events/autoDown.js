@@ -14,7 +14,6 @@ const fs             = require("fs");
 const { execSync }   = require("child_process");
 const { Downloader } = require("@tobyg74/tiktok-api-dl");
 const { extractBody }            = require("../../utils/bot/messageUtils");
-const { uploadThumbnail, uploadAttachmentToZalo } = require("../../utils/media/zaloMedia");
 
 const TEMP     = path.join(process.cwd(), "includes", "cache");
 const FOWN     = "https://fown.onrender.com";
@@ -150,7 +149,7 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
         const size = fs.statSync(upload).size;
 
         let thumbUrl = "";
-        try { thumbUrl = await uploadThumbnail(api, upload, threadId, threadType) || ""; } catch {}
+        try { thumbUrl = await global.zaloUploadThumbnail(api, upload, threadId, threadType) || ""; } catch {}
 
         // Bước 1: GitHub upload < 50MB → sendVideo
         if (typeof global.githubUpload === "function" && size < 50 * 1024 * 1024) {
@@ -182,13 +181,8 @@ async function sendVideo(api, videoUrl, info, caption, threadId, threadType) {
 // ─── Gửi audio ─────────────────────────────────────────────────────────────────
 async function sendAudio(api, audioUrl, info, caption, threadId, threadType) {
     const id   = uid();
-    const raw  = tmp(`ad_aud_${id}`);
-    const aac  = `${raw}.aac`;
     const imgs = [];
     try {
-        await dlFile(audioUrl, raw);
-        toAac(raw, aac);
-
         if (info.thumbnail) {
             try {
                 const tp = tmp(`ad_thumb_${id}.jpg`);
@@ -199,29 +193,8 @@ async function sendAudio(api, audioUrl, info, caption, threadId, threadType) {
         if (caption || imgs.length)
             await api.sendMessage({ msg: caption, attachments: imgs.length ? imgs : undefined, ttl: 500_000 }, threadId, threadType);
 
-        // Bước 1: upload AAC → sendVoice
-        try {
-            const voiceUrl = await uploadAttachmentToZalo(api, aac, threadId, threadType);
-            if (voiceUrl) {
-                await api.sendVoice({ voiceUrl, ttl: 900_000 }, threadId, threadType);
-                return logInfo("[AutoDown] sendVoice (upload) OK.");
-            }
-        } catch (e) { logWarn(`[AutoDown] sendVoice upload lỗi: ${e.message}`); }
-
-        // Bước 2: GitHub → sendVoice
-        if (typeof global.githubUpload === "function" && fs.statSync(aac).size < 50 * 1024 * 1024) {
-            try {
-                const ghUrl = await global.githubUpload(aac, `autodown/aud_${id}.aac`);
-                if (ghUrl) {
-                    await api.sendVoice({ voiceUrl: ghUrl, ttl: 500_000 }, threadId, threadType);
-                    return logInfo("[AutoDown] sendVoice (GitHub) OK.");
-                }
-            } catch (e) { logWarn(`[AutoDown] sendVoice GitHub lỗi: ${e.message}`); }
-        }
-
-        // Bước 3: attachment
-        await api.sendMessage({ msg: caption, attachments: [aac], ttl: 500_000 }, threadId, threadType);
-    } finally { del(raw, aac, ...imgs); }
+        await global.zaloSendVoice(api, audioUrl, threadId, threadType);
+    } finally { del(...imgs); }
 }
 
 // ─── Gửi ảnh slideshow ─────────────────────────────────────────────────────────
@@ -414,7 +387,7 @@ async function handleOther(api, url, threadId, threadType, cookies = "") {
                     try {
                         const tp = tmp(`ad_otherthumb_${uid()}.bin`);
                         await dlFile(thumb, tp);
-                        thumbZalo = await uploadAttachmentToZalo(api, tp, threadId, threadType) || "";
+                        thumbZalo = await global.zaloUploadAttachment(api, tp, threadId, threadType) || "";
                         try { fs.unlinkSync(tp); } catch {}
                     } catch {}
                 }

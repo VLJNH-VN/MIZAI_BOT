@@ -125,12 +125,11 @@ function startAutoSend(api) {
               try {
                 const uid = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
                 tmpPath = await downloadToTemp(ghUrl, uid);
-                const tmpSize  = fs.statSync(tmpPath).size;
-                const uploaded = await api.uploadAttachment([tmpPath], threadId, ThreadType.Group);
-                const fileUrl  = uploaded?.[0]?.fileUrl;
-                if (!fileUrl) throw new Error("uploadAttachment không trả về fileUrl");
+                const videoUrl = await global.zaloUploadAttachment(api, tmpPath, threadId, ThreadType.Group);
+                if (!videoUrl) throw new Error("zaloUploadAttachment không trả về URL");
+                const tmpSize = fs.statSync(tmpPath).size;
                 await api.sendVideo({
-                  videoUrl:     fileUrl,
+                  videoUrl,
                   thumbnailUrl: "",
                   msg:          "",
                   width:        576,
@@ -151,13 +150,12 @@ function startAutoSend(api) {
           // ── Ưu tiên 2: Video local từ cache/videos ────────────────────────
           const videoPath = pickRandomVideo();
           if (videoPath) {
-            const meta     = getVideoMeta(videoPath);
-            const vidSize  = fs.statSync(videoPath).size;
-            const uploaded = await api.uploadAttachment([videoPath], threadId, ThreadType.Group);
-            const fileUrl  = uploaded?.[0]?.fileUrl;
-            if (fileUrl) {
+            const meta    = getVideoMeta(videoPath);
+            const vidSize = fs.statSync(videoPath).size;
+            const videoUrl = await global.zaloUploadAttachment(api, videoPath, threadId, ThreadType.Group);
+            if (videoUrl) {
               await api.sendVideo({
-                videoUrl:     fileUrl,
+                videoUrl,
                 thumbnailUrl: "",
                 msg:          "",
                 width:        meta.width    || 1280,

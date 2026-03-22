@@ -45,6 +45,14 @@
  * │  global.isBotAdmin(userId)       → boolean                             │
  * │  global.isGroupAdmin({ api, groupId, userId }) → Promise<boolean>      │
  * ├──────────────────────┬──────────────────────────────────────────────────┤
+ * │  global.zaloSendVoice(api, source, threadId, type, ttl?)               │
+ * │    source: URL hoặc đường dẫn file local AAC/MP3                       │
+ * │    → gửi voice (download → AAC → upload CDN → sendVoice)              │
+ * │  global.zaloSendVideo(api, opts, threadId, type)                       │
+ * │    opts: { videoUrl, videoPath?, msg?, width?, height?, duration? }    │
+ * │  global.zaloUploadThumbnail(api, videoPath, threadId, type) → url|null │
+ * │  global.zaloUploadAttachment(api, filePath, threadId, type) → url|null │
+ * ├──────────────────────┬──────────────────────────────────────────────────┤
  * │  global.sendMessage(message, threadId, threadType) → Promise           │
  * │    message: string | object { msg, attachments, ... }                  │
  * │    threadType: ThreadType.Group | ThreadType.User                      │
@@ -108,6 +116,12 @@ const groupLoader                             = require("../../includes/database
 const dataManager                             = require("../../includes/database/core/dataManager");
 const userController                          = require("../../includes/database/user/userController");
 const groupSettings                           = require("../../includes/database/group/groupSettings");
+const {
+  zaloSendVoice,
+  zaloSendVideo,
+  uploadThumbnail       : _zaloUploadThumbnail,
+  uploadAttachmentToZalo: _zaloUploadAttachment,
+}                                             = require("../media/zaloMedia");
 
 // ── Logger ────────────────────────────────────────────────────────────────────
 global.logInfo   = logInfo;
@@ -185,6 +199,18 @@ global.Threads = groupSettings;
 
 // ── Xử lý video gai ──────────────────────────────────────────────────────────
 global.processGaiData = processGaiData;
+
+// ── Zalo Media Helpers — dùng chung cho voice / video ────────────────────────
+// global.zaloSendVoice(api, source, threadId, threadType, ttl?)
+//   source: URL hoặc đường dẫn file local (AAC/MP3/...)
+// global.zaloSendVideo(api, opts, threadId, threadType)
+//   opts: { videoUrl, videoPath?, msg?, width?, height?, duration?, ttl? }
+// global.zaloUploadThumbnail(api, videoPath, threadId, threadType) → url|null
+// global.zaloUploadAttachment(api, filePath, threadId, threadType) → url|null
+global.zaloSendVoice        = zaloSendVoice;
+global.zaloSendVideo        = zaloSendVideo;
+global.zaloUploadThumbnail  = _zaloUploadThumbnail;
+global.zaloUploadAttachment = _zaloUploadAttachment;
 
 // ── CAWR — Thư viện tiện ích dùng chung ──────────────────────────────────────
 // global.cawr.tt.search(query, limit)           → Promise<Array>

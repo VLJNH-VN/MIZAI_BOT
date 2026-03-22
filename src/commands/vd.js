@@ -20,7 +20,6 @@ const fs             = require("fs");
 const path           = require("path");
 const axios          = require("axios");
 const { execSync }   = require("child_process");
-const { uploadThumbnail } = require("../../utils/media/zaloMedia");
 
 const LISTAPI_DIR = path.join(process.cwd(), "includes", "listapi");
 const TEMP_DIR    = path.join(process.cwd(), "includes", "cache");
@@ -132,7 +131,7 @@ async function sendOneVideo(api, event, srcUrl, caption) {
     // Bước 3: Tạo thumbnail → upload Zalo CDN (dùng utils/zaloMedia)
     let thumbnailUrl = "";
     try {
-      thumbnailUrl = await uploadThumbnail(api, uploadPath, event.threadId, event.type) || "";
+      thumbnailUrl = await global.zaloUploadThumbnail(api, uploadPath, event.threadId, event.type) || "";
       global.logInfo?.(`[vd] Thumbnail Zalo URL: ${thumbnailUrl?.slice(0, 60)}`);
     } catch (et) {
       global.logWarn?.(`[vd] Thumbnail lỗi: ${et.message}`);

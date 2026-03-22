@@ -10,7 +10,6 @@ const fs    = require("fs");
 const { Reactions } = require("zca-js");
 const { fmtDurationSec, fmtDurationMs } = require("../../utils/media/helpers");
 const { drawSearchCard, drawNowPlayingCard } = require("../../utils/media/canvas");
-const { zaloSendVoice } = require("../../utils/media/zaloMedia");
 
 const FOWN_API = "https://fown.onrender.com";
 const MIXCLOUD_GRAPHQL_URL = "https://app.mixcloud.com/graphql";
@@ -236,7 +235,7 @@ module.exports = {
           const infoMsg = `✅ SoundCloud\n📝 ${t.title}\n👤 ${t.uploader}\n⏳ ${fmtDurationSec(t.duration)} · ▶️ ${fmtNum(t.view_count)}`;
           await api.sendMessage({ msg: infoMsg }, event.threadId, event.type);
         }
-        await zaloSendVoice(api, audioUrl, event.threadId, event.type);
+        await global.zaloSendVoice(api, audioUrl, event.threadId, event.type);
       } catch (err) { return send("❌ Lỗi tải nhạc: " + err.message); }
 
     } else if (platform === "spt") {
@@ -286,7 +285,7 @@ module.exports = {
           const infoMsg = `🎵 ${track.title}\n👤 ${track.author}\n⏳ ${durStr}`;
           await send(infoMsg);
         }
-        await zaloSendVoice(api, audioUrl, event.threadId, event.type);
+        await global.zaloSendVoice(api, audioUrl, event.threadId, event.type);
       } catch (err) { return send(`❌ Lỗi tải nhạc: ${err.message}`); }
 
     } else if (platform === "mix") {
@@ -322,7 +321,7 @@ module.exports = {
         await send(fallbackText);
       }
       if (audioUrl) {
-        await zaloSendVoice(api, audioUrl, event.threadId, event.type);
+        await global.zaloSendVoice(api, audioUrl, event.threadId, event.type);
       }
     }
   },

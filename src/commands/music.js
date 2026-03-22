@@ -2,7 +2,7 @@
 
 /**
  * src/commands/music.js
- * Gộp: scl (SoundCloud) + spt (Spotify) + mixcloud (Mixcloud)
+ * Gộp: scl (SoundCloud) + spt (Spotify) + mixcloud (Mixcloud) + yt (YouTube)
  */
 
 const https = require("https");
@@ -32,6 +32,29 @@ function formatDuration(seconds) {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
+function resolveUrl(url) {
+  if (!url) return url;
+  if (url.startsWith("/")) return FOWN_API + url;
+  return url;
+}
+
+// ── YouTube ────────────────────────────────────────────────────────────────────
+async function ytSearch(keyword) {
+  const res = await global.axios.get(
+    `${FOWN_API}/api/search?ytsearch=${encodeURIComponent(keyword)}&svl=6`,
+    { timeout: 30000 }
+  );
+  return (res.data?.results || []).map(item => ({
+    id:        item.id || "",
+    title:     item.title || "Unknown",
+    author:    item.uploader || "Unknown",
+    duration:  (item.duration || 0) * 1000,
+    link:      item.url || item.webpage_url || "",
+    _durSec:   item.duration || 0,
+    thumbnail: item.thumbnail || "",
+  }));
+}
+
 // ── Spotify (via fown API / yt-dlp spsearch) ──────────────────────────────────
 async function sptSearch(keyword) {
   const res = await global.axios.get(
@@ -39,12 +62,12 @@ async function sptSearch(keyword) {
     { timeout: 30000 }
   );
   return (res.data?.results || []).map(item => ({
-    id:       item.id || "",
-    title:    item.title || "Unknown",
-    author:   item.uploader || "Unknown",
-    duration: (item.duration || 0) * 1000,
-    link:     item.url || "",
-    _durSec:  item.duration || 0,
+    id:        item.id || "",
+    title:     item.title || "Unknown",
+    author:    item.uploader || "Unknown",
+    duration:  (item.duration || 0) * 1000,
+    link:      item.url || item.webpage_url || "",
+    _durSec:   item.duration || 0,
     thumbnail: item.thumbnail || "",
   }));
 }
@@ -105,7 +128,7 @@ async function mixSearch(term) {
 // ── SoundCloud ────────────────────────────────────────────────────────────────
 async function sclSearch(query) {
   const res = await global.axios.get(
-    `${FOWN_API}/api/search?scsearch=${encodeURIComponent(query)}&svl=5`,
+    `${FOWN_API}/api/search?scsearch=${encodeURIComponent(query)}&svl=6`,
     { timeout: 30000 }
   );
   return res.data?.results || [];
@@ -114,26 +137,31 @@ async function sclSearch(query) {
 module.exports = {
   config: {
     name:            "music",
-    aliases:         ["nhac", "scl", "soundcloud", "sc", "spt", "spotify", "mixcloud", "mix", "mx"],
-    version:         "2.0.0",
+    aliases:         ["nhac", "scl", "soundcloud", "sc", "spt", "spotify", "mixcloud", "mix", "mx", "yt", "youtube", "ytm", "ytmusic"],
+    version:         "3.0.0",
     hasPermssion:    0,
     credits:         "MiZai",
-    description:     "Tìm & tải nhạc từ SoundCloud, Spotify hoặc Mixcloud",
+    description:     "Tìm & tải nhạc từ SoundCloud, Spotify, Mixcloud hoặc YouTube",
     commandCategory: "Giải Trí",
-    usages: "music sc|spt|mix <từ khóa>   — Tìm nhạc (SoundCloud / Spotify / Mixcloud)",
+    usages: "music sc|spt|mix|yt <từ khóa>   — Tìm nhạc (SoundCloud / Spotify / Mixcloud / YouTube)",
     cooldowns: 5,
   },
 
   run: async ({ api, event, args, send, registerReply, commandName, threadID }) => {
-    const FLAG_MAP = { sc: "sc", soundcloud: "sc", scl: "sc", nhac: "sc", spt: "spt", spotify: "spt", mix: "mix", mixcloud: "mix", mx: "mix" };
+    const FLAG_MAP = {
+      sc: "sc", soundcloud: "sc", scl: "sc", nhac: "sc",
+      spt: "spt", spotify: "spt",
+      mix: "mix", mixcloud: "mix", mx: "mix",
+      yt: "yt", youtube: "yt", ytm: "yt", ytmusic: "yt",
+    };
 
     let platform = FLAG_MAP[commandName] || null;
     let queryArgs = args;
 
     if (platform) {
-      // commandName là alias platform trực tiếp (sc, nhac, spt, mix…) → args là query
+      // commandName là alias platform trực tiếp → args là query
     } else {
-      // commandName là "music" hoặc tương tự → đọc arg đầu làm platform
+      // commandName là "music" → đọc arg đầu làm platform
       const sub = (args[0] || "").toLowerCase();
       if (FLAG_MAP[sub]) { platform = FLAG_MAP[sub]; queryArgs = args.slice(1); }
       else {
@@ -141,8 +169,9 @@ module.exports = {
           `🎵 MUSIC — TÌM & TẢI NHẠC\n━━━━━━━━━━━━━━━━\n` +
           `• .music sc <từ khóa>   → SoundCloud\n` +
           `• .music spt <từ khóa>  → Spotify\n` +
-          `• .music mix <từ khóa>  → Mixcloud\n\n` +
-          `Ví dụ: .music sc bóng phù hoa`
+          `• .music mix <từ khóa>  → Mixcloud\n` +
+          `• .music yt <từ khóa>   → YouTube\n\n` +
+          `Ví dụ: .music yt bóng phù hoa`
         );
       }
     }
@@ -161,7 +190,7 @@ module.exports = {
         try { cardPath = await getCanvas().drawSearchCard({ platform: "sc", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
         const sent = cardPath
           ? await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type)
-          : await send(`💬 Reply số từ 1-${tracks.length} để tải nhạc`);
+          : await send(`💬 Reply số từ 1-${Math.min(tracks.length, 6)} để tải nhạc`);
         if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
         const msgId = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId;
         if (msgId) registerReply({ messageId: String(msgId), commandName: "music", payload: { platform: "sc", tracks } });
@@ -174,10 +203,23 @@ module.exports = {
         try { cardPath = await getCanvas().drawSearchCard({ platform: "spt", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
         const sent = cardPath
           ? await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type)
-          : await send(`📌 Reply STT (1–${tracks.length}) để tải nhạc`);
+          : await send(`📌 Reply STT (1–${Math.min(tracks.length, 6)}) để tải nhạc`);
         if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
         const msgId = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId ?? sent?.msgId;
         if (msgId) registerReply({ messageId: String(msgId), commandName: "music", payload: { platform: "spt", tracks }, ttl: 10 * 60 * 1000 });
+
+      } else if (platform === "yt") {
+        const tracks = await ytSearch(query);
+        if (!tracks.length) return send(`😔 Không tìm thấy kết quả cho "${query}"`);
+        tracks.forEach(t => { t._durStr = t._durSec ? fmtDurationSec(t._durSec) : fmtDurationMs(t.duration); });
+        let cardPath;
+        try { cardPath = await getCanvas().drawSearchCard({ platform: "yt", query, tracks: tracks.slice(0, 6) }); } catch (_) {}
+        const sent = cardPath
+          ? await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type)
+          : await send(`🎬 Reply số từ 1-${Math.min(tracks.length, 6)} để tải nhạc`);
+        if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
+        const msgId = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId ?? sent?.msgId;
+        if (msgId) registerReply({ messageId: String(msgId), commandName: "music", payload: { platform: "yt", tracks }, ttl: 10 * 60 * 1000 });
 
       } else if (platform === "mix") {
         const results = await mixSearch(query);
@@ -208,19 +250,26 @@ module.exports = {
     const numMatch = body.trim().replace(/@\S*/g, "").trim().match(/\d+/);
     const choice = numMatch ? parseInt(numMatch[0], 10) : NaN;
 
-    if (platform === "sc") {
-      if (!tracks.length) return send("❌ Hết dữ liệu. Vui lòng tìm lại.");
-      if (isNaN(choice) || choice < 1 || choice > tracks.length) return send(`⚠️ Reply số từ 1 đến ${tracks.length}`);
-      const t = tracks[choice - 1];
+    async function addReactionWow() {
       try {
         const _raw = event?.data ?? {};
         const _mid = _raw?.msgId ?? _raw?.cliMsgId ?? _raw?.clientMsgId ?? null;
         const _cid = _raw?.cliMsgId ?? _raw?.clientMsgId ?? _mid ?? null;
         if (_mid || _cid) await api.addReaction(Reactions.WOW, { type: event.type, threadId: event.threadId, data: { msgId: _mid, cliMsgId: _cid } });
       } catch (_) {}
+    }
+
+    if (platform === "sc") {
+      if (!tracks.length) return send("❌ Hết dữ liệu. Vui lòng tìm lại.");
+      if (isNaN(choice) || choice < 1 || choice > tracks.length) return send(`⚠️ Reply số từ 1 đến ${tracks.length}`);
+      const t = tracks[choice - 1];
+      await addReactionWow();
       try {
-        const res = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(t.url)}`, { timeout: 120000 });
-        const audioUrl = res.data?.download_audio_url || res.data?.download_url;
+        const res = await global.axios.get(
+          `${FOWN_API}/api/media?url=${encodeURIComponent(t.url)}`,
+          { timeout: 120000 }
+        );
+        const audioUrl = resolveUrl(res.data?.download_audio_url || res.data?.download_url);
         if (!audioUrl) return send("❌ Không lấy được link tải. Thử bài khác.");
         let cardPath;
         try {
@@ -246,29 +295,33 @@ module.exports = {
       if (!tracks.length) return send("❌ Hết dữ liệu. Vui lòng tìm lại.");
       if (isNaN(choice) || choice < 1 || choice > tracks.length) return send(`⚠️ Nhập số từ 1 đến ${tracks.length}.`);
       const track = tracks[choice - 1];
-      try {
-        const _raw = event?.data ?? {};
-        const _mid = _raw?.msgId ?? _raw?.cliMsgId ?? _raw?.clientMsgId ?? null;
-        const _cid = _raw?.cliMsgId ?? _raw?.clientMsgId ?? _mid ?? null;
-        if (_mid || _cid) await api.addReaction(Reactions.WOW, { type: event.type, threadId: event.threadId, data: { msgId: _mid, cliMsgId: _cid } });
-      } catch (_) {}
+      await addReactionWow();
       try {
         const durStr = track._durSec ? fmtDurationSec(track._durSec) : fmtDurationMs(track.duration);
         const spfUrl = track.link || track.url || "";
         let audioUrl = null;
 
         if (spfUrl) {
-          const mediaRes = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(spfUrl)}`, { timeout: 120000 });
-          audioUrl = mediaRes.data?.download_audio_url || mediaRes.data?.download_url || null;
+          const mediaRes = await global.axios.get(
+            `${FOWN_API}/api/media?url=${encodeURIComponent(spfUrl)}`,
+            { timeout: 120000 }
+          );
+          audioUrl = resolveUrl(mediaRes.data?.download_audio_url || mediaRes.data?.download_url || null);
         }
 
         if (!audioUrl) {
           const keyword   = `${track.title} ${track.author}`;
-          const searchRes = await global.axios.get(`${FOWN_API}/api/search?q=${encodeURIComponent(keyword)}&platform=yt&svl=1`, { timeout: 30000 });
-          const ytmUrl    = searchRes.data?.results?.[0]?.url;
+          const searchRes = await global.axios.get(
+            `${FOWN_API}/api/search?ytsearch=${encodeURIComponent(keyword)}&svl=1`,
+            { timeout: 30000 }
+          );
+          const ytmUrl = searchRes.data?.results?.[0]?.url || searchRes.data?.results?.[0]?.webpage_url;
           if (!ytmUrl) return send("❌ Không tìm thấy nhạc. Thử bài khác.");
-          const mediaRes2 = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(ytmUrl)}`, { timeout: 120000 });
-          audioUrl = mediaRes2.data?.download_audio_url || mediaRes2.data?.download_url || null;
+          const mediaRes2 = await global.axios.get(
+            `${FOWN_API}/api/media?url=${encodeURIComponent(ytmUrl)}`,
+            { timeout: 120000 }
+          );
+          audioUrl = resolveUrl(mediaRes2.data?.download_audio_url || mediaRes2.data?.download_url || null);
         }
 
         if (!audioUrl) return send("❌ Không lấy được link tải. Thử lại sau.");
@@ -286,8 +339,41 @@ module.exports = {
           await api.sendMessage({ msg: "", attachments: [cardPath] }, event.threadId, event.type);
           try { fs.unlinkSync(cardPath); } catch (_) {}
         } else {
-          const infoMsg = `🎵 ${track.title}\n👤 ${track.author}\n⏳ ${durStr}`;
-          await send(infoMsg);
+          await send(`🎵 ${track.title}\n👤 ${track.author}\n⏳ ${durStr}`);
+        }
+        await global.zaloSendVoice(api, audioUrl, event.threadId, event.type);
+      } catch (err) { return send(`❌ Lỗi tải nhạc: ${err.message}`); }
+
+    } else if (platform === "yt") {
+      if (!tracks.length) return send("❌ Hết dữ liệu. Vui lòng tìm lại.");
+      if (isNaN(choice) || choice < 1 || choice > tracks.length) return send(`⚠️ Nhập số từ 1 đến ${tracks.length}.`);
+      const track = tracks[choice - 1];
+      await addReactionWow();
+      try {
+        const durStr = track._durSec ? fmtDurationSec(track._durSec) : fmtDurationMs(track.duration);
+        const ytUrl  = track.link || track.url || "";
+        if (!ytUrl) return send("❌ Không có link. Thử lại sau.");
+        const mediaRes = await global.axios.get(
+          `${FOWN_API}/api/media?url=${encodeURIComponent(ytUrl)}`,
+          { timeout: 120000 }
+        );
+        const audioUrl = resolveUrl(mediaRes.data?.download_audio_url || mediaRes.data?.download_url || null);
+        if (!audioUrl) return send("❌ Không lấy được link tải. Thử bài khác.");
+        let cardPath;
+        try {
+          cardPath = await getCanvas().drawNowPlayingCard({
+            platform: "yt",
+            title:    track.title,
+            artist:   track.author,
+            duration: durStr,
+            thumb:    track.thumbnail || "",
+          });
+        } catch (_) {}
+        if (cardPath) {
+          await api.sendMessage({ msg: "", attachments: [cardPath] }, event.threadId, event.type);
+          try { fs.unlinkSync(cardPath); } catch (_) {}
+        } else {
+          await send(`🎬 ${track.title}\n👤 ${track.author}\n⏳ ${durStr}`);
         }
         await global.zaloSendVoice(api, audioUrl, event.threadId, event.type);
       } catch (err) { return send(`❌ Lỗi tải nhạc: ${err.message}`); }
@@ -297,12 +383,7 @@ module.exports = {
       if (isNaN(choice) || choice < 1 || choice > 5 || !results[choice - 1]) return send("⚠️ Chọn số từ 1-5.");
       const r = results[choice - 1];
       const mixUrl = `https://www.mixcloud.com/${r.owner.username}/${r.slug}`;
-      try {
-        const _raw = event?.data ?? {};
-        const _mid = _raw?.msgId ?? _raw?.cliMsgId ?? _raw?.clientMsgId ?? null;
-        const _cid = _raw?.cliMsgId ?? _raw?.clientMsgId ?? _mid ?? null;
-        if (_mid || _cid) await api.addReaction(Reactions.WOW, { type: event.type, threadId: event.threadId, data: { msgId: _mid, cliMsgId: _cid } });
-      } catch (_) {}
+      await addReactionWow();
       let cardPath;
       try {
         cardPath = await getCanvas().drawNowPlayingCard({
@@ -314,8 +395,11 @@ module.exports = {
       } catch (_) {}
       let audioUrl = null;
       try {
-        const mediaRes = await global.axios.get(`${FOWN_API}/api/media?url=${encodeURIComponent(mixUrl)}`, { timeout: 20000 });
-        audioUrl = mediaRes.data?.download_audio_url || mediaRes.data?.download_url || null;
+        const mediaRes = await global.axios.get(
+          `${FOWN_API}/api/media?url=${encodeURIComponent(mixUrl)}`,
+          { timeout: 20000 }
+        );
+        audioUrl = resolveUrl(mediaRes.data?.download_audio_url || mediaRes.data?.download_url || null);
       } catch (_) {}
       const fallbackText = `🎵 ${r.name}\n👤 ${r.owner.displayName}\n⏳ ${formatDuration(r.audioLength)}\n🔗 ${mixUrl}`;
       if (cardPath) {

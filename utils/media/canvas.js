@@ -23,7 +23,8 @@ async function fetchImageBuffer(url) {
       },
     });
     return Buffer.from(res.data);
-  } catch {
+  } catch (e) {
+    console.warn("[canvas] fetchImageBuffer lỗi:", e?.message, "| URL:", url?.slice(0, 120));
     return null;
   }
 }
@@ -32,9 +33,13 @@ async function safeLoadImage(url) {
   if (!url) return null;
   try {
     const buf = await fetchImageBuffer(url);
-    if (!buf) return null;
+    if (!buf) {
+      console.warn("[canvas] fetchImageBuffer trả null cho URL:", url?.slice(0, 120));
+      return null;
+    }
     return await loadImage(buf);
-  } catch {
+  } catch (e) {
+    console.warn("[canvas] safeLoadImage lỗi:", e?.message, "| URL:", url?.slice(0, 120));
     return null;
   }
 }

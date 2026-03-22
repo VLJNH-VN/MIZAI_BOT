@@ -119,7 +119,7 @@ async function ytSearch(keyword) {
     `${FOWN_API}/api/search?ytsearch=${encodeURIComponent(keyword)}&svl=6`,
     { timeout: 30000 }
   );
-  return (res.data?.results || []).map(item => ({
+  const mapped = (res.data?.results || []).map(item => ({
     id:        item.id || "",
     title:     item.title || "Unknown",
     author:    item.uploader || "Unknown",
@@ -128,6 +128,8 @@ async function ytSearch(keyword) {
     _durSec:   item.duration || 0,
     thumbnail: resolveUrl(item.thumbnail || "") || "",
   }));
+  if (mapped[0]) console.log("[MUSIC:yt] thumbnail[0]:", mapped[0].thumbnail?.slice(0, 120));
+  return mapped;
 }
 
 // ── Spotify (Spotify Web API — Client Credentials) ────────────────────────────

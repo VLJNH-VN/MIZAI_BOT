@@ -101,10 +101,24 @@ async function cleanupCacheDir(options = {}) {
   }
 }
 
+async function _optimizeDb() {
+  try {
+    const { getDb } = require("../../includes/database/core/sqlite");
+    const db = await getDb();
+    if (db && typeof db.pragma === "function") {
+      db.pragma("optimize");
+      db.pragma("wal_checkpoint(PASSIVE)");
+    }
+  } catch (_) {}
+}
+
 function scheduleCacheCleanup(intervalMs = 60 * 60 * 1000, options = {}) {
   try {
     cleanupCacheDir(options);
-    setInterval(() => cleanupCacheDir(options), intervalMs).unref?.();
+    setInterval(() => {
+      cleanupCacheDir(options);
+      _optimizeDb();
+    }, intervalMs).unref?.();
     logInfo(`cacheCleaner: auto dọn cache mỗi ${Math.round(intervalMs / 60000)} phút.`);
   } catch (e) {
     logError(`cacheCleaner.scheduleCacheCleanup error: ${e?.message || e}`);

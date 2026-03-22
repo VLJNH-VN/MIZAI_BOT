@@ -59,15 +59,29 @@ function fmtMoney(n) {
 global.txTime = 0;
 
 function startTxLoop(api) {
-  let results = null;
-  let soLan   = 0;
+  let results       = null;
+  let soLan         = 0;
+  let _groupsCache  = null;
+  let _phienCache   = null;
+
+  async function getGroups() {
+    if (_groupsCache === null) _groupsCache = await tx.getEnabledGroups();
+    return _groupsCache;
+  }
+  async function getPhien() {
+    if (_phienCache === null) _phienCache = await tx.getCurrentPhien();
+    return _phienCache;
+  }
 
   setInterval(async () => {
     try {
-      const checkData = await tx.getEnabledGroups();
-      if (!checkData.length) return;
+      const checkData = await getGroups();
+      if (!checkData.length) {
+        if (global.txTime !== 0) global.txTime = 0;
+        return;
+      }
 
-      const phien = await tx.getCurrentPhien();
+      const phien = await getPhien();
 
       global.txTime += 1;
       const { ThreadType } = require("zca-js");
@@ -155,6 +169,7 @@ function startTxLoop(api) {
 
         // ── Lưu lịch sử phiên ────────────────────────────────────────────────
         await tx.addRound(phien + 1, results.result, results.dice1, results.dice2, results.dice3);
+        _phienCache = null;
 
         const last10   = (await tx.getLastRounds(10)).reverse();
         const icons    = { tài: "⚫️", xỉu: "⚪️" };
@@ -178,6 +193,7 @@ function startTxLoop(api) {
           if (soLan >= 2) {
             await tx.disableGroup(tid);
             soLan = 0;
+            _groupsCache = null;
             api.sendMessage({ msg: "🔕 Không có người chơi, tự động tắt game!" }, tid, ThreadType.Group).catch(() => {});
           }
         }
@@ -185,6 +201,8 @@ function startTxLoop(api) {
 
       else if (global.txTime >= 60) {
         global.txTime = 0;
+        _groupsCache  = null;
+        _phienCache   = null;
       }
     } catch (err) {
       if (typeof logError === "function") logError("[TxLoop] Lỗi vòng lặp: " + err.message);

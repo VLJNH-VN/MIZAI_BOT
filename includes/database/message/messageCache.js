@@ -13,13 +13,20 @@
  *   getThread(threadId, limit?)     — lấy danh sách tin gần nhất
  */
 
-const MAX_PER_THREAD = 200;
+const MAX_PER_THREAD = 50;
+const MAX_THREADS    = 30;
 
 const _store = new Map();
 
 function _getList(threadId) {
-  if (!_store.has(threadId)) _store.set(threadId, []);
-  return _store.get(threadId);
+  if (_store.has(threadId)) return _store.get(threadId);
+  if (_store.size >= MAX_THREADS) {
+    const oldest = _store.keys().next().value;
+    _store.delete(oldest);
+  }
+  const list = [];
+  _store.set(threadId, list);
+  return list;
 }
 
 function _prune(list) {

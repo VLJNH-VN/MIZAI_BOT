@@ -21,8 +21,16 @@
 const { getDb, run, get, all } = require("../core/sqlite");
 
 // Cache prefix trong bộ nhớ để tránh hit DB mỗi tin nhắn
-const _prefixCache = new Map();
-const PREFIX_CACHE_TTL = 5 * 60 * 1000; // 5 phút
+const _prefixCache     = new Map();
+const PREFIX_CACHE_TTL = 5 * 60 * 1000;
+const PREFIX_CACHE_MAX = 50;
+
+function _prefixCacheSet(id, entry) {
+  if (_prefixCache.size >= PREFIX_CACHE_MAX && !_prefixCache.has(id)) {
+    _prefixCache.delete(_prefixCache.keys().next().value);
+  }
+  _prefixCache.set(id, entry);
+}
 
 function _defaultPrefix() {
   return global.prefix || global.config?.prefix || ".";
@@ -49,7 +57,7 @@ async function getPrefix(threadId) {
   const db = await getDb();
   const row = await get(db, "SELECT prefix FROM groups WHERE group_id = ?", [id]);
   const value = (row?.prefix && row.prefix.trim()) ? row.prefix : _defaultPrefix();
-  _prefixCache.set(id, { value, ts: Date.now() });
+  _prefixCacheSet(id, { value, ts: Date.now() });
   return value;
 }
 
@@ -62,7 +70,7 @@ async function setPrefix(threadId, prefix) {
     "UPDATE groups SET prefix = ?, updated_at = ? WHERE group_id = ?",
     [val, Date.now(), id]
   );
-  _prefixCache.set(id, { value: val, ts: Date.now() });
+  _prefixCacheSet(id, { value: val, ts: Date.now() });
 }
 
 // ── Rankup ────────────────────────────────────────────────────────────────────

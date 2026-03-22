@@ -248,18 +248,18 @@ global.Ljzi = {
     return _cache[name]?.length ?? 0;
   },
 
-  async send(api, event, name) {
-    const caption = `🎬 ${name}`;
+  async send(api, event, name, caption) {
+    const cap = caption ?? `🎬 ${name}`;
 
     if (_cache[name] && _cache[name].length > 0) {
       const item = _cache[name].shift();
       _fillCache(name).catch(() => {});
-      await _sendFromFile(api, event, item.filePath, item.meta, caption);
+      await _sendFromFile(api, event, item.filePath, item.meta, cap);
     } else {
       global.logWarn?.(`[Ljzi] Cache "${name}" trống, download on-demand...`);
       const url = this.pick(name);
       if (!url) throw new Error(`[Ljzi] Danh sách "${name}" trống hoặc chưa có.`);
-      await _sendOnDemand(api, event, url, caption);
+      await _sendOnDemand(api, event, url, cap);
       _fillCache(name).catch(() => {});
     }
   },

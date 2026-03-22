@@ -40,9 +40,10 @@ function savePng(canvas, prefix) {
 // ── Music constants ───────────────────────────────────────────────────────────
 
 const PLATFORM = {
-  sc:  { name: "SoundCloud", color: "#ff5500", bg1: "#1a0a00", bg2: "#2d1200", icon: "🎵" },
-  spt: { name: "Spotify",    color: "#1db954", bg1: "#001209", bg2: "#002b15", icon: "🎧" },
-  mix: { name: "Mixcloud",   color: "#7c4dff", bg1: "#0d0022", bg2: "#1a0044", icon: "🎶" },
+  sc:  { name: "SoundCloud", color: "#ff5500", accent: "#ff8844", bg1: "#0f0500", bg2: "#1e0a00", icon: "☁️" },
+  spt: { name: "Spotify",    color: "#1db954", accent: "#1ed760", bg1: "#020f06", bg2: "#041a0c", icon: "🎧" },
+  mix: { name: "Mixcloud",   color: "#7c4dff", accent: "#a07eff", bg1: "#060010", bg2: "#0e0022", icon: "🎶" },
+  yt:  { name: "YouTube",    color: "#ff0000", accent: "#ff4444", bg1: "#0f0000", bg2: "#1a0000", icon: "▶️" },
 };
 
 // ── Menu theme ────────────────────────────────────────────────────────────────
@@ -135,85 +136,229 @@ function drawClockIcon(ctx, x, y, size, color) {
  */
 async function drawSearchCard({ platform, query, tracks }) {
   const p       = PLATFORM[platform] || PLATFORM.sc;
-  const W       = 760;
-  const PADDING = 28;
-  const ROW_H   = 68;
-  const HEADER  = 110;
-  const FOOTER  = 52;
+  const W       = 800;
+  const PAD     = 24;
+  const HEADER  = 100;
+  const ROW_H   = 72;
+  const FOOTER  = 48;
   const H       = HEADER + tracks.length * ROW_H + FOOTER;
+  const THUMB_S = 48;
 
   const canvas = createCanvas(W, H);
   const ctx    = canvas.getContext("2d");
 
+  // ── Background ──────────────────────────────────────────────────────────────
   const bg = ctx.createLinearGradient(0, 0, W, H);
   bg.addColorStop(0, p.bg1);
-  bg.addColorStop(1, p.bg2);
+  bg.addColorStop(0.6, p.bg2);
+  bg.addColorStop(1, "#000000");
   ctx.fillStyle = bg;
-  roundRect(ctx, 0, 0, W, H, 18);
+  roundRect(ctx, 0, 0, W, H, 20);
   ctx.fill();
 
-  ctx.strokeStyle = p.color + "55";
+  // subtle diagonal texture lines
+  ctx.save();
+  ctx.globalAlpha = 0.04;
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 1;
+  for (let i = -H; i < W + H; i += 28) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i + H, H);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // border glow
+  const borderGrad = ctx.createLinearGradient(0, 0, W, H);
+  borderGrad.addColorStop(0, p.color + "99");
+  borderGrad.addColorStop(0.5, p.accent + "44");
+  borderGrad.addColorStop(1, p.color + "22");
+  ctx.strokeStyle = borderGrad;
   ctx.lineWidth = 2;
-  roundRect(ctx, 1, 1, W - 2, H - 2, 18);
+  roundRect(ctx, 1, 1, W - 2, H - 2, 20);
   ctx.stroke();
 
-  const headerGrad = ctx.createLinearGradient(0, 0, W, HEADER);
-  headerGrad.addColorStop(0, p.color + "33");
-  headerGrad.addColorStop(1, "transparent");
-  ctx.fillStyle = headerGrad;
-  roundRect(ctx, 0, 0, W, HEADER, 18);
+  // top-right glow orb
+  const orb = ctx.createRadialGradient(W, 0, 0, W, 0, 280);
+  orb.addColorStop(0, p.color + "28");
+  orb.addColorStop(1, "transparent");
+  ctx.fillStyle = orb;
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+  const hGrad = ctx.createLinearGradient(0, 0, W, HEADER);
+  hGrad.addColorStop(0, p.color + "40");
+  hGrad.addColorStop(1, "transparent");
+  ctx.fillStyle = hGrad;
+  roundRect(ctx, 0, 0, W, HEADER, 20);
   ctx.fill();
 
-  ctx.font = "bold 30px sans-serif";
+  // platform badge
+  const badgeText = `${p.icon}  ${p.name.toUpperCase()}`;
+  ctx.font = "bold 13px monospace";
+  const bw = ctx.measureText(badgeText).width + 20;
+  roundRect(ctx, PAD, 18, bw, 26, 8);
+  ctx.fillStyle = p.color + "30";
+  ctx.fill();
+  ctx.strokeStyle = p.color + "88";
+  ctx.lineWidth = 1;
+  roundRect(ctx, PAD, 18, bw, 26, 8);
+  ctx.stroke();
   ctx.fillStyle = p.color;
-  ctx.fillText(`${p.icon} ${p.name}`, PADDING, 48);
+  ctx.fillText(badgeText, PAD + 10, 35);
 
-  ctx.font = "18px sans-serif";
-  ctx.fillStyle = "#cccccc";
-  ctx.fillText(`🔎  "${truncate(query, 55)}"`, PADDING, 82);
+  // query text
+  ctx.font = "bold 22px sans-serif";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(`🔍  ${truncate(query, 44)}`, PAD, 78);
 
-  ctx.fillStyle = p.color + "44";
-  ctx.fillRect(PADDING, HEADER - 10, W - PADDING * 2, 1);
+  // sub-label
+  ctx.font = "13px sans-serif";
+  ctx.fillStyle = p.color + "88";
+  const sub = `${tracks.length} kết quả  ·  Reply số để tải nhạc`;
+  ctx.fillText(sub, W - PAD - ctx.measureText(sub).width, 78);
+
+  // divider
+  const divGrad = ctx.createLinearGradient(PAD, 0, W - PAD, 0);
+  divGrad.addColorStop(0, "transparent");
+  divGrad.addColorStop(0.1, p.color + "66");
+  divGrad.addColorStop(0.9, p.color + "66");
+  divGrad.addColorStop(1, "transparent");
+  ctx.strokeStyle = divGrad;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(PAD, HEADER - 1);
+  ctx.lineTo(W - PAD, HEADER - 1);
+  ctx.stroke();
+
+  // ── Rows ────────────────────────────────────────────────────────────────────
+  const thumbPromises = tracks.map(t => {
+    const url = t.thumbnail || t.artwork_url || "";
+    if (!url) return Promise.resolve(null);
+    return loadImage(url).catch(() => null);
+  });
+  const thumbImgs = await Promise.all(thumbPromises);
 
   tracks.forEach((t, i) => {
-    const y = HEADER + i * ROW_H;
+    const rowY = HEADER + i * ROW_H;
+
+    // alternate row bg
     if (i % 2 === 0) {
-      ctx.fillStyle = "#ffffff08";
-      ctx.fillRect(0, y, W, ROW_H);
+      ctx.fillStyle = "#ffffff06";
+      ctx.fillRect(0, rowY, W, ROW_H);
     }
-    const numStr = `${i + 1}`;
-    ctx.font = "bold 22px monospace";
+
+    // hover-like left accent bar
+    ctx.fillStyle = p.color + (i % 2 === 0 ? "66" : "33");
+    ctx.fillRect(0, rowY + 10, 3, ROW_H - 20);
+
+    // number badge
+    const numX = PAD;
+    const numCY = rowY + ROW_H / 2;
+    ctx.beginPath();
+    ctx.arc(numX + 14, numCY, 14, 0, Math.PI * 2);
+    ctx.fillStyle = p.color + "22";
+    ctx.fill();
+    ctx.strokeStyle = p.color + "66";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.font = "bold 14px monospace";
     ctx.fillStyle = p.color;
-    ctx.fillText(numStr, PADDING, y + 28);
-    const numW = ctx.measureText("9.").width + 10;
-    const xOff = PADDING + numW + 10;
-    ctx.font = "bold 20px sans-serif";
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(truncate(t.title || t.name || "Không rõ", 46), xOff, y + 28);
-    const artist = truncate(t.uploader || t.author || t.owner?.displayName || "", 38);
-    const dur    = t._durStr || "";
-    ctx.font = "15px sans-serif";
-    ctx.fillStyle = "#aaaaaa";
-    ctx.fillText(`👤 ${artist}`, xOff, y + 52);
-    if (dur) {
-      ctx.fillStyle = p.color + "cc";
-      ctx.font = "bold 15px monospace";
-      ctx.fillText(dur, W - PADDING - ctx.measureText(dur).width, y + 52);
+    ctx.textAlign = "center";
+    ctx.fillText(`${i + 1}`, numX + 14, numCY + 5);
+    ctx.textAlign = "left";
+
+    // thumbnail
+    const thumbX = numX + 36;
+    const thumbY = rowY + (ROW_H - THUMB_S) / 2;
+    ctx.save();
+    roundRect(ctx, thumbX, thumbY, THUMB_S, THUMB_S, 8);
+    ctx.clip();
+    if (thumbImgs[i]) {
+      ctx.drawImage(thumbImgs[i], thumbX, thumbY, THUMB_S, THUMB_S);
+    } else {
+      const tg = ctx.createLinearGradient(thumbX, thumbY, thumbX + THUMB_S, thumbY + THUMB_S);
+      tg.addColorStop(0, p.color + "44");
+      tg.addColorStop(1, p.bg2);
+      ctx.fillStyle = tg;
+      ctx.fillRect(thumbX, thumbY, THUMB_S, THUMB_S);
+      ctx.font = `${THUMB_S * 0.45}px sans-serif`;
+      ctx.fillStyle = p.color + "bb";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("♪", thumbX + THUMB_S / 2, thumbY + THUMB_S / 2);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
     }
-    ctx.fillStyle = "#ffffff0a";
-    ctx.fillRect(PADDING, y + ROW_H - 1, W - PADDING * 2, 1);
+    ctx.restore();
+    ctx.strokeStyle = p.color + "44";
+    ctx.lineWidth = 1;
+    roundRect(ctx, thumbX, thumbY, THUMB_S, THUMB_S, 8);
+    ctx.stroke();
+
+    // text info
+    const textX = thumbX + THUMB_S + 14;
+    const maxTitleW = W - textX - PAD - 80;
+
+    ctx.font = "bold 18px sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(truncate(t.title || t.name || "Không rõ", 42), textX, rowY + 30);
+
+    const artist = t.uploader || t.author || t.owner?.displayName || "Unknown";
+    ctx.font = "14px sans-serif";
+    ctx.fillStyle = "#999999";
+    ctx.fillText(`👤  ${truncate(artist, 38)}`, textX, rowY + 52);
+
+    // duration badge (right)
+    const dur = t._durStr || "";
+    if (dur) {
+      ctx.font = "bold 13px monospace";
+      const dw = ctx.measureText(dur).width + 16;
+      const dX = W - PAD - dw;
+      const dY = rowY + ROW_H / 2 - 11;
+      roundRect(ctx, dX, dY, dw, 22, 6);
+      ctx.fillStyle = p.color + "22";
+      ctx.fill();
+      ctx.strokeStyle = p.color + "55";
+      ctx.lineWidth = 1;
+      roundRect(ctx, dX, dY, dw, 22, 6);
+      ctx.stroke();
+      ctx.fillStyle = p.accent;
+      ctx.fillText(dur, dX + 8, dY + 15);
+    }
+
+    // row separator
+    if (i < tracks.length - 1) {
+      const sepGrad = ctx.createLinearGradient(PAD, 0, W - PAD, 0);
+      sepGrad.addColorStop(0, "transparent");
+      sepGrad.addColorStop(0.15, "#ffffff12");
+      sepGrad.addColorStop(0.85, "#ffffff12");
+      sepGrad.addColorStop(1, "transparent");
+      ctx.strokeStyle = sepGrad;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(PAD, rowY + ROW_H);
+      ctx.lineTo(W - PAD, rowY + ROW_H);
+      ctx.stroke();
+    }
   });
 
-  const footerY = HEADER + tracks.length * ROW_H;
-  ctx.fillStyle = "#ffffff18";
-  ctx.fillRect(0, footerY, W, FOOTER);
-  ctx.font = "italic 16px sans-serif";
+  // ── Footer ───────────────────────────────────────────────────────────────────
+  const footY = HEADER + tracks.length * ROW_H;
+  const fGrad2 = ctx.createLinearGradient(0, footY, 0, footY + FOOTER);
+  fGrad2.addColorStop(0, p.color + "18");
+  fGrad2.addColorStop(1, p.color + "08");
+  ctx.fillStyle = fGrad2;
+  ctx.fillRect(0, footY, W, FOOTER);
+
+  ctx.font = "14px sans-serif";
   ctx.fillStyle = "#888888";
-  ctx.fillText(`💬  Reply số từ 1–${tracks.length} để tải nhạc`, PADDING, footerY + 34);
-  ctx.font = "bold 14px sans-serif";
-  ctx.fillStyle = p.color + "88";
+  ctx.fillText(`💬  Reply số từ 1–${tracks.length} để tải nhạc`, PAD, footY + 30);
+  ctx.font = "bold 13px sans-serif";
+  ctx.fillStyle = p.color + "77";
   const wm1 = "✦ Mizai Bot";
-  ctx.fillText(wm1, W - PADDING - ctx.measureText(wm1).width, footerY + 34);
+  ctx.fillText(wm1, W - PAD - ctx.measureText(wm1).width, footY + 30);
 
   return savePng(canvas, "music_card");
 }

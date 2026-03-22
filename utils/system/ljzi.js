@@ -20,7 +20,7 @@
 const fs           = require("fs");
 const path         = require("path");
 const axios        = require("axios");
-const { execSync } = require("child_process");
+const { spawnSync } = require("child_process");
 
 const LISTAPI_DIR = path.join(__dirname, "../../includes/listapi");
 const TEMP_DIR    = path.join(__dirname, "../../includes/cache");
@@ -54,11 +54,15 @@ async function downloadFile(url, filePath) {
 
 function probeStreams(filePath) {
   try {
-    const out  = execSync(
-      `ffprobe -v error -show_format -show_streams -of json "${filePath}"`,
-      { timeout: 30000, stdio: "pipe" }
-    ).toString();
-    const data = JSON.parse(out);
+    const result = spawnSync("ffprobe", [
+      "-v", "error",
+      "-show_format", "-show_streams",
+      "-of", "json",
+      filePath,
+    ], { timeout: 30000, encoding: "utf8" });
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error(result.stderr || "ffprobe lỗi");
+    const data = JSON.parse(result.stdout);
     const vs   = data.streams?.find(s => s.codec_type === "video");
     const dur  = parseFloat(data.format?.duration || 0);
     return {
@@ -72,13 +76,19 @@ function probeStreams(filePath) {
 }
 
 function convertToH264(inputPath, outputPath) {
-  execSync(
-    `ffmpeg -y -i "${inputPath}" -map 0:v:0 -map 0:a:0? ` +
-    `-c:v libx264 -preset fast -crf 23 -profile:v baseline -level 3.1 ` +
-    `-pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" ` +
-    `-c:a aac -b:a 128k -ar 44100 -movflags +faststart "${outputPath}"`,
-    { timeout: 180000, stdio: "pipe" }
-  );
+  const result = spawnSync("ffmpeg", [
+    "-y", "-i", inputPath,
+    "-map", "0:v:0", "-map", "0:a:0?",
+    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+    "-profile:v", "baseline", "-level", "3.1",
+    "-pix_fmt", "yuv420p",
+    "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+    "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+    "-movflags", "+faststart",
+    outputPath,
+  ], { timeout: 300000, encoding: "utf8" });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(result.stderr || "ffmpeg lỗi");
 }
 
 // ── Load JSON list ─────────────────────────────────────────────────────────────

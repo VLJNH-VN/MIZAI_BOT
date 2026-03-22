@@ -41,7 +41,7 @@
 
 const fs           = require("fs");
 const path         = require("path");
-const { execSync } = require("child_process");
+const { spawnSync } = require("child_process");
 
 // ── Thư mục cache tạm ────────────────────────────────────────────────────────
 const CACHE_DIR = path.join(process.cwd(), "includes", "cache");
@@ -110,10 +110,13 @@ async function uploadThumbnail(api, videoPath, threadId, threadType) {
 
   try {
     // Bước 1: ffmpeg trích frame giây 1
-    execSync(
-      `ffmpeg -y -i "${videoPath}" -ss 00:00:01 -vframes 1 -vf scale=320:-1 -q:v 5 "${jpgPath}"`,
-      { timeout: 30000, stdio: "pipe" }
-    );
+    const thumbResult = spawnSync("ffmpeg", [
+      "-y", "-i", videoPath,
+      "-ss", "00:00:01", "-vframes", "1",
+      "-vf", "scale=320:-1", "-q:v", "5",
+      jpgPath,
+    ], { timeout: 30000, encoding: "utf8" });
+    if (thumbResult.error) throw thumbResult.error;
     if (!fs.existsSync(jpgPath) || fs.statSync(jpgPath).size === 0) return null;
 
     // Bước 2: rename .jpg → .bin (trick của GwenDev)
@@ -242,10 +245,12 @@ async function zaloSendVoice(api, source, threadId, threadType, ttl = 900_000) {
       aacPath = tmpPath;
     } else {
       aacPath = path.join(CACHE_DIR, `voice_${uid()}.aac`);
-      execSync(
-        `ffmpeg -y -i "${tmpPath}" -vn -c:a aac -b:a 128k "${aacPath}"`,
-        { timeout: 120000, stdio: "pipe" }
-      );
+      const aacResult = spawnSync("ffmpeg", [
+        "-y", "-i", tmpPath,
+        "-vn", "-c:a", "aac", "-b:a", "128k",
+        aacPath,
+      ], { timeout: 120000, encoding: "utf8" });
+      if (aacResult.error) throw aacResult.error;
       needCleanup = true;
     }
 

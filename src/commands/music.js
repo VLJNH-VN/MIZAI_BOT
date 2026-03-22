@@ -23,7 +23,7 @@ const MIXCLOUD_GRAPHQL_URL = "https://app.mixcloud.com/graphql";
 const _cfg = (() => { try { return require("../../config.json"); } catch { return {}; } })();
 const spotifyApi = new SpotifyWebApi({
   clientId:     _cfg.spotifyClientId     || "1530d567ec6542669896bc96efd370f3",
-  clientSecret: _cfg.spotifyClientSecret || "6e0241b124da40dfb98728b7f29cedfd",
+  clientSecret: _cfg.spotifyClientSecret || "a42a5f176e6146219163543787b40494",
 });
 let _spotifyTokenExpiry = 0;
 
@@ -98,6 +98,16 @@ function resolveUrl(url) {
   if (!url) return url;
   if (url.startsWith("/")) return FOWN_API + url;
   return url;
+}
+
+function extractMsgId(sent) {
+  if (!sent) return null;
+  return sent?.message?.msgId
+    ?? sent?.msgId
+    ?? sent?.attachment?.[0]?.msgId
+    ?? (Array.isArray(sent?.attachment) ? sent.attachment[0]?.msgId : null)
+    ?? (Array.isArray(sent) ? sent[0]?.msgId : null)
+    ?? null;
 }
 
 // ── YouTube ────────────────────────────────────────────────────────────────────
@@ -286,7 +296,7 @@ module.exports = {
           ? await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type)
           : await send(`💬 Reply số từ 1-${Math.min(tracks.length, 6)} để tải nhạc`);
         if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
-        const msgId = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId;
+        const msgId = extractMsgId(sent);
         if (msgId) registerReply({ messageId: String(msgId), commandName: "music", payload: { platform: "sc", tracks } });
 
       } else if (platform === "spt") {
@@ -299,7 +309,7 @@ module.exports = {
           ? await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type)
           : await send(`📌 Reply STT (1–${Math.min(tracks.length, 6)}) để tải nhạc`);
         if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
-        const msgId = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId ?? sent?.msgId;
+        const msgId = extractMsgId(sent);
         if (msgId) registerReply({ messageId: String(msgId), commandName: "music", payload: { platform: "spt", tracks }, ttl: 10 * 60 * 1000 });
 
       } else if (platform === "yt") {
@@ -312,7 +322,7 @@ module.exports = {
           ? await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type)
           : await send(`🎬 Reply số từ 1-${Math.min(tracks.length, 6)} để tải nhạc`);
         if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
-        const msgId = sent?.message?.msgId ?? sent?.attachment?.[0]?.msgId ?? sent?.msgId;
+        const msgId = extractMsgId(sent);
         if (msgId) registerReply({ messageId: String(msgId), commandName: "music", payload: { platform: "yt", tracks }, ttl: 10 * 60 * 1000 });
 
       } else if (platform === "mix") {
@@ -329,7 +339,7 @@ module.exports = {
           ? await api.sendMessage({ msg: "", attachments: [cardPath] }, threadID, event.type)
           : await send(`💬 Reply số từ 1-5 để xem link Mixcloud`);
         if (cardPath) try { fs.unlinkSync(cardPath); } catch (_) {}
-        const sentId = sent?.message?.msgId ?? (Array.isArray(sent?.attachment) && sent.attachment[0]?.msgId);
+        const sentId = extractMsgId(sent);
         if (sentId) registerReply({ messageId: String(sentId), commandName: "music", payload: { platform: "mix", results } });
       }
     } catch (err) {

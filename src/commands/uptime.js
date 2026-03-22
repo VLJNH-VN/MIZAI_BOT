@@ -161,9 +161,13 @@ module.exports = {
       return send(`⚡ Ping API: ${latency}ms  ${bar}`);
     }
 
-    // ── Đo ping trước ────────────────────────────────────────────────────────
+    // ── Đo ping bằng cách gửi tin "đang tải" ────────────────────────────────
     const t0 = Date.now();
-    try { await api.sendMessage({ msg: "" }, threadID, event.type); } catch (_) {}
+    let loadingMsgId = null;
+    try {
+      const res = await api.sendMessage({ msg: "⏳ Đang tải thông tin hệ thống..." }, threadID, event.type);
+      loadingMsgId = res?.msgId || res?.message_id || null;
+    } catch (_) {}
     const pingMs = Date.now() - t0;
 
     const data = getSystemData(pingMs);

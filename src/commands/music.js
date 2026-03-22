@@ -126,7 +126,7 @@ async function ytSearch(keyword) {
     duration:  (item.duration || 0) * 1000,
     link:      item.url || item.webpage_url || "",
     _durSec:   item.duration || 0,
-    thumbnail: item.thumbnail || "",
+    thumbnail: resolveUrl(item.thumbnail || "") || "",
   }));
 }
 

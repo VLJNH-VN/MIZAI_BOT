@@ -6,9 +6,38 @@
  */
 
 const { createCanvas, loadImage } = require("canvas");
-const fs   = require("fs");
-const path = require("path");
-const os   = require("os");
+const fs    = require("fs");
+const path  = require("path");
+const os    = require("os");
+const axios = require("axios");
+
+async function fetchImageBuffer(url) {
+  if (!url) return null;
+  try {
+    const res = await axios.get(url, {
+      responseType: "arraybuffer",
+      timeout: 8000,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+      },
+    });
+    return Buffer.from(res.data);
+  } catch {
+    return null;
+  }
+}
+
+async function safeLoadImage(url) {
+  if (!url) return null;
+  try {
+    const buf = await fetchImageBuffer(url);
+    if (!buf) return null;
+    return await loadImage(buf);
+  } catch {
+    return null;
+  }
+}
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -235,8 +264,7 @@ async function drawSearchCard({ platform, query, tracks }) {
   // ── Rows ────────────────────────────────────────────────────────────────────
   const thumbPromises = tracks.map(t => {
     const url = t.thumbnail || t.artwork_url || "";
-    if (!url) return Promise.resolve(null);
-    return loadImage(url).catch(() => null);
+    return safeLoadImage(url);
   });
   const thumbImgs = await Promise.all(thumbPromises);
 
@@ -394,11 +422,9 @@ async function drawNowPlayingCard({ platform, title, artist, duration, thumb }) 
   ctx.save();
   roundRect(ctx, thumbX, thumbY, THUMB_SIZE, THUMB_SIZE, 12);
   ctx.clip();
-  if (thumb) {
-    try {
-      const img = await loadImage(thumb);
-      ctx.drawImage(img, thumbX, thumbY, THUMB_SIZE, THUMB_SIZE);
-    } catch { drawDefaultThumb(ctx, thumbX, thumbY, THUMB_SIZE, p); }
+  const thumbImg = await safeLoadImage(thumb);
+  if (thumbImg) {
+    ctx.drawImage(thumbImg, thumbX, thumbY, THUMB_SIZE, THUMB_SIZE);
   } else {
     drawDefaultThumb(ctx, thumbX, thumbY, THUMB_SIZE, p);
   }

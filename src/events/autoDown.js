@@ -20,10 +20,20 @@ const { uploadThumbnail, zaloSendVoice, uploadAttachmentToZalo } = require("../.
 const tempDir  = path.join(process.cwd(), "includes", "cache");
 const API_BASE = "https://fown.onrender.com";
 
+// ─── Facebook — toàn bộ dạng URL (yt-dlp qua fown) ────────────────────────────
+//  Covers: www/m/web/l/lm/touch.facebook.com | fb.watch | fb.me
+//  Dạng path: /watch /reel /share/r /share/v /video /reel /story /photo
+//             /USER/videos /groups/.../posts /live /permalink ...
+const FB_REGEX = /(?:(?:www|m|web|l|lm|touch)\.)?facebook\.com|fb\.watch(?:\/|$)|fb\.me(?:\/|$)/i;
+
+function isFacebookUrl(url) {
+    return FB_REGEX.test(url);
+}
+
 // ─── Danh sách platform hỗ trợ (yt-dlp) — KHÔNG bao gồm TikTok/Douyin/CapCut ─
 const SUPPORTED_LINKS = [
     /instagram\.com/, /threads\.net/, /threads\.com/,
-    /facebook\.com/, /fb\.watch/,
+    FB_REGEX,
     /youtube\.com/, /youtu\.be/,
     /twitter\.com/, /x\.com/,
     /reddit\.com/, /redd\.it/,
@@ -77,6 +87,30 @@ const AUDIO_ONLY_SOURCES = new Set([
 // ─── TikTok detection (dùng package riêng, không qua SUPPORTED_LINKS) ──────────
 function isTikTokUrl(url) {
     return /(?:vm\.|vt\.|www\.)?tiktok\.com|douyin\.com|capcut\.com/.test(url);
+}
+
+// ─── Facebook URL resolver — follow redirect fb.watch / fb.me → canonical URL ──
+//  fb.watch/abc và fb.me/abc là short link, cần resolve trước để yt-dlp xử lý tốt
+async function resolveFbUrl(url) {
+    const isShort = /fb\.watch(?:\/|$)|fb\.me(?:\/|$)/i.test(url);
+    if (!isShort) return url;
+    try {
+        const res = await axios.get(url, {
+            timeout:          10000,
+            maxRedirects:     5,
+            headers: { "User-Agent": global.userAgent || "Mozilla/5.0" },
+            validateStatus:   () => true,
+        });
+        const canonical = res?.request?.res?.responseUrl
+            || res?.request?.path
+            || url;
+        const finalUrl = typeof canonical === "string" && canonical.startsWith("http")
+            ? canonical : url;
+        if (finalUrl !== url) logDebug(`[AutoDown] FB resolve: ${url} → ${finalUrl}`);
+        return finalUrl;
+    } catch {
+        return url;
+    }
 }
 
 // ─── Settings (dùng groups.settings SQLite) ───────────────────────────────────
@@ -441,6 +475,20 @@ async function handleTikTok(api, url, threadId, threadType) {
     throw new Error("TikTok: Không tìm thấy URL video/ảnh");
 }
 
+// ─── Handler: Facebook — resolve short link → fown (yt-dlp) ───────────────────
+//  Dạng hỗ trợ qua yt-dlp:
+//    facebook.com/watch?v=          facebook.com/reel/
+//    facebook.com/share/r/          facebook.com/share/v/
+//    facebook.com/USER/videos/      facebook.com/video/
+//    facebook.com/story.php         facebook.com/photo?fbid=
+//    facebook.com/groups/*/posts/   facebook.com/live/
+//    fb.watch/<id>                  fb.me/<id>
+async function handleFacebook(api, url, threadId, threadType) {
+    logDebug(`[AutoDown] Facebook: ${url}`);
+    const resolvedUrl = await resolveFbUrl(url);
+    await handleOther(api, resolvedUrl, threadId, threadType);
+}
+
 // ─── Handler: Các platform khác (yt-dlp API) ───────────────────────────────────
 async function fetchMediaInfo(url, retries = 3) {
     let lastErr;
@@ -642,6 +690,8 @@ function startAutoDown(api) {
 
             if (isTikTok) {
                 await handleTikTok(api, url, threadId, threadType);
+            } else if (isFacebookUrl(url)) {
+                await handleFacebook(api, url, threadId, threadType);
             } else {
                 await handleOther(api, url, threadId, threadType);
             }

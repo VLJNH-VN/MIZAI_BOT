@@ -131,17 +131,8 @@ async function _prepareOne(name) {
     const meta      = probeStreams(finalPath);
     const fileSize  = fs.statSync(finalPath).size;
 
-    // ── Pre-upload lên GitHub ngầm — khi gửi sẽ dùng ngay, không chờ ──────
-    let releaseUrl = null;
-    if (typeof global.githubReleaseUpload === "function" && fileSize < 50 * 1024 * 1024) {
-      try {
-        releaseUrl = await global.githubReleaseUpload(finalPath, `ljzi_${id}.mp4`);
-      } catch (e) {
-        global.logWarn?.(`[Ljzi] Pre-upload GitHub lỗi: ${e.message}`);
-      }
-    }
-
-    _cache[name].push({ filePath: finalPath, meta, releaseUrl });
+    // releaseUrl sẽ được upload lúc gửi thật (trong _sendFromFile)
+    _cache[name].push({ filePath: finalPath, meta, releaseUrl: null });
     return true;
   } catch (e) {
     global.logWarn?.(`[Ljzi] _prepareOne "${name}" lỗi: ${e.message}`);

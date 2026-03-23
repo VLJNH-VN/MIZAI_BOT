@@ -18,10 +18,57 @@ sec()  { echo -e "\n${BOLD}${CYAN}▸ $1${NC}"; }
 echo -e "\n${BOLD}${CYAN}  MIZAI — Rebuild Native Modules (Termux)${NC}"
 echo -e "  ${DIM}$(uname -m) | $(node --version 2>/dev/null || echo 'node?')${NC}\n"
 
-# ── 0. Kiểm tra cơ bản ────────────────────────────────────────────────────────
+# ── 0. Cài nvm & hạ Node.js xuống v20 LTS ────────────────────────────────────
+sec "Kiểm tra phiên bản Node.js"
+
+NODE_VER=$(node -e "process.stdout.write(process.version.slice(1).split('.')[0])" 2>/dev/null || echo 0)
+
+# Load nvm nếu đã cài
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh" 2>/dev/null
+
+if [ "$NODE_VER" -gt 20 ] || [ "$NODE_VER" -eq 0 ]; then
+  warn "Node.js hiện tại: v$(node --version 2>/dev/null || echo '?') — canvas/sharp cần Node 20 LTS"
+  info "Đang cài nvm để quản lý phiên bản Node..."
+
+  # Cài nvm
+  if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash 2>/dev/null
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+  fi
+
+  if command -v nvm &>/dev/null; then
+    info "Đang cài Node.js v20 LTS (có thể mất vài phút)..."
+    nvm install 20 2>&1 | tail -5
+    nvm use 20
+    nvm alias default 20
+
+    # Ghi vào .bashrc để tự load mỗi lần mở Termux
+    BASHRC="$HOME/.bashrc"
+    grep -q "NVM_DIR" "$BASHRC" 2>/dev/null || cat >> "$BASHRC" <<'NVMEOF'
+
+# nvm — Node Version Manager
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+NVMEOF
+    ok "Node.js đã chuyển sang: $(node --version)"
+  else
+    warn "nvm không cài được — thử dùng pkg..."
+    pkg install -y nodejs-lts 2>/dev/null
+    ok "Node.js: $(node --version 2>/dev/null || echo 'lỗi')"
+  fi
+else
+  ok "Node.js v$(node --version) OK (≤ v20)"
+fi
+
+# Cập nhật NODE_VER sau khi đổi
+NODE_VER=$(node -e "process.stdout.write(process.version.slice(1).split('.')[0])" 2>/dev/null || echo 0)
+
+# ── 0b. Kiểm tra node_modules ─────────────────────────────────────────────────
 if [ ! -d node_modules ]; then
-  err "Chưa có node_modules! Chạy: npm install --ignore-scripts trước."
-  exit 1
+  info "Chưa có node_modules — đang cài..."
+  npm install --ignore-scripts 2>&1 | tail -3
 fi
 
 # ── 1. Cài gói hệ thống cần thiết ────────────────────────────────────────────

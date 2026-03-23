@@ -110,10 +110,14 @@ install_system() {
 }
 
 # ════════════════════════════════════════════════════════════
-#  3. Kiểm tra Node.js
+#  3. Kiểm tra Node.js (khuyến nghị v20 LTS cho canvas/sharp)
 # ════════════════════════════════════════════════════════════
 check_node() {
   log_section "Kiểm tra Node.js"
+
+  # Load nvm nếu đã cài
+  export NVM_DIR="$HOME/.nvm"
+  [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh" 2>/dev/null
 
   if ! command -v node &>/dev/null; then
     log_error "Node.js chưa cài! Chạy: pkg install nodejs-lts"
@@ -129,6 +133,32 @@ check_node() {
   if [ "$NODE_MAJOR" -lt 18 ]; then
     log_error "Cần Node.js >= 18. Hiện tại: $NODE_VER → Chạy: pkg install nodejs-lts"
     exit 1
+  fi
+
+  # canvas/sharp cần Node <= 20 để build được trên ARM Termux
+  if [ "$NODE_MAJOR" -gt 20 ]; then
+    log_warn "Node.js $NODE_VER > v20 — canvas/sharp có thể không build được trên ARM."
+    log_info "Đang hạ xuống Node.js v20 LTS qua nvm..."
+
+    if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+      curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash 2>/dev/null
+      [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+    fi
+
+    if command -v nvm &>/dev/null 2>&1; then
+      nvm install 20 2>&1 | tail -3
+      nvm use 20
+      nvm alias default 20
+      # Ghi vào .bashrc
+      grep -q "NVM_DIR" "$HOME/.bashrc" 2>/dev/null || cat >> "$HOME/.bashrc" <<'NVMEOF'
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+NVMEOF
+      log_ok "Node.js đã chuyển sang: $(node --version)"
+    else
+      log_warn "nvm không cài được. Tiếp tục với Node.js $NODE_VER — canvas/sharp có thể lỗi."
+    fi
   fi
 }
 

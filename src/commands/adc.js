@@ -66,8 +66,8 @@ module.exports = {
 
     try {
       const code = fs.readFileSync(filePath, "utf8");
-      const token = global.config.githubToken;
-      if (!token) return send("❌ Chưa cấu hình githubToken trong config.json");
+      const token = global.config?.githubToken || process.env.GITHUB_TOKEN;
+      if (!token) return send("❌ Chưa cấu hình githubToken (trong config.json hoặc biến môi trường GITHUB_TOKEN)");
 
       const res = await axios.post(
         "https://api.github.com/gists",

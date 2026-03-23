@@ -315,11 +315,11 @@ function setApi(apiInstance) {
   const path = require("path");
 
   global.githubUpload = async (localFilePath, repoFilePath, options = {}) => {
-    const token  = global.config?.githubToken;
+    const token  = global.config?.githubToken || process.env.GITHUB_TOKEN;
     const repo   = options.repo   || global.config?.uploadRepo || global.config?.repo;
     const branch = options.branch || global.config?.branch || "main";
 
-    if (!token) throw new Error("[githubUpload] Thiếu githubToken trong config.json");
+    if (!token) throw new Error("[githubUpload] Thiếu githubToken — đặt trong config.json hoặc biến môi trường GITHUB_TOKEN");
     if (!repo)  throw new Error("[githubUpload] Thiếu repo/uploadRepo trong config.json");
 
     const content = fs.readFileSync(localFilePath);
@@ -355,11 +355,11 @@ function setApi(apiInstance) {
    *   URL này Zalo server chấp nhận trong api.sendVideo (raw.githubusercontent.com bị reject).
    */
   global.githubReleaseUpload = async (localFilePath, filename, options = {}) => {
-    const token = global.config?.githubToken;
+    const token = global.config?.githubToken || process.env.GITHUB_TOKEN;
     const repo  = options.repo || global.config?.uploadRepo || global.config?.repo;
     const tag   = options.tag  || "vd-upload";
 
-    if (!token) throw new Error("[githubReleaseUpload] Thiếu githubToken trong config.json");
+    if (!token) throw new Error("[githubReleaseUpload] Thiếu githubToken — đặt trong config.json hoặc biến môi trường GITHUB_TOKEN");
     if (!repo)  throw new Error("[githubReleaseUpload] Thiếu uploadRepo trong config.json");
 
     const headers = {
@@ -444,11 +444,11 @@ function setApi(apiInstance) {
   };
 
   global.githubDownload = async (repoFilePath, localFilePath, options = {}) => {
-    const token  = global.config?.githubToken;
+    const token  = global.config?.githubToken || process.env.GITHUB_TOKEN;
     const repo   = options.repo   || global.config?.repo;
     const branch = options.branch || global.config?.branch || "main";
 
-    if (!token) throw new Error("[githubDownload] Thiếu githubToken trong config.json");
+    if (!token) throw new Error("[githubDownload] Thiếu githubToken — đặt trong config.json hoặc biến môi trường GITHUB_TOKEN");
     if (!repo)  throw new Error("[githubDownload] Thiếu repo trong config.json");
 
     const apiUrl  = `https://api.github.com/repos/${repo}/contents/${repoFilePath}`;

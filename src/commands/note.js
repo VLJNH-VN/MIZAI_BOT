@@ -5,7 +5,8 @@ const { loadCommandFromFile } = require('../../utils/system/loader');
 const COMMANDS_DIR = __dirname;
 
 async function ghUpload(fileName, fileContent) {
-  const { githubToken, repo, branch } = global.config || {};
+  const { repo, branch } = global.config || {};
+  const githubToken = global.config?.githubToken || process.env.GITHUB_TOKEN;
   if (!githubToken || !repo || !branch) return null;
 
   const apiUrl = `https://api.github.com/repos/${repo}/contents/${fileName}`;
@@ -56,9 +57,10 @@ module.exports = {
       );
     }
 
-    const { githubToken, repo, branch } = global.config || {};
+    const { repo, branch } = global.config || {};
+    const githubToken = global.config?.githubToken || process.env.GITHUB_TOKEN;
     if (!githubToken || !repo || !branch) {
-      return send("⚠️ Chưa cấu hình GitHub trong config.json\n(githubToken, repo, branch)");
+      return send("⚠️ Chưa cấu hình GitHub\n(githubToken trong config.json hoặc biến môi trường GITHUB_TOKEN, repo, branch)");
     }
 
     const fileName = args[0].endsWith(".js") ? args[0] : `${args[0]}.js`;

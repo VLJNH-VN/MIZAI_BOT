@@ -33,8 +33,9 @@ async function uploadFile(localPath, remotePath) {
 
 // ── Hàm backup chính ──────────────────────────────────────────────────────────
 async function runBackup() {
-  if (!global.config?.githubToken || !global.config?.repo) {
-    global.logWarn?.("[Backup] Chưa cấu hình githubToken hoặc repo trong config.json — bỏ qua.");
+  const token = global.config?.githubToken || process.env.GITHUB_TOKEN;
+  if (!token || !global.config?.repo) {
+    global.logWarn?.("[Backup] Chưa cấu hình githubToken (config.json hoặc biến môi trường GITHUB_TOKEN) hoặc repo — bỏ qua.");
     return { success: false, reason: "Chưa cấu hình githubToken / repo" };
   }
 
@@ -69,7 +70,7 @@ async function runBackup() {
 
 // ── Lên lịch auto backup ──────────────────────────────────────────────────────
 function scheduleBackup(intervalMs = 6 * 60 * 60 * 1000) {
-  if (!global.config?.githubToken || !global.config?.repo) {
+  if ((!global.config?.githubToken && !process.env.GITHUB_TOKEN) || !global.config?.repo) {
     global.logWarn?.("[Backup] githubToken / repo chưa đặt → auto backup TẮT.");
     return;
   }

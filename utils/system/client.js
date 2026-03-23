@@ -200,11 +200,28 @@ async function createZaloClient() {
     } catch (err) {
       logWarn(`[Cookie] Đăng nhập bằng cookie thất bại: ${err?.message || err}`);
       logInfo("[Cookie] Chuyển sang đăng nhập bằng QR...");
+      try { fs.unlinkSync(cookiePath); } catch {}
     }
   }
 
-  // Fallback: đăng nhập QR và lưu cookie lại
-  return await loginWithQR(zalo, userAgent, cookiePath, qrPath, imei);
+  // Fallback: đăng nhập QR với retry tối đa 3 lần
+  const MAX_QR_RETRY = 3;
+  for (let attempt = 1; attempt <= MAX_QR_RETRY; attempt++) {
+    try {
+      if (attempt > 1) {
+        logInfo(`[QR] Thử lại lần ${attempt}/${MAX_QR_RETRY}...`);
+        imei = generateImei(userAgent);
+        persistImeiToConfig(imei);
+        config.imei = imei;
+      }
+      return await loginWithQR(zalo, userAgent, cookiePath, qrPath, imei);
+    } catch (err) {
+      logWarn(`[QR] Lần ${attempt} thất bại: ${err?.message || err}`);
+      if (attempt === MAX_QR_RETRY) throw err;
+      logInfo("[QR] Thử lại sau 3 giây...");
+      await new Promise(r => setTimeout(r, 3000));
+    }
+  }
 }
 
 // ── Kết nối thêm tài khoản từ cookie path ─────────────────────────────────────

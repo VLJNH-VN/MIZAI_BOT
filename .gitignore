@@ -39,8 +39,13 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+.replit
+.replitignore
+.npmrc
 
-# Bot sensitive files — KHÔNG commit lên GitHub
+# ══════════════════════════════════════════════
+#  Bot sensitive files — KHÔNG BAO GIỜ commit
+# ══════════════════════════════════════════════
 config.json
 cookie.json
 qr.png
@@ -49,6 +54,22 @@ appstate.json
 # Backups
 backups/
 
-# SQLite runtime files
+# SQLite database (chứa dữ liệu người dùng)
+*.sqlite
 *.sqlite-shm
 *.sqlite-wal
+includes/database/core/data/
+
+# Cache & temp media
+includes/cache/
+
+# Runtime data (dữ liệu vận hành — không cần share)
+includes/data/runtime/
+includes/data/game/taixiu/betHistory/
+includes/data/game/taixiu/lichsuGD/
+includes/data/game/taixiu/money.json
+includes/data/game/taixiu/phien.json
+includes/database/groupsCache.json
+
+# Bot stats cache
+includes/cache/bot_stats.json

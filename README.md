@@ -43,6 +43,34 @@ npm start
 
 ---
 
+## Cài đặt trên Termux (Android)
+
+```bash
+# 1. Clone repo
+git clone https://github.com/VLJNH-VN/MIZAI_BOT.git
+cd MIZAI_BOT
+
+# 2. Chạy script setup tự động (cài gói, build native modules, patch ffmpeg)
+chmod +x setup-termux.sh
+bash setup-termux.sh
+
+# 3. Áp dụng biến môi trường
+source ~/.bashrc
+
+# 4. Sửa config.json rồi chạy bot trong tmux
+tmux new -s mizai
+npm start
+# Ctrl+B → D để thoát tmux, bot vẫn chạy nền
+```
+
+> **Lưu ý Termux:**
+> - Script `setup-termux.sh` tự động cài Cairo, libvips, ffmpeg và build các native module (`canvas`, `sharp`, `better-sqlite3`) từ source.
+> - Nếu `canvas` hoặc `sharp` không build được, bot vẫn chạy bình thường — chỉ các lệnh sinh card ảnh (menu, uptime, join/leave card) sẽ không hiển thị ảnh.
+> - Cài **Termux:API** và chạy `termux-wake-lock` để ngăn Android tắt bot khi màn hình tối.
+> - Tắt tối ưu pin cho Termux trong **Cài đặt → Ứng dụng → Termux → Pin**.
+
+---
+
 ## Cấu hình (`config.json`)
 
 > File này **KHÔNG được commit lên GitHub** — đã có trong `.gitignore`

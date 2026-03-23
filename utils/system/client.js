@@ -4,7 +4,10 @@ const path = require("path");
 const { Zalo } = require("zca-js");
 const { imageSize } = require("image-size");
 const QRCode = require("qrcode");
-const sharp = require("sharp");
+let _sharp = null;
+try { _sharp = require("sharp"); } catch {
+  console.warn("[client] Module 'sharp' chưa được build — QR terminal display sẽ bị tắt.");
+}
 const jsQR = require("jsqr");
 
 // ── IMEI & Cookie helpers ─────────────────────────────────────────────────────
@@ -79,8 +82,12 @@ function saveCookieFile(cookiePath, cookies) {
 
 async function displayQRInTerminal(imageBase64) {
   try {
+    if (!_sharp) {
+      logWarn("[QR] sharp chưa build — không thể hiển thị QR trong terminal. Hãy mở file qr.png để quét.");
+      return;
+    }
     const buf = Buffer.from(imageBase64, "base64");
-    const { data, info } = await sharp(buf).raw().toBuffer({ resolveWithObject: true });
+    const { data, info } = await _sharp(buf).raw().toBuffer({ resolveWithObject: true });
     const decoded = jsQR(data, info.width, info.height);
     const qrContent = decoded ? decoded.data : null;
     if (!qrContent) {

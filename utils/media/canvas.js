@@ -5,7 +5,18 @@
  * Tất cả canvas card: music / group / menu
  */
 
-const { createCanvas, loadImage } = require("canvas");
+let createCanvas, loadImage;
+let _canvasAvailable = false;
+try {
+  const _c = require("canvas");
+  createCanvas = _c.createCanvas;
+  loadImage    = _c.loadImage;
+  _canvasAvailable = true;
+} catch (e) {
+  console.warn("[canvas] Module 'canvas' chưa được build. Các lệnh card ảnh sẽ không khả dụng.");
+  console.warn("[canvas] Chạy setup-termux.sh hoặc: npm rebuild canvas --build-from-source");
+}
+
 const fs    = require("fs");
 const path  = require("path");
 const os    = require("os");
@@ -1341,7 +1352,9 @@ async function drawUptimeCard({
 
 // ═════════════════════════════════════════════════════════════════════════════
 
-module.exports = {
+const _stub = async () => null;
+
+module.exports = _canvasAvailable ? {
   drawSearchCard,
   drawNowPlayingCard,
   drawLoadingCard,
@@ -1352,4 +1365,15 @@ module.exports = {
   drawCommandInfoCard,
   drawAllCommandsCard,
   drawUptimeCard,
+} : {
+  drawSearchCard      : _stub,
+  drawNowPlayingCard  : _stub,
+  drawLoadingCard     : _stub,
+  drawJoinCard        : _stub,
+  drawLeaveCard       : _stub,
+  drawMenuCard        : _stub,
+  drawCategoryCard    : _stub,
+  drawCommandInfoCard : _stub,
+  drawAllCommandsCard : _stub,
+  drawUptimeCard      : _stub,
 };

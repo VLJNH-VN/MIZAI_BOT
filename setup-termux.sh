@@ -174,11 +174,18 @@ install_npm() {
   # Xóa lock file cũ của node_modules nếu có lỗi
   [ -f node_modules/.package-lock.json ] && rm -f node_modules/.package-lock.json 2>/dev/null
 
-  if npm install --build-from-source 2>&1 | tail -3; then
+  NPM_LOG=$(npm install --build-from-source --ignore-engines 2>&1)
+  NPM_EXIT=$?
+  echo "$NPM_LOG" | tail -5
+
+  if [ $NPM_EXIT -eq 0 ]; then
     log_ok "npm install thành công."
   else
     log_warn "npm install lỗi — thử --ignore-scripts..."
-    if npm install --ignore-scripts 2>&1 | tail -3; then
+    NPM_LOG2=$(npm install --ignore-scripts --ignore-engines 2>&1)
+    NPM_EXIT2=$?
+    echo "$NPM_LOG2" | tail -5
+    if [ $NPM_EXIT2 -eq 0 ]; then
       log_warn "Đã cài nhưng bỏ qua build scripts — sẽ rebuild thủ công ở bước sau."
     else
       log_error "npm install thất bại. Kiểm tra kết nối mạng và thử lại."
@@ -358,6 +365,28 @@ check_config() {
 }
 
 # ════════════════════════════════════════════════════════════
+#  11. Cài tmux (giữ bot chạy khi tắt Termux)
+# ════════════════════════════════════════════════════════════
+setup_keepalive() {
+  log_section "Cài tiện ích giữ bot sống (tmux)"
+
+  if command -v tmux &>/dev/null; then
+    log_ok "tmux đã cài."
+  else
+    log_info "Cài tmux..."
+    pkg install -y tmux 2>/dev/null && log_ok "tmux đã cài." || \
+      log_warn "tmux không cài được — bot sẽ dừng khi đóng Termux."
+  fi
+
+  # Kích hoạt wake-lock nếu có termux-api
+  if command -v termux-wake-lock &>/dev/null; then
+    termux-wake-lock 2>/dev/null && log_ok "Wake-lock đã bật — Android sẽ không sleep Termux." || true
+  else
+    log_warn "termux-api chưa cài — cài Termux:API app rồi: pkg install termux-api"
+  fi
+}
+
+# ════════════════════════════════════════════════════════════
 #  Tổng kết
 # ════════════════════════════════════════════════════════════
 summary() {
@@ -376,13 +405,21 @@ summary() {
   echo -e "  2. Đảm bảo ${YELLOW}cookie.json${NC} có cookie Zalo hợp lệ"
   echo -e "  3. Áp dụng biến môi trường:"
   echo -e "     ${GREEN}source ~/.bashrc${NC}"
-  echo -e "  4. Chạy bot:"
+  echo -e "  4. Chạy bot (trong tmux để không bị kill khi tắt màn hình):"
+  echo -e "     ${GREEN}tmux new -s mizai${NC}"
   echo -e "     ${GREEN}npm start${NC}"
+  echo -e "     ${DIM}(Ctrl+B → D để thoát tmux, bot vẫn chạy nền)${NC}"
+  echo ""
+  echo -e "  ${BOLD}Giữ bot chạy liên tục trên Android:${NC}"
+  echo -e "  ${DIM}• Cài Termux:API app → pkg install termux-api → termux-wake-lock${NC}"
+  echo -e "  ${DIM}• Bật 'Acquire WakeLock' trong notification bar của Termux${NC}"
+  echo -e "  ${DIM}• Tắt tối ưu pin cho app Termux trong cài đặt Android${NC}"
   echo ""
   echo -e "  ${DIM}Lệnh khác:${NC}"
   echo -e "  ${DIM}npm run dev        — chạy + auto-reload${NC}"
   echo -e "  ${DIM}npm run list-cmds  — xem tất cả lệnh${NC}"
   echo -e "  ${DIM}npm run backup     — backup dữ liệu lên GitHub${NC}"
+  echo -e "  ${DIM}tmux attach -t mizai — mở lại session bot${NC}"
   echo ""
 }
 
@@ -400,4 +437,5 @@ rebuild_canvas
 rebuild_sharp
 patch_ffmpeg_static   # ← bước này fix lỗi ffmpeg-static trên ARM
 check_config
+setup_keepalive
 summary

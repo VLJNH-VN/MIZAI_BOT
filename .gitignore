@@ -1,0 +1,82 @@
+# compiled output
+dist
+tmp
+out-tsc
+*.tsbuildinfo
+.expo
+.expo-shared
+
+# dependencies
+node_modules
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# misc
+/.sass-cache
+/connect.lock
+/coverage
+npm-debug.log
+yarn-error.log
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Replit
+.cache/
+.local/
+.replit
+.replitignore
+.npmrc
+.canvas/
+attached_assets/
+pnpm-lock.yaml
+.agents/
+
+# ══════════════════════════════════════════════
+#  Bot sensitive files — KHÔNG BAO GIỜ commit
+# ══════════════════════════════════════════════
+config.json
+cookie.json
+qr.png
+appstate.json
+
+# Backups
+backups/
+
+# SQLite database (chứa dữ liệu người dùng)
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+includes/database/core/data/
+
+# Cache & temp media
+includes/cache/
+
+# Runtime data (dữ liệu vận hành — không cần share)
+includes/data/runtime/
+includes/data/game/taixiu/betHistory/
+includes/data/game/taixiu/lichsuGD/
+includes/data/game/taixiu/money.json
+includes/data/game/taixiu/phien.json
+includes/database/groupsCache.json
+
+# Config có dữ liệu nhóm cụ thể (runtime)
+includes/data/config/anti.json
+includes/data/config/auto.json
+includes/data/config/muted.json
+includes/data/config/tuongtac.json

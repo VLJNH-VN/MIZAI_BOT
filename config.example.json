@@ -1,0 +1,22 @@
+{
+  "prefix": ">",
+  "loginMethod": "qr",
+  "cookiePath": "./cookie.json",
+  "imei": "YOUR_IMEI_HERE",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+  "ownerId": "YOUR_ZALO_UID_HERE",
+  "adminBotIds": [
+    "ADMIN_UID_1"
+  ],
+  "qrPath": "./qr.png",
+  "hfToken": "hf_YOUR_HUGGINGFACE_TOKEN",
+  "flux": "YOUR_FLUX_KEY",
+  "githubToken": "",
+  "repo": "YOUR_GITHUB_USERNAME/YOUR_NOTE_REPO",
+  "uploadRepo": "YOUR_GITHUB_USERNAME/YOUR_UPLOAD_REPO",
+  "branch": "main",
+  "autoUndoOnAngry": true,
+  "🔄 undoEnabled": true,
+  "spotifyClientId": "YOUR_SPOTIFY_CLIENT_ID",
+  "spotifyClientSecret": "YOUR_SPOTIFY_CLIENT_SECRET"
+}

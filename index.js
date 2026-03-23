@@ -8,7 +8,7 @@ const MAIN_FILE  = path.join(__dirname, "main.js");
 const RESTART_DELAY_MS = 5000;
 
 // ── Kiểm tra & rebuild better-sqlite3 ────────────────────────────────────────
-(function checkNativeModules() {
+/*(function checkNativeModules() {
   try {
     require("better-sqlite3");
   } catch {
@@ -69,7 +69,7 @@ const RESTART_DELAY_MS = 5000;
 
   applyPatch(loginQRPath, esmOrigStart, esmPatchStart, esmOrigEnd, esmPatchEnd);
   applyPatch(loginQRCjsPath, cjsOrigStart, cjsPatchStart, cjsOrigEnd, cjsPatchEnd);
-})();
+})();*/
 
 // ── Launcher ──────────────────────────────────────────────────────────────────
 let _restartCount = 0;

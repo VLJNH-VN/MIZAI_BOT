@@ -3,7 +3,7 @@
 const { spawn, execSync } = require("child_process");
 const path = require("path");
 
-const NODE_FLAGS = ["--max-old-space-size=384", "--gc-interval=100"];
+const NODE_FLAGS = ["--max-old-space-size=200", "--gc-interval=200"];
 const MAIN_FILE  = path.join(__dirname, "main.js");
 const RESTART_DELAY_MS = 5000;
 

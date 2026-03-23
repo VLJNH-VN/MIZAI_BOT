@@ -84,8 +84,9 @@ git add -A
 git commit -m "chore: upload MIZAI_BOT $(date '+%Y-%m-%d %H:%M')" 2>/dev/null || \
   echo -e "  ${YELLOW}· Không có gì mới để commit${NC}"
 
-echo -e "  ${CYAN}Đang push lên GitHub...${NC}"
-if git push -u origin main --force 2>&1; then
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+echo -e "  ${CYAN}Đang push branch '${BRANCH}' lên GitHub...${NC}"
+if git push -u origin "$BRANCH" --force 2>&1; then
   echo -e "\n${BOLD}${GREEN}✔ Upload thành công!${NC}"
   echo -e "  Link: ${CYAN}https://github.com/${GH_USER}/${GH_REPO}${NC}"
 else

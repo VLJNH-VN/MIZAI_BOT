@@ -42,6 +42,8 @@ Thumbs.db
 .replit
 .replitignore
 .npmrc
+.canvas/
+attached_assets/
 
 # ══════════════════════════════════════════════
 #  Bot sensitive files — KHÔNG BAO GIỜ commit
@@ -71,5 +73,8 @@ includes/data/game/taixiu/money.json
 includes/data/game/taixiu/phien.json
 includes/database/groupsCache.json
 
-# Bot stats cache
-includes/cache/bot_stats.json
+# Config có dữ liệu nhóm cụ thể (runtime)
+includes/data/config/anti.json
+includes/data/config/auto.json
+includes/data/config/muted.json
+includes/data/config/tuongtac.json

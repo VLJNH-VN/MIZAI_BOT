@@ -333,7 +333,85 @@ EOF
 }
 
 # ════════════════════════════════════════════════════════════
-#  10. Kiểm tra & tạo file cấu hình
+#  10. Tạo thư mục & file mặc định (cần thiết khi clone mới)
+# ════════════════════════════════════════════════════════════
+setup_data_dirs() {
+  log_section "Tạo thư mục & file dữ liệu mặc định"
+
+  # Tạo các thư mục cần thiết
+  DIRS=(
+    "includes/cache"
+    "includes/data/runtime"
+    "includes/data/config"
+    "includes/data/game/taixiu/betHistory"
+    "includes/data/game/taixiu/lichsuGD"
+    "includes/database/core/data"
+    "includes/listapi"
+  )
+
+  for d in "${DIRS[@]}"; do
+    if [ ! -d "$d" ]; then
+      mkdir -p "$d" && log_ok "Tạo thư mục: $d"
+    else
+      echo -e "  ${DIM}· $d (đã tồn tại)${NC}"
+    fi
+  done
+
+  # Tạo các file dữ liệu mặc định nếu chưa có
+  _mk_json() {
+    local file="$1"
+    local content="$2"
+    if [ ! -f "$file" ]; then
+      echo "$content" > "$file" && log_ok "Tạo file: $file"
+    else
+      echo -e "  ${DIM}· $file (đã tồn tại)${NC}"
+    fi
+  }
+
+  # Runtime data
+  _mk_json "includes/data/runtime/users.json"    '{}'
+  _mk_json "includes/data/runtime/groups.json"   '{}'
+  _mk_json "includes/data/runtime/muted.json"    '{}'
+  _mk_json "includes/data/runtime/key.json"      '{}'
+  _mk_json "includes/data/runtime/rentKey.json"  '{}'
+  _mk_json "includes/data/runtime/thuebot.json"  '{}'
+  _mk_json "includes/data/runtime/lastSeen.json" '{}'
+  _mk_json "includes/data/runtime/goibot.json"   '{}'
+  _mk_json "includes/data/runtime/tuongtac.json" '{}'
+  _mk_json "includes/data/runtime/mizai_memory.json" '[]'
+  _mk_json "includes/data/runtime/mizai_state.json"  '{}'
+
+  # Config data
+  _mk_json "includes/data/config/anti.json"     '{}'
+  _mk_json "includes/data/config/auto.json"     '{}'
+  _mk_json "includes/data/config/muted.json"    '{}'
+  _mk_json "includes/data/config/tuongtac.json" '{}'
+  _mk_json "includes/data/config/autoSend.json"    '[]'
+  _mk_json "includes/data/config/auto_xo_so.json" '{}'
+
+  # Game data
+  _mk_json "includes/data/game/taixiu/txConfig.json" \
+    '{"cauMode":false,"cauResult":null,"cauCount":0,"nhaMode":false,"nhaPhien":0}'
+  _mk_json "includes/data/game/taixiu/fileCheck.json" '{}'
+  _mk_json "includes/data/game/taixiu/money.json"     '[]'
+  _mk_json "includes/data/game/taixiu/phien.json"     '{"phien":1,"ketqua":[]}'
+
+  # Key data
+  _mk_json "includes/data/key.json" \
+    '{"keys":[],"autoCheck":true,"live":[],"dead":[]}'
+
+  # Listapi (danh sách video)
+  _mk_json "includes/listapi/gai.json" '[]'
+  _mk_json "includes/listapi/ani.json" '[]'
+
+  # groupsCache
+  _mk_json "includes/database/groupsCache.json" '{}'
+
+  log_ok "Hoàn tất tạo thư mục & file mặc định."
+}
+
+# ════════════════════════════════════════════════════════════
+#  11. Kiểm tra & tạo file cấu hình
 # ════════════════════════════════════════════════════════════
 check_config() {
   log_section "Kiểm tra file cấu hình"
@@ -431,6 +509,7 @@ check_env
 install_system
 check_node
 setup_build_env
+setup_data_dirs       # ← tạo thư mục & file mặc định trước khi npm install
 install_npm
 rebuild_sqlite
 rebuild_canvas

@@ -50,14 +50,21 @@ npm start
 git clone https://github.com/VLJNH-VN/MIZAI_BOT.git
 cd MIZAI_BOT
 
-# 2. Chạy script setup tự động (cài gói, build native modules, patch ffmpeg)
+# 2. Chạy script setup tự động
+#    - Cài gói hệ thống (cairo, libvips, ffmpeg, ...)
+#    - Tạo thư mục & file dữ liệu mặc định
+#    - Build native modules (canvas, sharp, better-sqlite3)
+#    - Patch ffmpeg-static → system ffmpeg (ARM)
 chmod +x setup-termux.sh
 bash setup-termux.sh
 
 # 3. Áp dụng biến môi trường
 source ~/.bashrc
 
-# 4. Sửa config.json rồi chạy bot trong tmux
+# 4. Sửa config.json (điền token, ownerId, ...)
+nano config.json
+
+# 5. Chạy bot trong tmux để không bị kill khi tắt màn hình
 tmux new -s mizai
 npm start
 # Ctrl+B → D để thoát tmux, bot vẫn chạy nền
@@ -215,6 +222,28 @@ npm run move-cmd <tên> <danh-mục>      # Di chuyển lệnh
 npm run backup-cmds                    # Backup lệnh ra .zip
 npm run backup                         # Backup dữ liệu lên GitHub
 ```
+
+---
+
+## Push lên GitHub lần đầu
+
+Nếu bạn fork/clone từ Replit hoặc từ máy khác rồi muốn đẩy lên GitHub sạch:
+
+```bash
+# 1. Xóa các file nhạy cảm ra khỏi git tracking (chỉ chạy 1 lần)
+chmod +x git-clean.sh
+bash git-clean.sh
+
+# 2. Kiểm tra lại
+git status
+
+# 3. Commit và push
+git add -A
+git commit -m "chore: clean tracked sensitive files"
+git push origin main
+```
+
+> Script `git-clean.sh` chỉ **bỏ tracking** — file local của bạn **không bị xóa**.
 
 ---
 

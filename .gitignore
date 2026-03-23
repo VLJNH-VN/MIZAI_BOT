@@ -44,6 +44,8 @@ Thumbs.db
 .npmrc
 .canvas/
 attached_assets/
+pnpm-lock.yaml
+.agents/
 
 # ══════════════════════════════════════════════
 #  Bot sensitive files — KHÔNG BAO GIỜ commit

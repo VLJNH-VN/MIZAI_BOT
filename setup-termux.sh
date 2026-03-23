@@ -1,181 +1,299 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 # ════════════════════════════════════════════════════════════
-#  MIZAI_BOT — Setup Script cho Termux (Android)
-#  Tác giả: VLJNH-VN
+#  MIZAI_BOT — Termux Setup Script
+#  Yêu cầu: Termux (Android), Node.js >= 18
 # ════════════════════════════════════════════════════════════
-
-set -e
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m'
 
-log_info()    { echo -e "${CYAN}[INFO]${NC} $1"; }
-log_ok()      { echo -e "${GREEN}[OK]${NC} $1"; }
-log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error()   { echo -e "${RED}[ERROR]${NC} $1"; }
-log_section() { echo -e "\n${BOLD}${CYAN}══ $1 ══${NC}"; }
+_ok=0
+_warn=0
+_fail=0
 
-echo -e "${BOLD}${CYAN}"
-echo "  ███╗   ███╗██╗███████╗ █████╗ ██╗"
-echo "  ████╗ ████║██║╚══███╔╝██╔══██╗██║"
-echo "  ██╔████╔██║██║  ███╔╝ ███████║██║"
-echo "  ██║╚██╔╝██║██║ ███╔╝  ██╔══██║██║"
-echo "  ██║ ╚═╝ ██║██║███████╗██║  ██║██║"
-echo "  ╚═╝     ╚═╝╚═╝╚══════╝╚═╝  ╚═╝╚═╝"
-echo -e "        BOT ZALO — TERMUX SETUP${NC}\n"
+log_info()    { echo -e "${CYAN}[INFO]${NC}  $1"; }
+log_ok()      { echo -e "${GREEN}[OK]${NC}    $1"; (( _ok++ )); }
+log_warn()    { echo -e "${YELLOW}[WARN]${NC}  $1"; (( _warn++ )); }
+log_error()   { echo -e "${RED}[ERR]${NC}   $1"; (( _fail++ )); }
+log_section() { echo -e "\n${BOLD}${CYAN}┌─ $1${NC}"; }
+log_done()    { echo -e "${DIM}└─ xong${NC}"; }
 
-# ── 1. Cập nhật Termux ────────────────────────────────────────
-log_section "Cập nhật Termux"
-pkg update -y && pkg upgrade -y
-log_ok "Termux đã cập nhật."
+banner() {
+  echo -e "${BOLD}${CYAN}"
+  echo "  ███╗   ███╗██╗███████╗ █████╗ ██╗"
+  echo "  ████╗ ████║██║╚══███╔╝██╔══██╗██║"
+  echo "  ██╔████╔██║██║  ███╔╝ ███████║██║"
+  echo "  ██║╚██╔╝██║██║ ███╔╝  ██╔══██║██║"
+  echo "  ██║ ╚═╝ ██║██║███████╗██║  ██║██║"
+  echo "  ╚═╝     ╚═╝╚═╝╚══════╝╚═╝  ╚═╝╚═╝"
+  echo -e "       BOT ZALO — TERMUX SETUP v1.5${NC}"
+  echo -e "${DIM}  $(date '+%Y-%m-%d %H:%M:%S')${NC}\n"
+}
 
-# ── 2. Cài các gói hệ thống cần thiết ────────────────────────
-log_section "Cài gói hệ thống"
-
-PKGS=(
-  nodejs
-  git
-  python
-  make
-  clang
-  pkg-config
-  # Cho canvas
-  cairo
-  pango
-  giflib
-  librsvg
-  libjpeg-turbo
-  # Cho sharp / libvips
-  libvips
-  # Tiện ích
-  curl
-  wget
-  ffmpeg
-)
-
-for pkg_name in "${PKGS[@]}"; do
-  if pkg list-installed 2>/dev/null | grep -q "^$pkg_name"; then
-    log_warn "$pkg_name đã cài, bỏ qua."
+# ── Kiểm tra đang chạy trong Termux ──────────────────────────
+check_termux() {
+  log_section "Kiểm tra môi trường"
+  if [ -z "$PREFIX" ] || [[ "$PREFIX" != *"com.termux"* ]]; then
+    log_warn "Script này được thiết kế cho Termux. Tiếp tục với rủi ro của bạn."
   else
-    log_info "Đang cài $pkg_name..."
-    pkg install -y "$pkg_name" || log_warn "Không thể cài $pkg_name — tiếp tục."
+    log_ok "Đang chạy trong Termux: $PREFIX"
   fi
-done
 
-log_ok "Hoàn tất cài gói hệ thống."
+  ARCH=$(uname -m)
+  log_info "Kiến trúc CPU: ${ARCH}"
 
-# ── 3. Kiểm tra Node.js ───────────────────────────────────────
-log_section "Kiểm tra Node.js"
-NODE_VER=$(node --version 2>/dev/null || echo "không tìm thấy")
-NPM_VER=$(npm --version 2>/dev/null || echo "không tìm thấy")
+  # Yêu cầu quyền lưu trữ (nếu chưa có)
+  if [ ! -d "$HOME/storage" ]; then
+    log_info "Cấp quyền truy cập bộ nhớ trong..."
+    termux-setup-storage 2>/dev/null || log_warn "termux-setup-storage không khả dụng."
+  else
+    log_ok "Quyền bộ nhớ trong đã có."
+  fi
+  log_done
+}
 
-if [[ "$NODE_VER" == "không tìm thấy" ]]; then
-  log_error "Node.js chưa được cài! Hãy chạy: pkg install nodejs"
-  exit 1
-fi
+# ── Cập nhật Termux ───────────────────────────────────────────
+update_termux() {
+  log_section "Cập nhật Termux packages"
+  pkg update -y -o Dpkg::Options::="--force-confold" 2>/dev/null && \
+  pkg upgrade -y -o Dpkg::Options::="--force-confold" 2>/dev/null && \
+    log_ok "Termux đã cập nhật." || \
+    log_warn "Cập nhật có lỗi nhỏ — tiếp tục."
+  log_done
+}
 
-log_ok "Node.js: $NODE_VER | npm: $NPM_VER"
+# ── Cài gói hệ thống ──────────────────────────────────────────
+install_system_pkgs() {
+  log_section "Cài gói hệ thống"
 
-NODE_MAJOR=$(node -e "console.log(process.versions.node.split('.')[0])" 2>/dev/null)
-if [ "$NODE_MAJOR" -lt 18 ]; then
-  log_error "Cần Node.js >= 18! Phiên bản hiện tại: $NODE_VER"
-  exit 1
-fi
+  # Nhóm: build tools
+  BUILD_PKGS=(git python make clang binutils pkg-config)
+  # Nhóm: cho canvas (node-canvas)
+  CANVAS_PKGS=(cairo pango giflib librsvg libjpeg-turbo libpng)
+  # Nhóm: cho sharp
+  SHARP_PKGS=(libvips)
+  # Nhóm: tiện ích
+  UTIL_PKGS=(nodejs-lts ffmpeg curl wget)
 
-# ── 4. Biến môi trường build native modules ───────────────────
-log_section "Cấu hình biến môi trường build"
+  ALL_PKGS=( "${BUILD_PKGS[@]}" "${CANVAS_PKGS[@]}" "${SHARP_PKGS[@]}" "${UTIL_PKGS[@]}" )
 
-export CC=clang
-export CXX=clang++
-export npm_config_build_from_source=true
-export npm_config_cache="$HOME/.npm-cache"
-export CFLAGS="-O2 -march=native"
-export CXXFLAGS="-O2 -march=native"
+  for p in "${ALL_PKGS[@]}"; do
+    # Dùng dpkg -s để check chính xác hơn pkg list-installed
+    if dpkg -s "$p" &>/dev/null; then
+      echo -e "  ${DIM}· $p đã cài${NC}"
+    else
+      log_info "Đang cài $p..."
+      pkg install -y "$p" 2>/dev/null && \
+        echo -e "  ${GREEN}+ $p${NC}" || \
+        log_warn "$p: không cài được — bỏ qua."
+    fi
+  done
 
-# Giúp node-gyp tìm Python
-export PYTHON=$(which python3 2>/dev/null || which python)
+  log_ok "Hoàn tất cài gói hệ thống."
+  log_done
+}
 
-log_ok "CC=$CC | CXX=$CXX | PYTHON=$PYTHON"
+# ── Kiểm tra Node.js ──────────────────────────────────────────
+check_node() {
+  log_section "Kiểm tra Node.js"
 
-# ── 5. Cài npm dependencies ───────────────────────────────────
-log_section "Cài npm dependencies"
-log_warn "Bước này có thể mất 10-20 phút trên lần đầu (build native modules)..."
+  if ! command -v node &>/dev/null; then
+    log_error "Không tìm thấy Node.js! Chạy: pkg install nodejs-lts"
+    exit 1
+  fi
 
-# Thử cài canvas từ prebuilt trước, nếu fail thì build từ source
-npm install --prefer-offline 2>/dev/null || npm install
+  NODE_VER=$(node --version)
+  NPM_VER=$(npm --version)
+  NODE_MAJOR=$(node -e "process.stdout.write(process.version.slice(1).split('.')[0])")
 
-log_ok "npm install hoàn tất."
+  log_ok "Node.js $NODE_VER  |  npm v$NPM_VER"
 
-# ── 6. Rebuild better-sqlite3 ────────────────────────────────
-log_section "Rebuild better-sqlite3"
-log_info "Đang rebuild better-sqlite3 cho kiến trúc hiện tại..."
+  if [ "$NODE_MAJOR" -lt 18 ]; then
+    log_error "Cần Node.js >= 18. Hiện tại: $NODE_VER"
+    log_info  "Chạy: pkg install nodejs-lts"
+    exit 1
+  fi
 
-npm rebuild better-sqlite3 --update-binary 2>/dev/null \
-  || npm rebuild better-sqlite3 \
-  || log_warn "better-sqlite3 không rebuild được — sẽ dùng sql.js fallback."
+  log_done
+}
 
-log_ok "better-sqlite3 đã xử lý."
+# ── Cấu hình npm & biến môi trường build ─────────────────────
+configure_build_env() {
+  log_section "Cấu hình môi trường build"
 
-# ── 7. Kiểm tra canvas ────────────────────────────────────────
-log_section "Kiểm tra canvas"
-node -e "require('canvas'); console.log('canvas OK')" 2>/dev/null \
-  && log_ok "canvas hoạt động tốt." \
-  || log_warn "canvas không load được — một số lệnh sinh ảnh có thể lỗi."
+  export CC=clang
+  export CXX=clang++
+  export PYTHON=$(command -v python3 2>/dev/null || command -v python)
+  export MAKEFLAGS="-j$(nproc)"
+  export npm_config_cache="$HOME/.npm-cache"
 
-# ── 8. Kiểm tra sharp ─────────────────────────────────────────
-log_section "Kiểm tra sharp"
-node -e "require('sharp'); console.log('sharp OK')" 2>/dev/null \
-  && log_ok "sharp hoạt động tốt." \
-  || log_warn "sharp không load được — xử lý ảnh có thể lỗi."
+  # Flags tối ưu cho ARM/x86
+  case "$(uname -m)" in
+    aarch64) export CFLAGS="-O2" ; export CXXFLAGS="-O2" ;;
+    armv7*)  export CFLAGS="-O2 -march=armv7-a" ; export CXXFLAGS="-O2 -march=armv7-a" ;;
+    *)       export CFLAGS="-O2" ; export CXXFLAGS="-O2" ;;
+  esac
 
-# ── 9. Kiểm tra ffmpeg ───────────────────────────────────────
-log_section "Kiểm tra ffmpeg"
-FFMPEG_PATH=$(which ffmpeg 2>/dev/null || echo "")
-if [ -n "$FFMPEG_PATH" ]; then
-  log_ok "ffmpeg tìm thấy tại: $FFMPEG_PATH"
-else
-  log_warn "ffmpeg không tìm thấy — tải video/audio có thể lỗi."
-fi
+  # Trỏ pkg-config cho canvas / sharp
+  export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
+  export LD_LIBRARY_PATH="$PREFIX/lib:$LD_LIBRARY_PATH"
 
-# ── 10. Kiểm tra config.json ─────────────────────────────────
-log_section "Kiểm tra config.json"
-if [ ! -f "config.json" ]; then
-  if [ -f "config.example.json" ]; then
+  # Cấu hình npm global
+  npm config set python "$PYTHON"       2>/dev/null
+  npm config set cache  "$HOME/.npm-cache" 2>/dev/null
+
+  log_ok "CC=$CC | CXX=$CXX | PYTHON=$PYTHON | jobs=$(nproc)"
+  log_ok "CFLAGS=$CFLAGS"
+  log_ok "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+  log_done
+}
+
+# ── Cài npm dependencies ──────────────────────────────────────
+install_npm() {
+  log_section "Cài npm dependencies"
+  log_warn "Có thể mất 10–25 phút (build native modules lần đầu)..."
+
+  # Xóa cache cũ nếu có lỗi trước đó
+  if [ -d "node_modules/.cache" ]; then
+    rm -rf node_modules/.cache
+  fi
+
+  npm install --build-from-source 2>&1 | tail -5 && \
+    log_ok "npm install hoàn tất." || {
+      log_warn "npm install lỗi, thử lại không có --build-from-source..."
+      npm install --ignore-scripts 2>&1 | tail -5 && \
+        log_warn "Cài xong nhưng bỏ qua scripts — sẽ rebuild thủ công." || \
+        log_error "npm install thất bại. Kiểm tra kết nối mạng."
+    }
+
+  log_done
+}
+
+# ── Rebuild native modules ────────────────────────────────────
+rebuild_native() {
+  log_section "Rebuild native modules"
+
+  # better-sqlite3
+  log_info "Rebuilding better-sqlite3..."
+  node -e "require('better-sqlite3')" 2>/dev/null && \
+    log_ok "better-sqlite3 đã hoạt động — bỏ qua rebuild." || {
+      npm rebuild better-sqlite3 --update-binary 2>/dev/null || \
+      npm rebuild better-sqlite3 2>/dev/null || \
+      log_warn "better-sqlite3 rebuild thất bại → dùng sql.js fallback."
+    }
+
+  # canvas
+  log_info "Rebuilding canvas..."
+  node -e "require('canvas')" 2>/dev/null && \
+    log_ok "canvas đã hoạt động." || {
+      npm rebuild canvas --build-from-source 2>/dev/null && \
+        log_ok "canvas rebuild thành công." || \
+        log_warn "canvas rebuild thất bại — lệnh sinh ảnh có thể không dùng được."
+    }
+
+  # sharp
+  log_info "Rebuilding sharp..."
+  node -e "require('sharp')" 2>/dev/null && \
+    log_ok "sharp đã hoạt động." || {
+      SHARP_IGNORE_GLOBAL_LIBVIPS=0 npm rebuild sharp --build-from-source 2>/dev/null && \
+        log_ok "sharp rebuild thành công." || \
+        log_warn "sharp rebuild thất bại — xử lý ảnh có thể bị hạn chế."
+    }
+
+  log_done
+}
+
+# ── Kiểm tra ffmpeg ───────────────────────────────────────────
+check_ffmpeg() {
+  log_section "Kiểm tra ffmpeg"
+  if command -v ffmpeg &>/dev/null; then
+    FFVER=$(ffmpeg -version 2>&1 | head -1 | awk '{print $3}')
+    log_ok "ffmpeg $FFVER  →  $(which ffmpeg)"
+    # Ghi đè FFMPEG_PATH để fluent-ffmpeg dùng hệ thống thay vì ffmpeg-static
+    echo "export FFMPEG_PATH=$(which ffmpeg)" >> "$HOME/.bashrc"
+    echo "export FFPROBE_PATH=$(which ffprobe 2>/dev/null || echo '')" >> "$HOME/.bashrc"
+    log_info "Đã ghi FFMPEG_PATH vào ~/.bashrc"
+  else
+    log_warn "ffmpeg không tìm thấy → tải video/audio có thể lỗi."
+  fi
+  log_done
+}
+
+# ── Kiểm tra & tạo file cấu hình ─────────────────────────────
+check_config() {
+  log_section "Kiểm tra file cấu hình"
+
+  # config.json
+  if [ -f "config.json" ]; then
+    log_ok "config.json tồn tại."
+    # Kiểm tra JSON hợp lệ
+    node -e "JSON.parse(require('fs').readFileSync('config.json','utf8'))" 2>/dev/null && \
+      log_ok "config.json hợp lệ (JSON parse OK)." || \
+      log_error "config.json bị lỗi cú pháp JSON!"
+  elif [ -f "config.example.json" ]; then
     cp config.example.json config.json
-    log_warn "Đã tạo config.json từ mẫu. Hãy điền thông tin vào file này!"
+    log_warn "Đã tạo config.json từ mẫu — hãy điền thông tin vào file này!"
   else
-    log_error "Không tìm thấy config.json và config.example.json!"
+    log_error "Không có config.json và config.example.json. Bot sẽ không chạy được!"
   fi
-else
-  log_ok "config.json đã tồn tại."
-fi
 
-# ── 11. Kiểm tra cookie.json ─────────────────────────────────
-log_section "Kiểm tra cookie.json"
-if [ ! -f "cookie.json" ]; then
-  log_warn "Chưa có cookie.json — cần export cookie Zalo và đặt vào file này."
-else
-  log_ok "cookie.json đã tồn tại."
-fi
+  # cookie.json
+  if [ -f "cookie.json" ]; then
+    log_ok "cookie.json tồn tại."
+    node -e "const c=JSON.parse(require('fs').readFileSync('cookie.json','utf8')); if(!Array.isArray(c)&&typeof c!=='object') throw 1; console.log('cookie count:', Array.isArray(c)?c.length:'object')" 2>/dev/null && \
+      log_ok "cookie.json hợp lệ." || \
+      log_warn "cookie.json có thể bị lỗi định dạng."
+  else
+    log_warn "Chưa có cookie.json — cần export cookie Zalo rồi đặt vào thư mục này."
+  fi
 
-# ── Tổng kết ─────────────────────────────────────────────────
-echo ""
-echo -e "${GREEN}${BOLD}════════════════════════════════════════${NC}"
-echo -e "${GREEN}${BOLD}  SETUP HOÀN TẤT!${NC}"
-echo -e "${GREEN}${BOLD}════════════════════════════════════════${NC}"
-echo ""
-echo -e "  ${CYAN}Các bước tiếp theo:${NC}"
-echo -e "  1. Điền thông tin vào ${YELLOW}config.json${NC} (cookie, imei, ownerId, token...)"
-echo -e "  2. Đảm bảo ${YELLOW}cookie.json${NC} đã có cookie Zalo hợp lệ"
-echo -e "  3. Chạy bot: ${GREEN}npm start${NC}"
-echo ""
-echo -e "  ${CYAN}Lệnh hữu ích:${NC}"
-echo -e "  ${GREEN}npm start${NC}           — Chạy bot"
-echo -e "  ${GREEN}npm run dev${NC}         — Chạy với auto-reload"
-echo -e "  ${GREEN}npm run list-cmds${NC}   — Liệt kê tất cả lệnh"
-echo ""
+  log_done
+}
+
+# ── Báo cáo tổng kết ──────────────────────────────────────────
+summary() {
+  echo ""
+  echo -e "${BOLD}${CYAN}════════════════════════════════════════════════${NC}"
+  echo -e "${BOLD}  SETUP KẾT THÚC${NC}"
+  echo -e "${BOLD}${CYAN}════════════════════════════════════════════════${NC}"
+  echo -e "  ${GREEN}Thành công:${NC} $_ok    ${YELLOW}Cảnh báo:${NC} $_warn    ${RED}Lỗi:${NC} $_fail"
+  echo -e "${BOLD}${CYAN}────────────────────────────────────────────────${NC}"
+
+  if [ "$_fail" -gt 0 ]; then
+    echo -e "\n  ${RED}Có $_fail lỗi cần xử lý trước khi chạy bot.${NC}"
+  fi
+
+  echo ""
+  echo -e "  ${BOLD}Bước tiếp theo:${NC}"
+  echo -e "  1. Sửa ${YELLOW}config.json${NC}  — điền cookie path, IMEI, ownerId, token API"
+  echo -e "  2. Đảm bảo ${YELLOW}cookie.json${NC} có cookie Zalo hợp lệ"
+  echo -e "  3. Reload shell: ${GREEN}source ~/.bashrc${NC}"
+  echo -e "  4. Chạy bot:     ${GREEN}npm start${NC}"
+  echo ""
+  echo -e "  ${DIM}Lệnh khác:${NC}"
+  echo -e "  ${DIM}npm run dev          — chạy + auto-reload (nodemon)${NC}"
+  echo -e "  ${DIM}npm run list-cmds    — xem tất cả lệnh${NC}"
+  echo -e "  ${DIM}npm run backup       — backup dữ liệu lên GitHub${NC}"
+  echo ""
+}
+
+# ══════════════════════════════════════════════════════════════
+#  MAIN
+# ══════════════════════════════════════════════════════════════
+banner
+check_termux
+update_termux
+install_system_pkgs
+check_node
+configure_build_env
+install_npm
+rebuild_native
+check_ffmpeg
+check_config
+summary

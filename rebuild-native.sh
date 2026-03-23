@@ -31,6 +31,17 @@ for p in clang make pkg-config python cairo pango giflib librsvg libjpeg-turbo l
 done
 ok "Gói hệ thống OK"
 
+# ── 1b. Cài node-gyp (bắt buộc để build native modules) ─────────────────────
+sec "Cài node-gyp"
+if ! command -v node-gyp &>/dev/null; then
+  info "Đang cài node-gyp toàn cục..."
+  npm install -g node-gyp 2>&1 | tail -3
+  command -v node-gyp &>/dev/null && ok "node-gyp đã cài." || { err "node-gyp cài thất bại!"; exit 1; }
+else
+  ok "node-gyp đã có: $(node-gyp --version)"
+fi
+npm config set node_gyp "$(which node-gyp)" 2>/dev/null
+
 # ── 2. Set biến môi trường ────────────────────────────────────────────────────
 sec "Cấu hình build environment"
 
